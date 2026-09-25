@@ -1,5 +1,21 @@
 # ChangeLog
 
+## 1.0.1 — 2026-09-25
+
+Marketplace branding update.
+
+### Fixed
+- **Store logo visibility** — the old icon's background (`#312e81`) was identical to the
+  marketplace banner color, so the icon blended invisibly into the listing header. The new
+  icon uses a brighter indigo→purple gradient plus a white inner ring that stays visible on
+  any background, and the gallery banner is now light (`#e0e7ff`) for full contrast.
+
+### Added
+- **Attribution** — the extension page now opens with the official
+  **Dhaka International University** logo and
+  *"Made by Department of CSE, Dhaka International University, Bangladesh"*.
+- Publisher author metadata updated to the department.
+
 ## 1.0.0 — 2026-09-25
 
 Initial release.

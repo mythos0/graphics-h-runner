@@ -2,11 +2,11 @@
   "name": "graphics-h-runner",
   "displayName": "graphics.h Runner — BGI C++ Graphics Toolkit",
   "description": "Compile & run C++ graphics.h programs (WinBGIM / SDL_bgi) with one keypress. Auto-detects graphics.h, applies the right linker flags per OS, auto-installs everything from zero, and ships a sidebar with 9 runnable examples, a Setup Doctor, snippets and templates.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "publisher": "mythos0-labs",
   "author": {
-    "name": "MYTHOS0",
-    "url": "https://github.com/mythos0"
+    "name": "Department of CSE, Dhaka International University",
+    "url": "https://github.com/mythos0/graphics-h-runner"
   },
   "license": "MIT",
   "icon": "icon.png",
@@ -19,8 +19,8 @@
     "Other"
   ],
   "galleryBanner": {
-    "color": "#312e81",
-    "theme": "dark"
+    "color": "#e0e7ff",
+    "theme": "light"
   },
   "badges": [
     {
