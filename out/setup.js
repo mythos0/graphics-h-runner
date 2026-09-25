@@ -364,6 +364,15 @@ static void poll_refresh (void)
 
 } // poll_refresh ()`);
         log.push('source: update() -> schedule-only + poll_refresh (no torn frames)');
+        /* forward declaration: delay()/k_bhit() use poll_refresh long before
+         * its definition site (gcc errors on implicit static declarations) */
+        if (!/static void poll_refresh\s+\(void\);/.test(c)) {
+            const declRe = /(static void update\s+\(void\);)/;
+            if (declRe.test(c)) {
+                c = c.replace(declRe, '$1\nstatic void poll_refresh  (void);');
+                log.push('source: poll_refresh forward declaration added');
+            }
+        }
         /* polling functions consume the flag */
         const pollNames = ['delay (int msec)', 'k_bhit (void)', 'event (void)',
             'edelay (', 'kdelay (', 'xkb_hit (void)'];
