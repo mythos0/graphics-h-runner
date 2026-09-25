@@ -2,7 +2,7 @@
   "name": "graphics-h-runner",
   "displayName": "graphics.h Runner — BGI C++ Graphics Toolkit",
   "description": "Compile & run C++ graphics.h programs (WinBGIM / SDL_bgi) with one keypress. Auto-detects graphics.h, applies the right linker flags per OS, auto-installs everything from zero, and ships a sidebar with 9 runnable examples, a Setup Doctor, snippets and templates.",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "publisher": "mythos0-labs",
   "author": {
     "name": "Department of CSE, Dhaka International University",

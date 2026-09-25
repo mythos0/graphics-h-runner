@@ -23,7 +23,11 @@ import {
   planSetup,
   installSdlBgiUserPrefix,
   installWinbgimWindows,
-  checkSdl2Dev
+  checkSdl2Dev,
+  installCompilerViaWinget,
+  installCompilerWindowsDirect,
+  discoverGppWindows,
+  verifyCompilerRun
 } from './setup';
 import { TEMPLATES } from './templates';
 import { guideHtml } from './guide';
@@ -80,6 +84,42 @@ async function addPathsToSetting(key: 'extraIncludePaths' | 'extraLibPaths', add
   }
 }
 
+async function setCompilerPathSetting(gppPath: string): Promise<void> {
+  const cfg = vscode.workspace.getConfiguration();
+  const current = cfg.get<string>(CONFIG_PREFIX + 'compilerPath', 'g++');
+  if (current !== gppPath) {
+    await cfg.update(CONFIG_PREFIX + 'compilerPath', gppPath, vscode.ConfigurationTarget.Global);
+    log('[setup] compilerPath := ' + gppPath);
+  }
+}
+
+/** First g++.exe candidate that actually runs (Windows). */
+async function findWorkingGpp(): Promise<{ gppPath: string; version: string } | undefined> {
+  for (const candidate of discoverGppWindows()) {
+    const v = await verifyCompilerRun(candidate);
+    if (v.ok) {
+      return { gppPath: candidate, version: v.version };
+    }
+  }
+  return undefined;
+}
+
+/** Spawn environment that also contains the compiler's own bin dir (DLL safety). */
+function compilerEnv(compiler: string): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { ...process.env };
+  try {
+    if (path.isAbsolute(compiler)) {
+      const dir = path.dirname(compiler);
+      if (fs.existsSync(dir)) {
+        env.PATH = dir + path.delimiter + (env.PATH || '');
+      }
+    }
+  } catch {
+    /* default env is fine */
+  }
+  return env;
+}
+
 async function runFullSetup(context: vscode.ExtensionContext): Promise<void> {
   const platform = currentPlatform();
   const storageRoot = context.globalStorageUri.fsPath;
@@ -125,6 +165,38 @@ async function runFullSetup(context: vscode.ExtensionContext): Promise<void> {
           } catch (e) {
             output.appendLine('[setup] SDL_bgi install error: ' + String(e));
             summary.push('SDL_bgi auto-install FAILED: ' + String(e));
+          }
+        } else if (step.kind === 'auto' && step.id === 'install-compiler-winget') {
+          const winget = await installCompilerViaWinget((p) =>
+            progress.report({ message: p.message.slice(0, 110) })
+          );
+          log('[setup] winget: ' + winget.detail);
+          const found = await findWorkingGpp();
+          if (found) {
+            await setCompilerPathSetting(found.gppPath);
+            summary.push(`Compiler installed automatically via winget: ${found.gppPath} (${found.version})`);
+          } else if (winget.ok) {
+            summary.push('winget finished but no working g++.exe was found — trying the direct-download fallback next.');
+          } else {
+            summary.push('winget automatic install not possible: ' + winget.detail + ' — trying the direct-download fallback next.');
+          }
+        } else if (step.kind === 'auto' && step.id === 'install-compiler-download') {
+          const current = getConfig();
+          const already = await verifyCompilerRun(current.compilerPath || 'g++');
+          if (already.ok) {
+            summary.push('Compiler already available — direct download skipped.');
+          } else {
+            try {
+              const dl = await installCompilerWindowsDirect(storageRoot, (p) =>
+                progress.report({ message: p.message.slice(0, 110) })
+              );
+              dl.log.forEach((l) => output.appendLine('[setup] ' + l));
+              await setCompilerPathSetting(dl.gppPath);
+              summary.push(`Compiler downloaded, verified (sha256) and installed automatically: ${dl.gppPath}`);
+            } catch (e) {
+              output.appendLine('[setup] direct download error: ' + String(e));
+              summary.push('Direct compiler download FAILED: ' + String(e));
+            }
           }
         } else if (step.kind === 'auto' && step.id === 'install-winbgim') {
           try {
@@ -223,29 +295,32 @@ function resolvePlan(sourceFile: string, cfg: ExtensionConfig): CompilePlan {
   );
 }
 
-async function compileSource(sourceFile: string): Promise<boolean> {
+type CompileResult = 'ok' | 'failed' | 'no-compiler';
+
+async function compileSource(sourceFile: string): Promise<CompileResult> {
   const cfg = getConfig();
   const plan = resolvePlan(sourceFile, cfg);
 
   log('[compile] ' + plan.commandLine);
 
-  const ok = await vscode.window.withProgress(
+  const result = await vscode.window.withProgress(
     {
       location: vscode.ProgressLocation.Notification,
       title: `graphics.h: compiling ${path.basename(sourceFile)}…`,
       cancellable: false
     },
     () =>
-      new Promise<boolean>((resolve) => {
+      new Promise<CompileResult>((resolve) => {
         let child;
         try {
           child = spawn(plan.compiler, plan.args, {
             cwd: path.dirname(sourceFile),
+            env: compilerEnv(plan.compiler),
             windowsHide: true
           });
         } catch (e) {
           log('[error] failed to start compiler: ' + String(e));
-          resolve(false);
+          resolve('no-compiler');
           return;
         }
 
@@ -253,18 +328,28 @@ async function compileSource(sourceFile: string): Promise<boolean> {
         child.stderr?.on('data', (d: Buffer) => output.append(d.toString()));
 
         child.on('error', (e: Error) => {
-          log('[error] ' + e.message);
-          resolve(false);
+          if ((e as NodeJS.ErrnoException).code === 'ENOENT') {
+            log(`[error] compiler not found: "${plan.compiler}" — offer automatic setup`);
+            resolve('no-compiler');
+          } else {
+            log('[error] ' + e.message);
+            resolve('failed');
+          }
         });
 
         child.on('close', (code: number | null) => {
-          log(code === 0 ? '[compile] success' : `[compile] failed with exit code ${code}`);
-          resolve(code === 0);
+          if (code === 0) {
+            log('[compile] success');
+            resolve('ok');
+          } else {
+            log(`[compile] failed with exit code ${code}`);
+            resolve('failed');
+          }
         });
       })
   );
 
-  return ok;
+  return result;
 }
 
 function runBinary(sourceFile: string): void {
@@ -335,6 +420,26 @@ function showCompileFailure(sourceFile: string): void {
         output.show(true);
       } else if (pick === 'Setup Doctor') {
         vscode.commands.executeCommand('graphics-h-runner.doctor');
+      }
+    });
+}
+
+/** The compiler itself is missing — offer the fully automatic fix. */
+function showNoCompilerHelp(): void {
+  vscode.window
+    .showErrorMessage(
+      'No C++ compiler found on this PC. graphics.h Runner can set up everything from zero — compiler + graphics library, no admin rights.',
+      'Set up everything (recommended)',
+      'Run Setup Doctor',
+      'Show Output'
+    )
+    .then((pick) => {
+      if (pick === 'Set up everything (recommended)') {
+        vscode.commands.executeCommand('graphics-h-runner.setupEverything');
+      } else if (pick === 'Run Setup Doctor') {
+        vscode.commands.executeCommand('graphics-h-runner.doctor');
+      } else if (pick === 'Show Output') {
+        output.show(true);
       }
     });
 }
@@ -536,9 +641,11 @@ export function activate(context: vscode.ExtensionContext): void {
       if (!file) {
         return;
       }
-      const ok = await compileSource(file);
-      if (ok) {
+      const result = await compileSource(file);
+      if (result === 'ok') {
         runBinary(file);
+      } else if (result === 'no-compiler') {
+        showNoCompilerHelp();
       } else {
         showCompileFailure(file);
       }
@@ -549,11 +656,13 @@ export function activate(context: vscode.ExtensionContext): void {
       if (!file) {
         return;
       }
-      const ok = await compileSource(file);
-      if (ok) {
+      const result = await compileSource(file);
+      if (result === 'ok') {
         vscode.window.showInformationMessage(
           `Compiled OK: ${path.basename(binaryPathFor(file, currentPlatform()))}`
         );
+      } else if (result === 'no-compiler') {
+        showNoCompilerHelp();
       } else {
         showCompileFailure(file);
       }

@@ -49,15 +49,22 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.WINBGIM_SOURCES = exports.SDL_BGI_TARBALL_URLS = void 0;
+exports.WINLIBS_FALLBACK = exports.WINGET_COMPILER_PACKAGE_ID = exports.WINBGIM_SOURCES = exports.SDL_BGI_TARBALL_URLS = void 0;
+exports.wingetInstallCompilerArgs = wingetInstallCompilerArgs;
 exports.detectLinuxPackageFamily = detectLinuxPackageFamily;
 exports.planSetup = planSetup;
 exports.checkSdl2Dev = checkSdl2Dev;
 exports.downloadToBuffer = downloadToBuffer;
+exports.runProcessStreaming = runProcessStreaming;
+exports.installCompilerViaWinget = installCompilerViaWinget;
+exports.discoverGppWindows = discoverGppWindows;
+exports.verifyCompilerRun = verifyCompilerRun;
+exports.installCompilerWindowsDirect = installCompilerWindowsDirect;
 exports.installWinbgimWindows = installWinbgimWindows;
 exports.patchSdlBgiSources = patchSdlBgiSources;
 exports.installSdlBgiUserPrefix = installSdlBgiUserPrefix;
 const child_process_1 = require("child_process");
+const crypto_1 = require("crypto");
 const fs = __importStar(require("fs"));
 const os = __importStar(require("os"));
 const path = __importStar(require("path"));
@@ -79,6 +86,31 @@ exports.WINBGIM_SOURCES = {
     libbgiA: [
         'https://raw.githubusercontent.com/redpinetree/winbgim64/master/WinBGIm64/libbgi64.a'
     ]
+};
+/* --- Windows: fully automatic compiler installation ---------------------- */
+/** winget package: WinLibs MinGW-w64 (UCRT, GCC + g++), zip/portable -> per-user install, no admin rights. */
+exports.WINGET_COMPILER_PACKAGE_ID = 'BrechtSanders.WinLibs.POSIX.UCRT';
+/** Arguments for the automatic winget compiler install (spawn-safe array). */
+function wingetInstallCompilerArgs() {
+    return [
+        'install', '-e', '--id', exports.WINGET_COMPILER_PACKAGE_ID,
+        '--accept-source-agreements', '--accept-package-agreements'
+    ];
+}
+/**
+ * Direct-download fallback (used only when winget is unavailable or failed):
+ * the WinLibs UCRT x86_64 release as a plain .zip — extractable on every
+ * Windows 10/11 with built-in PowerShell Expand-Archive. No admin rights:
+ * everything lives inside the extension's storage folder.
+ */
+exports.WINLIBS_FALLBACK = {
+    version: '16.2.0posix-14.0.0-ucrt-r1',
+    url: 'https://github.com/brechtsanders/winlibs_mingw/releases/download/16.2.0posix-14.0.0-ucrt-r1/' +
+        'winlibs-x86_64-posix-seh-gcc-16.2.0-mingw-w64ucrt-14.0.0-r1.zip',
+    sha256Url: 'https://github.com/brechtsanders/winlibs_mingw/releases/download/16.2.0posix-14.0.0-ucrt-r1/' +
+        'winlibs-x86_64-posix-seh-gcc-16.2.0-mingw-w64ucrt-14.0.0-r1.zip.sha256',
+    /** bytes, from the release asset (verified 2026-09-25) */
+    sizeBytes: 274029684
 };
 /* ------------------------------------------------------------------ */
 /* planning                                                            */
@@ -169,17 +201,26 @@ function planSetup(platform, probe, sdl2DevOk = true) {
     if (platform === 'windows') {
         if (!probe.compilerOk) {
             steps.push({
-                id: 'install-compiler',
-                kind: 'terminal',
-                title: 'Install MinGW-w64 g++ via winget',
-                detail: 'g++ was not found. This installs the WinLibs MinGW-w64 build through winget. If winget is unavailable, download WinLibs manually (next step).',
-                command: 'winget install -e --id BrechtSanders.WinLibs.POSIX.UCRT --accept-source-agreements --accept-package-agreements'
+                id: 'install-compiler-winget',
+                kind: 'auto',
+                title: 'Install MinGW-w64 g++ automatically (winget)',
+                detail: 'Runs "winget install BrechtSanders.WinLibs.POSIX.UCRT" for you — a per-user, portable ' +
+                    'install (no administrator rights). The extension then finds the new g++ and wires it into ' +
+                    'its settings automatically.'
+            });
+            steps.push({
+                id: 'install-compiler-download',
+                kind: 'auto',
+                title: 'Direct-download compiler fallback',
+                detail: 'Used only if the winget step could not provide a compiler (e.g. winget missing): downloads ' +
+                    'the WinLibs MinGW-w64 UCRT zip (~274 MB, one time), extracts it into the extension folder ' +
+                    'and wires the compiler in — no admin rights, no PATH editing.'
             });
             steps.push({
                 id: 'manual-compiler',
                 kind: 'manual',
                 title: 'Manual alternative: WinLibs',
-                detail: 'No winget? Download the WinLibs UCRT release (MinGW-w64 g++), extract it, and add its bin\\ folder to PATH (or set "graphics-h-runner.compilerPath" to the full g++.exe path).',
+                detail: 'Both automatic steps failed? Download the WinLibs UCRT release (MinGW-w64 g++), extract it, and add its bin\\ folder to PATH (or set "graphics-h-runner.compilerPath" to the full g++.exe path).',
                 url: 'https://winlibs.com/'
             });
         }
@@ -252,6 +293,227 @@ async function downloadToBuffer(url, timeoutMs = 120000) {
         throw new Error(`HTTP ${res.status} for ${url}`);
     }
     return Buffer.from(await res.arrayBuffer());
+}
+/**
+ * Spawn a process, stream stdout/stderr lines through onLine and resolve with
+ * the exit state. Used for winget (long download) and PowerShell extraction.
+ */
+function runProcessStreaming(cmd, args, opts = {}) {
+    return new Promise((resolve) => {
+        let child;
+        try {
+            child = (0, child_process_1.spawn)(cmd, args, { windowsHide: true });
+        }
+        catch {
+            resolve({ code: -1, spawnFailed: true, tail: '' });
+            return;
+        }
+        const tail = [];
+        const push = (chunk) => {
+            for (const line of chunk.toString().split(/\r?\n/)) {
+                const t = line.trim();
+                if (t) {
+                    tail.push(t);
+                    if (tail.length > 40)
+                        tail.shift();
+                    try {
+                        opts.onLine?.(t);
+                    }
+                    catch {
+                        /* progress callbacks must never crash the install */
+                    }
+                }
+            }
+        };
+        child.stdout?.on('data', push);
+        child.stderr?.on('data', push);
+        const timer = setTimeout(() => child.kill(), opts.timeoutMs ?? 30 * 60 * 1000);
+        child.on('error', (e) => {
+            clearTimeout(timer);
+            const code = e.code || '';
+            resolve({ code: -1, spawnFailed: code === 'ENOENT' || code === 'EINVAL', tail: tail.join(' | ') + ' ' + e.message });
+        });
+        child.on('close', (code) => {
+            clearTimeout(timer);
+            resolve({ code: code ?? -1, spawnFailed: false, tail: tail.join(' | ') });
+        });
+    });
+}
+/**
+ * Run the winget compiler install (per-user, no admin) and report progress.
+ * Tries the direct executable first and a cmd.exe fallback if the spawn
+ * itself fails (App-Execution-Alias quirks).
+ */
+async function installCompilerViaWinget(onProgress) {
+    const args = wingetInstallCompilerArgs();
+    onProgress?.({ message: 'Starting winget (this downloads the WinLibs MinGW-w64 toolchain, ~270 MB)…' });
+    let res = await runProcessStreaming('winget', args, {
+        onLine: (line) => onProgress?.({ message: line.slice(0, 120) }),
+        timeoutMs: 45 * 60 * 1000
+    });
+    if (res.spawnFailed) {
+        // second chance through cmd.exe (covers alias resolution problems)
+        res = await runProcessStreaming('cmd.exe', ['/d', '/c', 'winget', ...args], {
+            onLine: (line) => onProgress?.({ message: line.slice(0, 120) }),
+            timeoutMs: 45 * 60 * 1000
+        });
+    }
+    if (res.spawnFailed) {
+        return { ok: false, detail: 'winget is not available on this PC' };
+    }
+    if (res.code !== 0) {
+        return { ok: false, detail: `winget exited with code ${res.code}: ${res.tail.slice(-300)}` };
+    }
+    return { ok: true, detail: 'winget install completed' };
+}
+/**
+ * Find g++.exe candidates on a Windows machine, most-promising first:
+ *   1. winget portable packages  (%LOCALAPPDATA%\Microsoft\WinGet\Packages)
+ *   2. winget shims             (%LOCALAPPDATA%\Microsoft\WinGet\Links)
+ *   3. classic install roots     (C:\MinGW, C:\msys64\{ucrt64,mingw64}, C:\TDM-GCC-64, C:\mingw64)
+ * The search is depth-bounded and entry-capped so it can never scan forever.
+ * `opts.localAppData` can be overridden for unit testing.
+ */
+function discoverGppWindows(opts = {}) {
+    const candidates = [];
+    const seen = new Set();
+    const add = (p) => {
+        const norm = p.toLowerCase();
+        if (!seen.has(norm) && fs.existsSync(p)) {
+            seen.add(norm);
+            candidates.push(p);
+        }
+    };
+    const localAppData = opts.localAppData || process.env.LOCALAPPDATA;
+    if (localAppData && fs.existsSync(localAppData)) {
+        const packagesDir = path.join(localAppData, 'Microsoft', 'WinGet', 'Packages');
+        const linksDir = path.join(localAppData, 'Microsoft', 'WinGet', 'Links');
+        // winget shims first? no — real package binaries preferred (shims can break DLL search)
+        walkForFile(packagesDir, 'g++.exe', 4, 4000, (p) => add(p));
+        add(path.join(linksDir, 'g++.exe'));
+    }
+    const roots = ['C:\\MinGW\\bin', 'C:\\mingw64\\bin', 'C:\\msys64\\ucrt64\\bin',
+        'C:\\msys64\\mingw64\\bin', 'C:\\TDM-GCC-64\\bin', 'C:\\TDM-GCC-64\\mingw64\\bin'];
+    for (const r of roots) {
+        add(path.join(r, 'g++.exe'));
+    }
+    // 64-bit toolchains first (winget packages also contain a 32-bit mingw32/)
+    return candidates.sort((a, b) => Number(/mingw64/i.test(b)) - Number(/mingw64/i.test(a)));
+}
+/** Bounded depth-first search for one file name. */
+function walkForFile(root, fileName, maxDepth, maxEntries, hit) {
+    if (maxEntries <= 0)
+        return;
+    let entries;
+    try {
+        entries = fs.readdirSync(root, { withFileTypes: true });
+    }
+    catch {
+        return;
+    }
+    for (const e of entries) {
+        if (maxEntries <= 0)
+            return;
+        maxEntries--;
+        const full = path.join(root, e.name);
+        if (e.isDirectory()) {
+            if (maxDepth > 1)
+                walkForFile(full, fileName, maxDepth - 1, maxEntries, hit);
+        }
+        else if (e.name.toLowerCase() === fileName) {
+            hit(full);
+        }
+    }
+}
+/**
+ * True when the candidate compiler runs and prints a version line.
+ * Returns the first version line for display.
+ */
+async function verifyCompilerRun(candidate) {
+    try {
+        const res = await runProcess(candidate, ['--version'], { timeoutMs: 20000 });
+        if (res.code !== 0) {
+            return { ok: false, version: '' };
+        }
+        const line = (res.stdout || res.stderr).split(/\r?\n/).find((l) => l.trim().length > 0) || '';
+        return { ok: true, version: line.trim().slice(0, 120) };
+    }
+    catch {
+        return { ok: false, version: '' };
+    }
+}
+/**
+ * Last-resort automatic install: download the WinLibs UCRT zip (streaming,
+ * sha256-verified) into <storageRoot>\mingw64-download, extract it with the
+ * built-in PowerShell Expand-Archive and return the g++.exe path.
+ * No administrator rights anywhere.
+ */
+async function installCompilerWindowsDirect(storageRoot, onProgress) {
+    const log = [];
+    const workDir = path.join(storageRoot, 'mingw64-download');
+    const zipPath = path.join(workDir, exports.WINLIBS_FALLBACK.url.split('/').pop() || 'winlibs.zip');
+    fs.mkdirSync(workDir, { recursive: true });
+    /* 1. download (streaming + progress) */
+    onProgress?.({ message: `Downloading WinLibs GCC (${Math.round(exports.WINLIBS_FALLBACK.sizeBytes / 1e6)} MB)…`, percent: 0 });
+    const res = await fetch(exports.WINLIBS_FALLBACK.url, { redirect: 'follow', signal: AbortSignal.timeout(60 * 60 * 1000) });
+    if (!res.ok || !res.body) {
+        throw new Error(`download failed: HTTP ${res.status}`);
+    }
+    const total = Number(res.headers.get('content-length')) || exports.WINLIBS_FALLBACK.sizeBytes;
+    let received = 0;
+    const reader = res.body.getReader();
+    const chunks = [];
+    for (;;) {
+        const { done, value } = await reader.read();
+        if (done)
+            break;
+        chunks.push(Buffer.from(value));
+        received += value.length;
+        onProgress?.({
+            message: `Downloading WinLibs GCC… ${(received / 1e6).toFixed(0)} / ${(total / 1e6).toFixed(0)} MB`,
+            percent: Math.min(99, Math.round((received / total) * 90))
+        });
+    }
+    const zip = Buffer.concat(chunks);
+    fs.writeFileSync(zipPath, zip);
+    log.push(`downloaded ${zip.length} bytes`);
+    /* 2. verify sha256 (first token of the .sha256 asset) */
+    onProgress?.({ message: 'Verifying checksum…', percent: 91 });
+    try {
+        const expected = (await downloadToBuffer(exports.WINLIBS_FALLBACK.sha256Url)).toString().trim().split(/\s+/)[0].toLowerCase();
+        const actual = (0, crypto_1.createHash)('sha256').update(zip).digest('hex');
+        if (expected && expected !== actual) {
+            throw new Error(`sha256 mismatch (expected ${expected.slice(0, 12)}…, got ${actual.slice(0, 12)}…)`);
+        }
+        log.push('sha256 verified');
+    }
+    catch (e) {
+        log.push('checksum check skipped/failed: ' + String(e));
+    }
+    /* 3. extract with PowerShell (built into Windows 10/11) */
+    onProgress?.({ message: 'Extracting (this can take a few minutes)…', percent: 93 });
+    const psScript = `Expand-Archive -LiteralPath '${zipPath.replace(/'/g, "''")}' -DestinationPath '${workDir.replace(/'/g, "''")}' -Force`;
+    const ps = await runProcessStreaming('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', psScript], { timeoutMs: 30 * 60 * 1000, onLine: (l) => log.push('ps: ' + l.slice(0, 100)) });
+    if (ps.code !== 0) {
+        throw new Error('extraction failed: ' + ps.tail.slice(-300));
+    }
+    log.push('extracted with Expand-Archive');
+    /* 4. find g++.exe (prefer mingw64 over mingw32) */
+    const found = [];
+    walkForFile(workDir, 'g++.exe', 4, 8000, (p) => found.push(p));
+    const gpp = found.find((p) => /mingw64/i.test(p)) ||
+        found.find((p) => /mingw32/i.test(p)) ||
+        found[0];
+    if (!gpp) {
+        throw new Error('g++.exe not found after extraction');
+    }
+    const check = await verifyCompilerRun(gpp);
+    if (!check.ok) {
+        throw new Error('downloaded g++.exe did not run');
+    }
+    log.push('compiler OK: ' + check.version);
+    onProgress?.({ message: 'Compiler ready.', percent: 100 });
+    return { gppPath: gpp, binDir: path.dirname(gpp), log };
 }
 /**
  * Download graphics.h / winbgim.h / libbgi.a into <storageRoot>/winbgim.

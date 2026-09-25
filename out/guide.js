@@ -39,7 +39,12 @@ function guideHtml(platform) {
   <em>BGI-compatible</em> graphics library. Press <kbd>Ctrl+Alt+R</kbd> in any <code>.cpp</code> file that includes
   <code>&lt;graphics.h&gt;</code> and watch the window appear.</p>
 
-  ${section('🪟 Windows — WinBGIM + MinGW-w64', `<ol>
+  ${section('🪟 Windows — WinBGIM + MinGW-w64', `<p><strong>Fully automatic (recommended):</strong> run <strong>graphics.h: Full Setup</strong> from the Command Palette.
+    On a fresh PC it now installs <em>everything</em> by itself — the MinGW-w64 g++ compiler (via winget, or a verified
+    direct download as fallback) <em>and</em> WinBGIM — all per-user, no administrator rights, and it wires every path into
+    the settings for you. If a compile ever reports a missing compiler, the extension offers this setup with one click.</p>
+    <p>Manual route (only if you prefer it):</p>
+    <ol>
       <li>Install <strong>MinGW-w64 g++</strong> — easiest via <a href="https://winlibs.com">winlibs.com</a> (unpack and add its <code>bin\\</code> to <code>PATH</code>) or <a href="https://www.msys2.org">MSYS2</a> (<code>pacman -S mingw-w64-ucrt-x86_64-gcc</code>).</li>
       <li>Install <strong>WinBGIM</strong>:
         <ul>
@@ -50,7 +55,7 @@ function guideHtml(platform) {
       <li>Verify in a terminal: <pre>g++ --version</pre></li>
       <li>In VS Code run <strong>graphics.h: Setup Doctor</strong> from the Command Palette — it must report <em>winbgim: OK</em>.</li>
     </ol>
-    <p>The extension compiles with:<pre>g++ main.cpp -o main.exe -lbgi -lgdi32 -lcomdlg32 -luuid -loleaut32 -lole32 -static-libgcc -static-libstdc++</pre></p>`, winActive)}
+    <p>The extension compiles with (fully statically linked — the .exe runs on any Windows 10/11):<pre>g++ main.cpp -o main.exe -static -lbgi -lgdi32 -lcomdlg32 -luuid -loleaut32 -lole32 -static-libgcc -static-libstdc++</pre></p>`, winActive)}
 
   ${section('🐧 Linux — SDL_bgi (recommended) or libgraph', `<p><strong>Option A — SDL_bgi</strong> (modern, maintained, supports <code>initwindow</code>):</p>
     <ol>

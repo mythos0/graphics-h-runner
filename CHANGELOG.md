@@ -1,5 +1,32 @@
 # ChangeLog
 
+## 1.1.0 — 2026-09-25
+
+Zero-touch Windows setup — the compiler is now installed automatically too.
+
+### Added
+- **Fully automatic Windows compiler install**: Full Setup now runs the WinLibs
+  MinGW-w64 (UCRT) winget package itself — a per-user, portable install with no
+  administrator rights — then discovers the new `g++.exe`, verifies it runs, and
+  wires it into `graphics-h-runner.compilerPath` automatically.
+- **Direct-download fallback** (when winget is missing): the WinLibs UCRT zip is
+  downloaded with live progress, verified against the official sha256 checksum,
+  extracted with the built-in PowerShell `Expand-Archive`, and wired up — still
+  no admin rights.
+- **One-click recovery**: compiling with no compiler no longer fails with a raw
+  `spawn g++ ENOENT`; the extension now explains the problem and offers
+  **"Set up everything (recommended)"** right in the dialog.
+- Compiler discovery also finds existing installs (winget packages/shims,
+  C:\MinGW, C:\msys64\{ucrt64,mingw64}, C:\TDM-GCC-64) and prefers 64-bit
+  toolchains automatically.
+
+### Fixed
+- Windows builds are now **fully statically linked** (`-static` in addition to
+  `-static-libgcc -static-libstdc++`), so compiled `.exe` files run on any
+  Windows 10/11 PC without missing-DLL errors.
+- Setup Doctor's Windows fix text now points to the automatic setup instead of
+  manual PATH editing.
+
 ## 1.0.1 — 2026-09-25
 
 Marketplace branding update.

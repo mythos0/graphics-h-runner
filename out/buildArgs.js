@@ -75,6 +75,11 @@ function buildCompilePlan(opts, useBgi, probe) {
         switch (opts.platform) {
             case 'windows':
                 library = 'winbgim';
+                if (opts.staticLinkWindows !== false) {
+                    // full static link BEFORE the -l list: the produced .exe must run on
+                    // a fresh PC with zero DLL hunting (libgcc/libstdc++/winpthread)
+                    args.push('-static');
+                }
                 args.push(...exports.WINBGIM_LINK_LIBS);
                 if (opts.staticLinkWindows !== false) {
                     args.push('-static-libgcc', '-static-libstdc++');

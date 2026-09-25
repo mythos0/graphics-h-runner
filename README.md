@@ -7,7 +7,7 @@
 
 # graphics.h Runner — BGI C++ Graphics Toolkit for VS Code
 
-[![Version](https://img.shields.io/badge/version-1.0.1-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey.svg)](#per-os-setup)
 [![Tests](https://img.shields.io/badge/sample%20tests-9%2F%209%20passing-brightgreen.svg)](#tested--verified)
@@ -40,7 +40,7 @@ Press **`Ctrl+Alt+R`** → compiled with the right linker flags → graphics win
 
 | Feature | What it does |
 |---|---|
-| **⚡ Full Setup (0 → running)** | One command bootstraps everything: installs WinBGIM/SDL_bgi **automatically** (download → patch → build → install into a user folder → paths wired into settings). System packages that need a password are handed to the terminal as copy-paste commands, then everything is re-verified live. |
+| **⚡ Full Setup (0 → running)** | One command bootstraps **everything** — including the C++ compiler itself on Windows (winget auto-install, or a sha256-verified direct download fallback; per-user, **no admin rights**) — then installs WinBGIM/SDL_bgi automatically (download → patch → build → install → paths wired into settings) and re-verifies the whole toolchain live. System packages that need a password are handed to the terminal as copy-paste commands. |
 | **🧭 graphics.h sidebar (Activity Bar)** | A dedicated icon in the Activity Bar opens the **graphics.h Programs** panel: all commands at the top (with their keybindings), all 9 example programs and 5 quick templates below — **click one and it opens in the editor as `filename.cpp`**, ready to run. |
 | **🩺 Setup Doctor** | Probes your compiler and *every* candidate graphics library by actually compiling a `graphics.h` probe. Reports exactly what is missing with per-OS fixes, and offers **Fix automatically**. |
 | **🔍 graphics.h auto-detect** | When `#include <graphics.h>` is present, BGI linker flags are applied automatically. Files without it still compile as plain C++. |
@@ -60,9 +60,9 @@ Extensions view (`Ctrl+Shift+X`), or from the command line:
 code --install-extension mythos0-labs.graphics-h-runner
 ```
 
-**From a GitHub release:** download `graphics-h-runner-1.0.1.vsix` from
+**From a GitHub release:** download `graphics-h-runner-1.1.0.vsix` from
 [Releases](../../releases), then in VS Code: `Extensions view → ⋯ → Install from VSIX…`
-(or `code --install-extension graphics-h-runner-1.0.1.vsix`).
+(or `code --install-extension graphics-h-runner-1.1.0.vsix`).
 
 **From source:**
 
@@ -164,12 +164,17 @@ user-prefix install → compile → verified render, plus WinBGIM asset validati
 ## Per-OS setup (what Full Setup automates)
 
 ### Windows
-1. **Compiler** — WinLibs MinGW-w64 via `winget install -e --id BrechtSanders.WinLibs.POSIX.UCRT`
-   or manually from [winlibs.com](https://winlibs.com/). Verify with `g++ --version`.
+1. **Compiler — now fully automatic**: Full Setup runs
+   `winget install -e --id BrechtSanders.WinLibs.POSIX.UCRT` for you (per-user portable install,
+   no admin prompt), then finds the new `g++.exe` and wires it into `graphics-h-runner.compilerPath`.
+   No winget? It downloads the WinLibs UCRT zip directly (sha256-verified) into the extension
+   folder and extracts it with built-in PowerShell — still no admin rights. Missing compiler on
+   run? You get a one-click **"Set up everything"** prompt. Manual route: [winlibs.com](https://winlibs.com/).
 2. **WinBGIM** — Full Setup downloads it into the extension folder automatically. Manual route:
    copy `graphics.h` + `winbgim.h` into `<MinGW>\include` and `libbgi.a` into `<MinGW>\lib`.
 3. The extension compiles with:
-   `g++ main.cpp -o main.exe -lbgi -lgdi32 -lcomdlg32 -luuid -loleaut32 -lole32 -static-libgcc -static-libstdc++`
+   `g++ main.cpp -o main.exe -static -lbgi -lgdi32 -lcomdlg32 -luuid -loleaut32 -lole32 -static-libgcc -static-libstdc++`
+   (fully statically linked — the `.exe` runs on any Windows 10/11 machine, no DLL hunting).
 
 ### Linux
 1. `sudo apt install build-essential libsdl2-dev` (or `dnf`/`pacman` equivalents — Full Setup

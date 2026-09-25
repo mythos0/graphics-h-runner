@@ -65,9 +65,9 @@ function runProcess(cmd, args, timeoutMs) {
         });
     });
 }
-const FIX_WINDOWS = 'Windows setup: install MinGW-w64 (e.g. from winlibs.com or MSYS2), then install WinBGIM: ' +
-    'copy graphics.h and winbgim.h into <MinGW>/include, and libbgi.a into <MinGW>/lib. ' +
-    'See the full walkthrough in the README (Windows section).';
+const FIX_WINDOWS = 'Run the extension\'s "graphics.h: Full Setup (everything, automatic)" command — it installs ' +
+    'MinGW-w64 g++ (winget or direct download) and WinBGIM automatically, per-user, no admin rights. ' +
+    'Manual route: install MinGW-w64 (winlibs.com or MSYS2) and set "graphics-h-runner.compilerPath".';
 const FIX_SDL_BGI_LINUX = 'Linux setup: install SDL2 dev files (sudo apt install libsdl2-dev) then build SDL_bgi: ' +
     'download from https://sourceforge.net/projects/sdl-bgi/ (or git clone the mirror), ' +
     'run make && sudo make install in its src/ folder. Details in the README (Linux section).';
@@ -174,7 +174,7 @@ async function probeEnvironment(opts) {
         fix: versionRes.code === 0
             ? undefined
             : opts.platform === 'windows'
-                ? 'Install MinGW-w64 g++ (winlibs.com or MSYS2) and add its bin/ folder to PATH, or set "graphics-h-runner.compilerPath" to the full path of g++.exe.'
+                ? 'Run "graphics.h: Full Setup (everything, automatic)" — it installs g++ + WinBGIM automatically (winget or direct download, no admin rights). Or set "graphics-h-runner.compilerPath" to an existing g++.exe.'
                 : 'Install g++ (e.g. sudo apt install build-essential) or set "graphics-h-runner.compilerPath".'
     };
     void versionLine;
