@@ -10,6 +10,7 @@
 import * as vscode from 'vscode';
 import { spawn } from 'child_process';
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import {
   currentPlatform,
@@ -33,6 +34,13 @@ import { TEMPLATES } from './templates';
 import { guideHtml } from './guide';
 import { loadProgramCatalog, LoadedProgram, resolveProgramTarget } from './programs';
 import { ProgramsViewProvider } from './programsView';
+import {
+  normalizeCompilerPath,
+  normalizeDirList,
+  pruneMissingDirs,
+  classifySpawnFailure,
+  NormalizeOptions
+} from './normalize';
 
 const OUTPUT_CHANNEL_NAME = 'graphics.h Runner';
 const TERMINAL_NAME = 'graphics.h Runner';
@@ -42,6 +50,7 @@ let output: vscode.OutputChannel;
 let statusItem: vscode.StatusBarItem | undefined;
 let doctorCache: DoctorResult | undefined;
 let doctorRunning: Promise<DoctorResult> | undefined;
+let programsView: ProgramsViewProvider | undefined;
 
 interface ExtensionConfig {
   compilerPath: string;
@@ -54,15 +63,22 @@ interface ExtensionConfig {
   showStatusBarItem: boolean;
 }
 
+/** Existence-probe options for the normalizers (real filesystem). */
+function normOpts(): NormalizeOptions {
+  return { platform: currentPlatform() };
+}
+
 function getConfig(): ExtensionConfig {
   const cfg = vscode.workspace.getConfiguration();
+  const rawCompiler = cfg.get<string>(CONFIG_PREFIX + 'compilerPath', 'g++');
   return {
-    compilerPath: cfg.get<string>(CONFIG_PREFIX + 'compilerPath', 'g++'),
+    /* healed on read: quotes, env vars, ~, directory paths, missing .exe */
+    compilerPath: normalizeCompilerPath(rawCompiler || 'g++', normOpts()) || 'g++',
     autoDetect: cfg.get<boolean>(CONFIG_PREFIX + 'autoDetect', true),
     linuxLibrary: cfg.get<LinuxLibrary>(CONFIG_PREFIX + 'linuxLibrary', 'auto'),
     staticLinkWindows: cfg.get<boolean>(CONFIG_PREFIX + 'staticLinkWindows', true),
-    extraIncludePaths: cfg.get<string[]>(CONFIG_PREFIX + 'extraIncludePaths', []),
-    extraLibPaths: cfg.get<string[]>(CONFIG_PREFIX + 'extraLibPaths', []),
+    extraIncludePaths: normalizeDirList(cfg.get<string[]>(CONFIG_PREFIX + 'extraIncludePaths', []), normOpts()),
+    extraLibPaths: normalizeDirList(cfg.get<string[]>(CONFIG_PREFIX + 'extraLibPaths', []), normOpts()),
     extraCompilerArgs: cfg.get<string[]>(CONFIG_PREFIX + 'extraCompilerArgs', []),
     showStatusBarItem: cfg.get<boolean>(CONFIG_PREFIX + 'showStatusBarItem', true)
   };
@@ -102,6 +118,26 @@ async function findWorkingGpp(): Promise<{ gppPath: string; version: string } | 
     }
   }
   return undefined;
+}
+
+/**
+ * Drop stale entries (deleted toolchain folders, wiped globalStorage) from the
+ * include/lib settings so diagnostics stay truthful. Non-fatal on failure.
+ */
+async function pruneStalePaths(): Promise<void> {
+  try {
+    const cfg = vscode.workspace.getConfiguration();
+    for (const key of ['extraIncludePaths', 'extraLibPaths'] as const) {
+      const current = normalizeDirList(cfg.get<string[]>(CONFIG_PREFIX + key, []), normOpts());
+      const kept = pruneMissingDirs(current, normOpts());
+      if (kept.length !== current.length) {
+        await cfg.update(CONFIG_PREFIX + key, kept, vscode.ConfigurationTarget.Global);
+        log(`[setup] pruned ${current.length - kept.length} stale entrie(s) from ${key}`);
+      }
+    }
+  } catch (e) {
+    log('[setup] stale-path prune skipped: ' + String(e));
+  }
 }
 
 /** Spawn environment that also contains the compiler's own bin dir (DLL safety). */
@@ -157,6 +193,13 @@ async function runFullSetup(context: vscode.ExtensionContext): Promise<void> {
         progress.report({ message: step.title });
 
         if (step.kind === 'auto' && step.id === 'install-sdl_bgi') {
+          /* never attempt the build while the compiler is still missing —
+           * that would guarantee a confusing failure. The terminal step above
+           * installs it; Full Setup can be re-run afterwards. */
+          if (platform !== 'windows' && !probe.compilerOk) {
+            summary.push('SDL_bgi auto-install postponed: install the compiler first (step above), then re-run Full Setup.');
+            continue;
+          }
           try {
             const res = await installSdlBgiUserPrefix({ storageRoot });
             await addPathsToSetting('extraIncludePaths', [res.includeDir]);
@@ -167,6 +210,14 @@ async function runFullSetup(context: vscode.ExtensionContext): Promise<void> {
             summary.push('SDL_bgi auto-install FAILED: ' + String(e));
           }
         } else if (step.kind === 'auto' && step.id === 'install-compiler-winget') {
+          /* half-setup fast path: a compiler may already be on disk (previous
+           * winget run, manual install, IDE bundle) — skip the whole download */
+          const existing = await findWorkingGpp();
+          if (existing) {
+            await setCompilerPathSetting(existing.gppPath);
+            summary.push(`Compiler already present on this PC — using ${existing.gppPath} (${existing.version}). winget step skipped.`);
+            continue;
+          }
           const winget = await installCompilerViaWinget((p) =>
             progress.report({ message: p.message.slice(0, 110) })
           );
@@ -182,8 +233,10 @@ async function runFullSetup(context: vscode.ExtensionContext): Promise<void> {
           }
         } else if (step.kind === 'auto' && step.id === 'install-compiler-download') {
           const current = getConfig();
-          const already = await verifyCompilerRun(current.compilerPath || 'g++');
-          if (already.ok) {
+          const already =
+            (await verifyCompilerRun(current.compilerPath || 'g++')).ok ||
+            Boolean(await findWorkingGpp());
+          if (already) {
             summary.push('Compiler already available — direct download skipped.');
           } else {
             try {
@@ -213,6 +266,7 @@ async function runFullSetup(context: vscode.ExtensionContext): Promise<void> {
         } else if (step.kind === 'manual') {
           summary.push(`ACTION NEEDED (manual): ${step.detail}${step.url ? ' — ' + step.url : ''}`);
         } else if (step.kind === 'verify') {
+          await pruneStalePaths();
           const fresh = getConfig();
           const res = await probeEnvironment({
             platform,
@@ -223,6 +277,7 @@ async function runFullSetup(context: vscode.ExtensionContext): Promise<void> {
           });
           doctorCache = res;
           updateStatusBar();
+          programsView?.setDoctorResult(res);
           summary.push(
             res.graphicsReady
               ? `VERIFIED: graphics.h is ready (library: ${res.bestLibrary}). Press Ctrl+Alt+R inside a graphics.h program to run it.`
@@ -311,6 +366,13 @@ async function compileSource(sourceFile: string): Promise<CompileResult> {
     },
     () =>
       new Promise<CompileResult>((resolve) => {
+        let settled = false;
+        const done = (r: CompileResult) => {
+          if (!settled) {
+            settled = true;
+            resolve(r);
+          }
+        };
         let child;
         try {
           child = spawn(plan.compiler, plan.args, {
@@ -320,7 +382,7 @@ async function compileSource(sourceFile: string): Promise<CompileResult> {
           });
         } catch (e) {
           log('[error] failed to start compiler: ' + String(e));
-          resolve('no-compiler');
+          done('no-compiler');
           return;
         }
 
@@ -328,22 +390,31 @@ async function compileSource(sourceFile: string): Promise<CompileResult> {
         child.stderr?.on('data', (d: Buffer) => output.append(d.toString()));
 
         child.on('error', (e: Error) => {
-          if ((e as NodeJS.ErrnoException).code === 'ENOENT') {
-            log(`[error] compiler not found: "${plan.compiler}" — offer automatic setup`);
-            resolve('no-compiler');
+          const kind = classifySpawnFailure({ errorCode: (e as NodeJS.ErrnoException).code, closeCode: null });
+          if (kind === 'no-compiler') {
+            log(`[error] compiler not found: "${plan.compiler}" — offering automatic setup`);
+            done('no-compiler');
           } else {
             log('[error] ' + e.message);
-            resolve('failed');
+            done('failed');
           }
         });
 
         child.on('close', (code: number | null) => {
           if (code === 0) {
             log('[compile] success');
-            resolve('ok');
+            done('ok');
+            return;
+          }
+          /* Windows surfaces spawn ENOENT as a negative close code (-4058) on
+           * some runtimes — classify it as "no compiler", not "compile error" */
+          const kind = classifySpawnFailure({ errorCode: undefined, closeCode: code });
+          if (code !== null && code < 0 && kind === 'no-compiler') {
+            log(`[error] compiler "${plan.compiler}" could not be started (exit ${code}) — offering automatic setup`);
+            done('no-compiler');
           } else {
             log(`[compile] failed with exit code ${code}`);
-            resolve('failed');
+            done('failed');
           }
         });
       })
@@ -366,6 +437,35 @@ function runBinary(sourceFile: string): void {
     return;
   }
 
+  /* Windows: launch the .exe directly (detached). This is immune to whichever
+   * shell the user's terminal profile uses (PowerShell/cmd/Git Bash quoting
+   * differences), and the graphics window lives on its own. */
+  if (platform === 'windows') {
+    try {
+      const child = spawn(bin, [], {
+        cwd: path.dirname(bin),
+        env: compilerEnv(bin),
+        detached: true,
+        stdio: 'ignore',
+        windowsHide: false
+      });
+      child.on('error', (e) => {
+        log('[run] detached launch failed: ' + e.message + ' — falling back to terminal');
+        runInTerminal(bin, platform);
+      });
+      child.unref();
+      log('[run] ' + bin + ' (detached)');
+      return;
+    } catch {
+      runInTerminal(bin, platform);
+      return;
+    }
+  }
+
+  runInTerminal(bin, platform);
+}
+
+function runInTerminal(bin: string, platform: string): void {
   const term =
     vscode.window.terminals.find((t) => t.name === TERMINAL_NAME && !t.exitStatus) ||
     vscode.window.createTerminal(TERMINAL_NAME);
@@ -385,6 +485,31 @@ async function getTargetSourceFile(): Promise<string | undefined> {
     }
     return editor.document.fileName;
   }
+
+  /* untitled documents (sidebar examples opened without a workspace folder)
+   * have no path to compile — offer a Save dialog first instead of failing */
+  if (editor && (editor.document.uri.scheme === 'untitled') && /^c(pp|\+\+)?$/i.test(editor.document.languageId)) {
+    if (editor.document.isDirty) {
+      await editor.document.save();
+    }
+    const defaultUri = vscode.Uri.file(
+      path.join(vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || path.join(os.homedir(), 'Documents'), 'program.cpp')
+    );
+    const target = await vscode.window.showSaveDialog({
+      defaultUri,
+      filters: { 'C++ source': ['cpp', 'cc', 'cxx'], 'C source': ['c'] }
+    });
+    if (!target) {
+      return undefined;
+    }
+    const buf = Buffer.from(editor.document.getText(), 'utf8');
+    fs.writeFileSync(target.fsPath, buf);
+    const doc = await vscode.workspace.openTextDocument(target.fsPath);
+    await vscode.window.showTextDocument(doc, { preview: false });
+    log('[compile] untitled document saved to ' + target.fsPath);
+    return target.fsPath;
+  }
+
   const cppEditors = vscode.window.visibleTextEditors.filter((e) =>
     isCppSourceFile(e.document.fileName)
   );
@@ -451,23 +576,23 @@ function updateStatusBar(): void {
     return;
   }
   const cfg = getConfig();
-  statusItem.text = '$(check) BGI';
+  statusItem.text = '$(circle-outline) graphics.h';
   if (!cfg.showStatusBarItem) {
     statusItem.hide();
     return;
   }
   statusItem.show();
   if (!doctorCache) {
-    statusItem.text = '$(circle-outline) BGI';
+    statusItem.text = '$(circle-outline) graphics.h';
     statusItem.tooltip = 'graphics.h environment not checked yet — click to run the Setup Doctor';
     return;
   }
   if (doctorCache.graphicsReady) {
-    statusItem.text = '$(check) BGI';
+    statusItem.text = '$(check) graphics.h';
     statusItem.tooltip = `graphics.h ready — compiler OK, library: ${doctorCache.bestLibrary}. Click to re-run the Setup Doctor.`;
   } else {
-    statusItem.text = '$(alert) BGI';
-    statusItem.tooltip = `graphics.h NOT ready — ${doctorCache.compilerCheck.ok ? 'no graphics library found' : 'no working C++ compiler'}. Click to run the Setup Doctor.`;
+    statusItem.text = '$(alert) graphics.h';
+    statusItem.tooltip = `graphics.h NOT ready — ${doctorCache.compilerCheck.ok ? 'no graphics library found' : 'no working C++ compiler'}. Click for the Setup Doctor, or run Full Setup.`;
   }
 }
 
@@ -492,6 +617,7 @@ async function runDoctor(verbose: boolean): Promise<DoctorResult> {
   const res = await doctorRunning;
   doctorCache = res;
   updateStatusBar();
+  programsView?.setDoctorResult(res);
 
   log('=== Setup Doctor ===');
   log(`platform      : ${res.platform}`);
@@ -627,6 +753,10 @@ export function activate(context: vscode.ExtensionContext): void {
   const catalog = loadProgramCatalog(context.extensionPath);
   log(`[programs] sidebar catalog: ${catalog.length} programs loaded`);
   const viewProvider = new ProgramsViewProvider(catalog);
+  programsView = viewProvider;
+  if (doctorCache) {
+    viewProvider.setDoctorResult(doctorCache);
+  }
   context.subscriptions.push(
     vscode.window.registerTreeDataProvider('graphics-h-runner.programs', viewProvider),
 
@@ -699,6 +829,7 @@ export function activate(context: vscode.ExtensionContext): void {
       if (e.affectsConfiguration(CONFIG_PREFIX)) {
         doctorCache = undefined;
         updateStatusBar();
+        programsView?.setDoctorResult(undefined);
         void runDoctor(false).catch(() => undefined);
       }
     })

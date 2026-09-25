@@ -13,6 +13,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.LIBGRAPH_LINK_LIBS = exports.SDL_BGI_LINK_LIBS = exports.WINBGIM_LINK_LIBS = void 0;
 exports.resolveLinuxLibrary = resolveLinuxLibrary;
 exports.buildCompilePlan = buildCompilePlan;
+const normalize_1 = require("./normalize");
 exports.WINBGIM_LINK_LIBS = [
     '-lbgi',
     '-lgdi32',
@@ -52,7 +53,9 @@ function quoteForDisplay(p) {
  * used when autoDetect is on and the file does not include graphics.h.
  */
 function buildCompilePlan(opts, useBgi, probe) {
-    const compiler = opts.compilerPath && opts.compilerPath.length > 0 ? opts.compilerPath : 'g++';
+    /* heal messy settings (quotes / directory paths / missing .exe) — the
+     * extension already normalizes its config, this keeps pure callers safe */
+    const compiler = (0, normalize_1.normalizeCompilerPath)(opts.compilerPath && opts.compilerPath.length > 0 ? opts.compilerPath : 'g++');
     const args = [];
     const includes = opts.extraIncludePaths || [];
     const libPaths = opts.extraLibPaths || [];

@@ -7,7 +7,7 @@
 
 # graphics.h Runner — BGI C++ Graphics Toolkit for VS Code
 
-[![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.2.0-blue.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey.svg)](#per-os-setup)
 [![Tests](https://img.shields.io/badge/sample%20tests-9%2F%209%20passing-brightgreen.svg)](#tested--verified)
@@ -41,12 +41,13 @@ Press **`Ctrl+Alt+R`** → compiled with the right linker flags → graphics win
 | Feature | What it does |
 |---|---|
 | **⚡ Full Setup (0 → running)** | One command bootstraps **everything** — including the C++ compiler itself on Windows (winget auto-install, or a sha256-verified direct download fallback; per-user, **no admin rights**) — then installs WinBGIM/SDL_bgi automatically (download → patch → build → install → paths wired into settings) and re-verifies the whole toolchain live. System packages that need a password are handed to the terminal as copy-paste commands. |
-| **🧭 graphics.h sidebar (Activity Bar)** | A dedicated icon in the Activity Bar opens the **graphics.h Programs** panel: all commands at the top (with their keybindings), all 9 example programs and 5 quick templates below — **click one and it opens in the editor as `filename.cpp`**, ready to run. |
+| **🧭 graphics.h sidebar (Activity Bar)** | A dedicated icon in the Activity Bar opens the **graphics.h Programs** panel: a live **Environment status row** (Ready / Not ready / Checking) with a one-click **“Set up everything”** fix while anything is missing, all commands with their keybindings, and all 9 example programs + 5 quick templates — **click one and it opens in the editor as `filename.cpp`**, ready to run. |
 | **🩺 Setup Doctor** | Probes your compiler and *every* candidate graphics library by actually compiling a `graphics.h` probe. Reports exactly what is missing with per-OS fixes, and offers **Fix automatically**. |
 | **🔍 graphics.h auto-detect** | When `#include <graphics.h>` is present, BGI linker flags are applied automatically. Files without it still compile as plain C++. |
 | **▶️ Compile & Run** | `Ctrl+Alt+R` (compile & run), `Ctrl+Alt+B` (compile), plus **Run Last Build** — all in the Command Palette, the editor context menu, and keybindings. |
 | **🧰 Per-OS linker recipes** | Windows (WinBGIM): `-lbgi -lgdi32 -lcomdlg32 -luuid -loleaut32 -lole32` + static linking. Linux (SDL_bgi): `-lSDL_bgi -lSDL2 -lm`, or libgraph: `-lgraph`. macOS: SDL_bgi via Homebrew SDL2. Custom library prefixes get matching `-Wl,-rpath` automatically. |
-| **📊 Status bar indicator** | `✓ BGI` / `⚠ BGI` / `? BGI` at a glance. Click to run the Setup Doctor. |
+| **📊 Status bar indicator** | `✓ graphics.h` / `⚠ graphics.h` / `? graphics.h` at a glance. Click to run the Setup Doctor. |
+| **🛡️ Messy-settings healing** | Real-world PCs have messy configs. The extension heals them on every run: quoted paths (`"C:\...\g++.exe"`), `%ENV%`/`$VAR` variables, `~`, trailing slashes, **directory-instead-of-exe** paths, missing `.exe` suffixes, stale include/lib dirs from old installs (auto-pruned), and Windows' raw `-4058` spawn failures are all recognized and routed to the one-click fix instead of cryptic errors. |
 | **✂️ Snippets** | `gfxprog`, `gfx-anim`, `gfx-mouse`, `gfx-kbd`, `gfx-text`, `gfx-bar`. |
 | **📄 Code templates** | 5 insertable programs: basic window, animation loop, mouse paint, keyboard control, fractal tree. |
 | **📖 Setup Guide** | In-editor webview with per-OS walkthroughs. |
@@ -60,9 +61,9 @@ Extensions view (`Ctrl+Shift+X`), or from the command line:
 code --install-extension mythos0-labs.graphics-h-runner
 ```
 
-**From a GitHub release:** download `graphics-h-runner-1.1.0.vsix` from
+**From a GitHub release:** download `graphics-h-runner-1.2.0.vsix` from
 [Releases](../../releases), then in VS Code: `Extensions view → ⋯ → Install from VSIX…`
-(or `code --install-extension graphics-h-runner-1.1.0.vsix`).
+(or `code --install-extension graphics-h-runner-1.2.0.vsix`).
 
 **From source:**
 

@@ -412,10 +412,13 @@ export async function installCompilerViaWinget(
  *   1. winget portable packages  (%LOCALAPPDATA%\Microsoft\WinGet\Packages)
  *   2. winget shims             (%LOCALAPPDATA%\Microsoft\WinGet\Links)
  *   3. classic install roots     (C:\MinGW, C:\msys64\{ucrt64,mingw64}, C:\TDM-GCC-64, C:\mingw64)
+ *   4. student-common IDE bundles (Code::Blocks, Dev-C++, Embarcadero)
+ *   5. anything already on PATH  (half-setup PCs where the installer edited
+ *      PATH but the current VS Code process was started before that)
  * The search is depth-bounded and entry-capped so it can never scan forever.
- * `opts.localAppData` can be overridden for unit testing.
+ * `opts.localAppData` / `opts.env` can be overridden for unit testing.
  */
-export function discoverGppWindows(opts: { localAppData?: string } = {}): string[] {
+export function discoverGppWindows(opts: { localAppData?: string; env?: Record<string, string | undefined> } = {}): string[] {
   const candidates: string[] = [];
   const seen = new Set<string>();
   const add = (p: string) => {
@@ -426,7 +429,8 @@ export function discoverGppWindows(opts: { localAppData?: string } = {}): string
     }
   };
 
-  const localAppData = opts.localAppData || process.env.LOCALAPPDATA;
+  const env = opts.env || (process.env as Record<string, string | undefined>);
+  const localAppData = opts.localAppData || env.LOCALAPPDATA;
   if (localAppData && fs.existsSync(localAppData)) {
     const packagesDir = path.join(localAppData, 'Microsoft', 'WinGet', 'Packages');
     const linksDir = path.join(localAppData, 'Microsoft', 'WinGet', 'Links');
@@ -436,10 +440,28 @@ export function discoverGppWindows(opts: { localAppData?: string } = {}): string
   }
 
   const roots = ['C:\\MinGW\\bin', 'C:\\mingw64\\bin', 'C:\\msys64\\ucrt64\\bin',
-                 'C:\\msys64\\mingw64\\bin', 'C:\\TDM-GCC-64\\bin', 'C:\\TDM-GCC-64\\mingw64\\bin'];
+                 'C:\\msys64\\mingw64\\bin', 'C:\\TDM-GCC-64\\bin', 'C:\\TDM-GCC-64\\mingw64\\bin',
+                 'C:\\Program Files\\CodeBlocks\\MinGW\\bin',
+                 'C:\\Program Files (x86)\\CodeBlocks\\MinGW\\bin',
+                 'C:\\Program Files (x86)\\Dev-Cpp\\MinGW64\\bin',
+                 'C:\\Dev-Cpp\\MinGW64\\bin',
+                 'C:\\Program Files\\mingw-w64\\x86_64-12.2.0-release-posix-seh-ucrt-rt_v10-rev2\\mingw64\\bin',
+                 'C:\\Program Files\\mingw-w64\\mingw64\\bin',
+                 'C:\\Program Files (x86)\\mingw-w64\\i686-posix-dwarf-rev0\\mingw32\\bin'];
   for (const r of roots) {
     add(path.join(r, 'g++.exe'));
   }
+
+  /* PATH scan: catches installers that already edited the machine/user PATH
+   * while this VS Code process still runs with an older PATH snapshot. */
+  for (const dir of (env.PATH || '').split(path.delimiter)) {
+    const d = dir.trim();
+    if (!d) {
+      continue;
+    }
+    add(path.join(d, 'g++.exe'));
+  }
+
   // 64-bit toolchains first (winget packages also contain a 32-bit mingw32/)
   return candidates.sort((a, b) => Number(/mingw64/i.test(b)) - Number(/mingw64/i.test(a)));
 }
@@ -497,6 +519,24 @@ export async function installCompilerWindowsDirect(
   const zipPath = path.join(workDir, WINLIBS_FALLBACK.url.split('/').pop() || 'winlibs.zip');
   fs.mkdirSync(workDir, { recursive: true });
 
+  /* 0. idempotency: a previous attempt may already have extracted the
+   * toolchain (crashed PC, re-run setup). Reuse it instead of re-downloading
+   * 274 MB. */
+  const preFound: string[] = [];
+  walkForFile(workDir, 'g++.exe', 4, 8000, (p) => preFound.push(p));
+  const preGpp =
+    preFound.find((p) => /mingw64/i.test(p)) ||
+    preFound.find((p) => /mingw32/i.test(p)) ||
+    preFound[0];
+  if (preGpp) {
+    const pre = await verifyCompilerRun(preGpp);
+    if (pre.ok) {
+      log.push('re-using previously extracted toolchain: ' + preGpp);
+      onProgress?.({ message: 'Compiler already downloaded — re-using it.', percent: 100 });
+      return { gppPath: preGpp, binDir: path.dirname(preGpp), log };
+    }
+  }
+
   /* 1. download (streaming + progress) */
   onProgress?.({ message: `Downloading WinLibs GCC (${Math.round(WINLIBS_FALLBACK.sizeBytes / 1e6)} MB)…`, percent: 0 });
   const res = await fetch(WINLIBS_FALLBACK.url, { redirect: 'follow', signal: AbortSignal.timeout(60 * 60 * 1000) } as RequestInit);
@@ -534,18 +574,34 @@ export async function installCompilerWindowsDirect(
     log.push('checksum check skipped/failed: ' + String(e));
   }
 
-  /* 3. extract with PowerShell (built into Windows 10/11) */
+  /* 3. extract — try the built-in bsdtar first (Windows 10 1803+, much faster
+   * than Expand-Archive on multi-hundred-MB archives), fall back to the
+   * built-in PowerShell Expand-Archive (every Windows 10/11 has it). */
   onProgress?.({ message: 'Extracting (this can take a few minutes)…', percent: 93 });
-  const psScript = `Expand-Archive -LiteralPath '${zipPath.replace(/'/g, "''")}' -DestinationPath '${workDir.replace(/'/g, "''")}' -Force`;
-  const ps = await runProcessStreaming(
-    'powershell.exe',
-    ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', psScript],
-    { timeoutMs: 30 * 60 * 1000, onLine: (l) => log.push('ps: ' + l.slice(0, 100)) }
+  let extractOk = false;
+  const tar = await runProcessStreaming(
+    path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe'),
+    ['-xf', zipPath, '-C', workDir],
+    { timeoutMs: 30 * 60 * 1000, onLine: (l) => log.push('tar: ' + l.slice(0, 100)) }
   );
-  if (ps.code !== 0) {
-    throw new Error('extraction failed: ' + ps.tail.slice(-300));
+  if (tar.code === 0 && !tar.spawnFailed) {
+    extractOk = true;
+    log.push('extracted with bsdtar');
+  } else {
+    log.push('bsdtar unavailable/failed, falling back to Expand-Archive');
+    const psScript = `Expand-Archive -LiteralPath '${zipPath.replace(/'/g, "''")}' -DestinationPath '${workDir.replace(/'/g, "''")}' -Force`;
+    const ps = await runProcessStreaming(
+      'powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', psScript],
+      { timeoutMs: 30 * 60 * 1000, onLine: (l) => log.push('ps: ' + l.slice(0, 100)) }
+    );
+    if (ps.code !== 0) {
+      throw new Error('extraction failed: ' + ps.tail.slice(-300));
+    }
+    extractOk = true;
+    log.push('extracted with Expand-Archive');
   }
-  log.push('extracted with Expand-Archive');
+  void extractOk;
 
   /* 4. find g++.exe (prefer mingw64 over mingw32) */
   const found: string[] = [];
@@ -562,6 +618,15 @@ export async function installCompilerWindowsDirect(
     throw new Error('downloaded g++.exe did not run');
   }
   log.push('compiler OK: ' + check.version);
+
+  /* 5. free the disk: the 274 MB zip is no longer needed */
+  try {
+    fs.rmSync(zipPath, { force: true });
+    log.push('removed downloaded zip archive');
+  } catch {
+    log.push('could not remove zip archive (non-fatal)');
+  }
+
   onProgress?.({ message: 'Compiler ready.', percent: 100 });
   return { gppPath: gpp, binDir: path.dirname(gpp), log };
 }

@@ -77,10 +77,10 @@ const TEMPLATE_META = [
 /** Commands shown at the top of the sidebar for discoverability. */
 exports.COMMAND_META = [
     { id: 'cmd-compileAndRun', commandId: 'graphics-h-runner.compileAndRun', title: 'Compile & Run', hint: 'Ctrl+Alt+R', icon: 'play' },
+    { id: 'cmd-setup', commandId: 'graphics-h-runner.setupEverything', title: 'Full Setup (0 to running)', hint: 'installs everything', icon: 'rocket' },
+    { id: 'cmd-doctor', commandId: 'graphics-h-runner.doctor', title: 'Setup Doctor', hint: 'check environment', icon: 'check' },
     { id: 'cmd-compile', commandId: 'graphics-h-runner.compile', title: 'Compile', hint: 'Ctrl+Alt+B', icon: 'file-binary' },
     { id: 'cmd-run', commandId: 'graphics-h-runner.run', title: 'Run Last Build', hint: 'opens a terminal', icon: 'terminal' },
-    { id: 'cmd-doctor', commandId: 'graphics-h-runner.doctor', title: 'Setup Doctor', hint: 'check environment', icon: 'check' },
-    { id: 'cmd-setup', commandId: 'graphics-h-runner.setupEverything', title: 'Full Setup (0 to running)', hint: 'auto-install libs', icon: 'rocket' },
     { id: 'cmd-template', commandId: 'graphics-h-runner.insertTemplate', title: 'Insert Code Template', hint: 'into editor', icon: 'wand' },
     { id: 'cmd-guide', commandId: 'graphics-h-runner.showGuide', title: 'Show Setup Guide', hint: 'step-by-step', icon: 'book' }
 ];

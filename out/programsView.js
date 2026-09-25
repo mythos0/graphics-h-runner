@@ -2,13 +2,17 @@
 /**
  * programsView.ts — TreeDataProvider for the graphics.h sidebar (activity bar).
  *
- * Layout (top -> bottom, so the commands are immediately visible):
- *   ▸ Commands            — one click runs the command (keys shown on the right)
+ * Layout (top -> bottom, ordered by what a user needs first):
+ *   ● Environment         — live status: Ready / Not ready / Checking…
+ *   ⚡ Set up everything   — one-click fix, shown while the environment is
+ *                            NOT ready (disappears once it is)
+ *   ▸ Commands            — compile & run, setup, doctor, templates, guide
  *   ▸ Example Programs    — all bundled graphics.h sample programs
- *   ▸ Quick Templates     — minimal starting-point code templates
+ *   ▸ Quick Templates     — minimal starting-point code (collapsed by default)
  *
  * Clicking a program fires graphics-h-runner.openProgram, which opens it
- * in the editor as filename.cpp.
+ * in the editor as filename.cpp. Clicking the environment row (or the fix)
+ * runs the Setup Doctor / Full Setup respectively.
  */
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
@@ -56,9 +60,17 @@ class ProgramsViewProvider {
     refresh() {
         this._onDidChangeTreeData.fire(undefined);
     }
+    /** Called by the extension whenever a doctor probe finishes (or resets). */
+    setDoctorResult(res) {
+        this.doctorStatus = res;
+        this.refresh();
+    }
     getTreeItem(node) {
+        if (node.kind === 'status') {
+            return this.statusItem();
+        }
         if (node.kind === 'section') {
-            const item = new vscode.TreeItem(node.label, vscode.TreeItemCollapsibleState.Expanded);
+            const item = new vscode.TreeItem(node.label, node.collapsed ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.Expanded);
             item.id = node.id;
             item.iconPath = new vscode.ThemeIcon(node.icon);
             item.contextValue = 'section';
@@ -87,20 +99,61 @@ class ProgramsViewProvider {
         };
         return item;
     }
+    statusItem() {
+        const item = new vscode.TreeItem('Environment', vscode.TreeItemCollapsibleState.None);
+        item.id = 'environment-status';
+        item.command = { command: 'graphics-h-runner.doctor', title: 'Setup Doctor' };
+        if (!this.doctorStatus) {
+            item.description = 'checking…';
+            item.iconPath = new vscode.ThemeIcon('sync~spin');
+            item.contextValue = 'status-checking';
+            item.tooltip = new vscode.MarkdownString('The Setup Doctor is probing the compiler and graphics libraries…');
+            return item;
+        }
+        const lib = this.doctorStatus.bestLibrary;
+        if (this.doctorStatus.graphicsReady) {
+            item.description = `Ready — ${lib}`;
+            item.iconPath = new vscode.ThemeIcon('check', new vscode.ThemeColor('testing.iconPassed'));
+            item.contextValue = 'status-ready';
+            item.tooltip = new vscode.MarkdownString('**graphics.h is ready to use.**  \nCompiler OK, library: `' + (lib ?? '?') + '`.  \n\n' +
+                '_Open an example below and press **Ctrl+Alt+R**._  \nClick to re-run the Setup Doctor.');
+            return item;
+        }
+        const reason = this.doctorStatus.compilerCheck.ok
+            ? 'no graphics library found'
+            : 'no working C++ compiler';
+        item.description = `Not ready — ${reason}`;
+        item.iconPath = new vscode.ThemeIcon('warning', new vscode.ThemeColor('testing.iconFailed'));
+        item.contextValue = 'status-not-ready';
+        item.tooltip = new vscode.MarkdownString(`**graphics.h is NOT ready yet** (${reason}).  \n\n` +
+            '_Click **“Set up everything”** below — it installs everything automatically, no admin rights._  \n' +
+            'Click this row to see the detailed Setup Doctor report.');
+        return item;
+    }
     getChildren(el) {
         if (!el) {
             const cmdNodes = programs_1.COMMAND_META.map((c) => ({ kind: 'command', id: c.id, commandId: c.commandId, title: c.title, hint: c.hint, icon: c.icon }));
+            const nodes = [{ kind: 'status', id: 'environment-status' }];
+            /* one-click fix while the environment is broken — the single most
+             * important action for a fresh-PC user */
+            if (this.doctorStatus && !this.doctorStatus.graphicsReady) {
+                nodes.push({
+                    kind: 'command',
+                    id: 'cta-setup-everything',
+                    commandId: 'graphics-h-runner.setupEverything',
+                    title: 'Set up everything (fix this)',
+                    hint: 'recommended',
+                    icon: 'rocket'
+                });
+            }
             const sampleNodes = this.programs
                 .filter((p) => p.kind === 'sample')
                 .map((p) => ({ kind: 'program', id: 'prog-' + p.id, program: p }));
             const templateNodes = this.programs
                 .filter((p) => p.kind === 'template')
                 .map((p) => ({ kind: 'program', id: 'prog-' + p.id, program: p }));
-            return [
-                { kind: 'section', id: 'sec-commands', label: 'Commands', icon: 'zap', children: cmdNodes },
-                { kind: 'section', id: 'sec-samples', label: 'Example Programs (graphics.h)', icon: 'folder-opened', children: sampleNodes },
-                { kind: 'section', id: 'sec-templates', label: 'Quick Templates', icon: 'folder-opened', children: templateNodes }
-            ];
+            nodes.push({ kind: 'section', id: 'sec-commands', label: 'Commands', icon: 'zap', children: cmdNodes }, { kind: 'section', id: 'sec-samples', label: 'Example Programs', icon: 'folder-opened', children: sampleNodes }, { kind: 'section', id: 'sec-templates', label: 'Quick Templates', icon: 'folder', children: templateNodes, collapsed: true });
+            return nodes;
         }
         if (el.kind === 'section') {
             return el.children;

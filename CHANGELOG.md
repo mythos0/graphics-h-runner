@@ -1,5 +1,56 @@
 # ChangeLog
 
+## 1.2.0 — 2026-09-25
+
+Robustness across every kind of PC (fresh / half-setup / messy settings) and a
+friendlier Activity Bar.
+
+### Added
+- **Environment status row** at the top of the graphics.h sidebar: live
+  *Ready — library* / *Not ready — reason* / *Checking…* state (kept in sync by
+  the Setup Doctor), plus a one-click **“Set up everything (fix this)”** button
+  that appears exactly while the environment is broken.
+- **Full Setup rocket button** in the sidebar title bar — the most important
+  action for a fresh PC is now always one click away.
+- **Compiler fast-path discovery**: Full Setup first checks the whole PC for an
+  existing working `g++.exe` (winget packages/shims, MinGW/MSYS2/TDM-GCC roots,
+  Code::Blocks & Dev-C++ bundles, every `PATH` entry) and skips the download
+  entirely when one is found — half-setup PCs are fixed in seconds.
+- Compiler discovery also scans **PATH entries** (catches installers that
+  edited PATH after VS Code was already running) and student-common IDE
+  compiler bundles.
+- **Untitled-document flow**: running an example opened without a workspace
+  folder now offers a Save dialog and continues compiling, instead of failing
+  with “open a .cpp file”.
+- `.c` files get the same keybindings (`Ctrl+Alt+R` / `Ctrl+Alt+B`) and editor
+  context-menu entries as `.cpp`.
+- New robustness suite `test/pc-states-tests.js` — 51 checks covering fresh,
+  half-setup and messy-settings PC states.
+
+### Fixed
+- **Windows `-4058` spawn failures** (`spawn g++ ENOENT` variants) are now
+  classified as “no compiler” on every runtime path, so users always get the
+  one-click setup dialog instead of a raw compile error.
+- **Messy settings are healed on read**: quotes, double-quotes (“copy as path”),
+  single quotes, `%ENV%` / `$VAR` / `${VAR}` / `~` expansion, trailing
+  slashes/backslashes, directory-instead-of-exe compiler paths, missing `.exe`
+  suffixes, and case-duplicate path lists all resolve to a working value.
+- **Stale include/lib paths** (deleted toolchain folders, wiped globalStorage)
+  are pruned automatically during Full Setup so diagnostics stay truthful.
+- Setup no longer attempts the SDL_bgi build while the compiler is still
+  missing on Linux/macOS (it used to fail noisily before the terminal step).
+- The direct-download fallback is now **idempotent** (re-uses an already
+  extracted toolchain instead of re-downloading 274 MB), tries the built-in
+  `tar.exe` first (much faster than `Expand-Archive` on large archives), and
+  deletes the zip after successful extraction to free disk space.
+- Setup Doctor now shows the detected compiler version and the *normalized*
+  path in its report, making broken settings obvious.
+- Windows: compiled programs are launched **directly (detached)** instead of
+  through the integrated terminal — immune to PowerShell/cmd/Git Bash quoting
+  differences, with terminal fallback if launching fails.
+- Status bar text is now human-readable (`✓ graphics.h`) instead of the cryptic
+  `✓ BGI`; Quick Templates section in the sidebar starts collapsed.
+
 ## 1.1.0 — 2026-09-25
 
 Zero-touch Windows setup — the compiler is now installed automatically too.

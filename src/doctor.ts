@@ -10,6 +10,7 @@ import { tmpdir } from 'os';
 import * as path from 'path';
 import { Platform } from './toolchain';
 import { LinuxLibrary } from './buildArgs';
+import { normalizeCompilerPath } from './normalize';
 
 export interface DoctorCheck {
   name: string;
@@ -40,6 +41,7 @@ const PROBE_SOURCE = '#include <graphics.h>\n\nint main () { return 0; }\n';
 interface RunOutcome {
   code: number;
   stderr: string;
+  stdout: string;
 }
 
 function runProcess(cmd: string, args: string[], timeoutMs: number): Promise<RunOutcome> {
@@ -47,10 +49,11 @@ function runProcess(cmd: string, args: string[], timeoutMs: number): Promise<Run
     execFile(
       cmd,
       args,
-      { timeout: timeoutMs, windowsHide: true },
+      { timeout: timeoutMs, windowsHide: true, maxBuffer: 16 * 1024 * 1024 },
       (err: Error | null, _stdout: string | Buffer, stderr: string | Buffer) => {
+        const stdout = String(_stdout || '');
         if (!err) {
-          resolve({ code: 0, stderr: String(stderr || '') });
+          resolve({ code: 0, stderr: String(stderr || ''), stdout });
         } else {
           const anyErr = err as { code?: number | string; killed?: boolean };
           let code = -1;
@@ -59,7 +62,7 @@ function runProcess(cmd: string, args: string[], timeoutMs: number): Promise<Run
           } else if (anyErr.killed) {
             code = 124; // timeout-like
           }
-          resolve({ code, stderr: String(stderr || err.message || '') });
+          resolve({ code, stderr: String(stderr || err.message || ''), stdout });
         }
       }
     );
@@ -174,18 +177,23 @@ export function librariesForPlatform(platform: Platform): Array<'winbgim' | 'sdl
  * Full environment probe: compiler + every candidate graphics library.
  */
 export async function probeEnvironment(opts: DoctorOptions): Promise<DoctorResult> {
-  const compiler = opts.compilerPath && opts.compilerPath.length > 0 ? opts.compilerPath : 'g++';
+  /* heal messy settings first: quotes, env vars, ~, directory paths, .exe */
+  const compiler = normalizeCompilerPath(
+    opts.compilerPath && opts.compilerPath.length > 0 ? opts.compilerPath : 'g++'
+  );
 
   const versionRes = await runProcess(compiler, ['--version'], 15000);
-  const versionLine = versionRes.stderr
-    ? ''
+  const versionLine = versionRes.code === 0
+    ? versionRes.stdout.split(/\r?\n/).find((l) => l.trim()) || ''
     : '';
   const compilerCheck: DoctorCheck = {
     name: `compiler (${compiler})`,
     ok: versionRes.code === 0,
     detail:
       versionRes.code === 0
-        ? 'found and executable'
+        ? versionLine
+          ? `found and executable — ${versionLine.trim().slice(0, 90)}`
+          : 'found and executable'
         : `could not run "${compiler}" (exit ${versionRes.code})`,
     fix:
       versionRes.code === 0
@@ -194,7 +202,6 @@ export async function probeEnvironment(opts: DoctorOptions): Promise<DoctorResul
           ? 'Run "graphics.h: Full Setup (everything, automatic)" — it installs g++ + WinBGIM automatically (winget or direct download, no admin rights). Or set "graphics-h-runner.compilerPath" to an existing g++.exe.'
           : 'Install g++ (e.g. sudo apt install build-essential) or set "graphics-h-runner.compilerPath".'
   };
-  void versionLine;
 
   const libs = librariesForPlatform(opts.platform);
   const libraryChecks: DoctorCheck[] = [];

@@ -44,12 +44,14 @@ const child_process_1 = require("child_process");
 const fs_1 = require("fs");
 const os_1 = require("os");
 const path = __importStar(require("path"));
+const normalize_1 = require("./normalize");
 const PROBE_SOURCE = '#include <graphics.h>\n\nint main () { return 0; }\n';
 function runProcess(cmd, args, timeoutMs) {
     return new Promise((resolve) => {
-        (0, child_process_1.execFile)(cmd, args, { timeout: timeoutMs, windowsHide: true }, (err, _stdout, stderr) => {
+        (0, child_process_1.execFile)(cmd, args, { timeout: timeoutMs, windowsHide: true, maxBuffer: 16 * 1024 * 1024 }, (err, _stdout, stderr) => {
+            const stdout = String(_stdout || '');
             if (!err) {
-                resolve({ code: 0, stderr: String(stderr || '') });
+                resolve({ code: 0, stderr: String(stderr || ''), stdout });
             }
             else {
                 const anyErr = err;
@@ -60,7 +62,7 @@ function runProcess(cmd, args, timeoutMs) {
                 else if (anyErr.killed) {
                     code = 124; // timeout-like
                 }
-                resolve({ code, stderr: String(stderr || err.message || '') });
+                resolve({ code, stderr: String(stderr || err.message || ''), stdout });
             }
         });
     });
@@ -160,16 +162,19 @@ function librariesForPlatform(platform) {
  * Full environment probe: compiler + every candidate graphics library.
  */
 async function probeEnvironment(opts) {
-    const compiler = opts.compilerPath && opts.compilerPath.length > 0 ? opts.compilerPath : 'g++';
+    /* heal messy settings first: quotes, env vars, ~, directory paths, .exe */
+    const compiler = (0, normalize_1.normalizeCompilerPath)(opts.compilerPath && opts.compilerPath.length > 0 ? opts.compilerPath : 'g++');
     const versionRes = await runProcess(compiler, ['--version'], 15000);
-    const versionLine = versionRes.stderr
-        ? ''
+    const versionLine = versionRes.code === 0
+        ? versionRes.stdout.split(/\r?\n/).find((l) => l.trim()) || ''
         : '';
     const compilerCheck = {
         name: `compiler (${compiler})`,
         ok: versionRes.code === 0,
         detail: versionRes.code === 0
-            ? 'found and executable'
+            ? versionLine
+                ? `found and executable — ${versionLine.trim().slice(0, 90)}`
+                : 'found and executable'
             : `could not run "${compiler}" (exit ${versionRes.code})`,
         fix: versionRes.code === 0
             ? undefined
@@ -177,7 +182,6 @@ async function probeEnvironment(opts) {
                 ? 'Run "graphics.h: Full Setup (everything, automatic)" — it installs g++ + WinBGIM automatically (winget or direct download, no admin rights). Or set "graphics-h-runner.compilerPath" to an existing g++.exe.'
                 : 'Install g++ (e.g. sudo apt install build-essential) or set "graphics-h-runner.compilerPath".'
     };
-    void versionLine;
     const libs = librariesForPlatform(opts.platform);
     const libraryChecks = [];
     for (const lib of libs) {

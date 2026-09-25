@@ -4,9 +4,12 @@
  * Validates:
  *  1. loadProgramCatalog() loads all 9 samples + 5 templates with real source
  *  2. ProgramsViewProvider produces the expected tree:
+ *     - environment status node on top (checking / ready / not-ready)
+ *     - one-click "Set up everything" fix appears while NOT ready
  *     - 3 sections, first section = Commands with 7 command nodes
  *     - every command node carries a working command id
  *     - every program node fires graphics-h-runner.openProgram with filename.cpp
+ *     - Quick Templates section is collapsed (less clutter)
  *  3. resolveProgramTarget() puts files under <ws>/graphics-h-programs/
  */
 'use strict';
@@ -32,7 +35,8 @@ require.cache['vscode-stub'] = {
       constructor(label, state) { this.label = label; this.collapsibleState = state; }
     },
     TreeItemCollapsibleState: { None: 0, Collapsed: 1, Expanded: 2 },
-    ThemeIcon: class ThemeIcon { constructor(id) { this.id = id; } },
+    ThemeIcon: class ThemeIcon { constructor(id, color) { this.id = id; this.color = color; } },
+    ThemeColor: class ThemeColor { constructor(id) { this.id = id; } },
     MarkdownString: class MarkdownString { constructor(v) { this.value = v; } },
     EventEmitter: class EventEmitter {
       constructor() { this.event = () => ({ dispose() {} }); }
@@ -71,26 +75,31 @@ check('all samples end with .cpp', samples.every((p) => /^[\w-]+\.cpp$/.test(p.f
 // 2. tree
 const provider = new ProgramsViewProvider(catalog);
 const top = provider.getChildren();
-check('3 top-level sections', top.length === 3);
-check('section 0 is Commands', top[0].label === 'Commands');
-check('section 1 is Example Programs (graphics.h)', top[1].label === 'Example Programs (graphics.h)');
-check('section 2 is Quick Templates', top[2].label === 'Quick Templates');
+check('top level = status + 3 sections (no doctor result yet)', top.length === 4);
+check('node 0 is the environment status node', top[0].kind === 'status');
+const statusItem0 = provider.getTreeItem(top[0]);
+check('status shows "checking…" before first doctor run', statusItem0.description === 'checking…');
 
-const cmdNodes = provider.getChildren(top[0]);
+check('section 1 is Commands', top[1].label === 'Commands');
+check('section 2 is Example Programs', top[2].label === 'Example Programs');
+check('section 3 is Quick Templates', top[3].label === 'Quick Templates');
+check('Quick Templates section is collapsed by default', top[3].collapsed === true);
+
+const cmdNodes = provider.getChildren(top[1]);
 check('7 command nodes', cmdNodes.length === 7);
 check('commands run on click (each tree item has command.command)',
   cmdNodes.every((n) => { const it = provider.getTreeItem(n); return it.command && it.command.command.startsWith('graphics-h-runner.'); }));
 check('first command is Compile & Run with hint Ctrl+Alt+R',
   cmdNodes[0].title === 'Compile & Run' && cmdNodes[0].hint === 'Ctrl+Alt+R');
 const expectedCmds = [
-  'graphics-h-runner.compileAndRun', 'graphics-h-runner.compile', 'graphics-h-runner.run',
-  'graphics-h-runner.doctor', 'graphics-h-runner.setupEverything',
+  'graphics-h-runner.compileAndRun', 'graphics-h-runner.setupEverything', 'graphics-h-runner.doctor',
+  'graphics-h-runner.compile', 'graphics-h-runner.run',
   'graphics-h-runner.insertTemplate', 'graphics-h-runner.showGuide'
 ];
-check('command ids match registered commands',
+check('command ids match registered commands (setup-friendly order)',
   cmdNodes.every((n, i) => n.commandId === expectedCmds[i]));
 
-const sampleNodes = provider.getChildren(top[1]);
+const sampleNodes = provider.getChildren(top[2]);
 check('9 sample nodes', sampleNodes.length === 9);
 const sampleItems = sampleNodes.map((n) => provider.getTreeItem(n));
 check('sample items open via openProgram with arguments',
@@ -98,10 +107,39 @@ check('sample items open via openProgram with arguments',
 check('sample items show filename.cpp as description',
   sampleItems.every((it, i) => it.description === samples[i].filename));
 
-const tplNodes = provider.getChildren(top[2]);
+const tplNodes = provider.getChildren(top[3]);
 check('5 template nodes', tplNodes.length === 5);
 check('template items also open via openProgram',
   tplNodes.every((n) => provider.getTreeItem(n).command.command === 'graphics-h-runner.openProgram'));
+
+// 2b. status node reacts to doctor results
+provider.setDoctorResult({
+  graphicsReady: true, bestLibrary: 'winbgim',
+  compilerCheck: { ok: true }, libraryChecks: [{ name: 'winbgim', ok: true }]
+});
+const topReady = provider.getChildren();
+check('ready env: still status + 3 sections (no CTA)', topReady.length === 4);
+const readyItem = provider.getTreeItem(topReady[0]);
+check('ready env status says Ready — winbgim', /Ready — winbgim/.test(String(readyItem.description)));
+
+provider.setDoctorResult({
+  graphicsReady: false, bestLibrary: null,
+  compilerCheck: { ok: false }, libraryChecks: [{ name: 'winbgim', ok: false }]
+});
+const topBad = provider.getChildren();
+check('not-ready env: status + CTA + 3 sections', topBad.length === 5);
+check('CTA is the setup-everything command',
+  topBad[1].kind === 'command' && topBad[1].commandId === 'graphics-h-runner.setupEverything');
+const badItem = provider.getTreeItem(topBad[0]);
+check('not-ready status mentions the reason', /Not ready/.test(String(badItem.description)));
+
+provider.setDoctorResult(undefined);
+check('resetting doctor result restores checking state',
+  provider.getTreeItem(provider.getChildren()[0]).description === 'checking…');
+provider.setDoctorResult({
+  graphicsReady: true, bestLibrary: 'winbgim',
+  compilerCheck: { ok: true }, libraryChecks: [{ name: 'winbgim', ok: true }]
+});
 
 // getTreeItem sanity for one node of each kind
 const cmdItem = provider.getTreeItem(cmdNodes[0]);

@@ -2,7 +2,7 @@
   "name": "graphics-h-runner",
   "displayName": "graphics.h Runner — BGI C++ Graphics Toolkit",
   "description": "Compile & run C++ graphics.h programs (WinBGIM / SDL_bgi) with one keypress. Auto-detects graphics.h, applies the right linker flags per OS, auto-installs everything from zero, and ships a sidebar with 9 runnable examples, a Setup Doctor, snippets and templates.",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "publisher": "mythos0-labs",
   "author": {
     "name": "Department of CSE, Dhaka International University",
@@ -110,7 +110,8 @@
       {
         "command": "graphics-h-runner.setupEverything",
         "title": "Full Setup — Install Everything (0 to running)",
-        "category": "graphics.h"
+        "category": "graphics.h",
+        "icon": "$(rocket)"
       },
       {
         "command": "graphics-h-runner.insertTemplate",
@@ -195,25 +196,40 @@
         "when": "editorTextFocus && resourceLangId == cpp"
       },
       {
+        "command": "graphics-h-runner.compileAndRun",
+        "key": "ctrl+alt+r",
+        "when": "editorTextFocus && resourceLangId == c"
+      },
+      {
         "command": "graphics-h-runner.compile",
         "key": "ctrl+alt+b",
         "when": "editorTextFocus && resourceLangId == cpp"
+      },
+      {
+        "command": "graphics-h-runner.compile",
+        "key": "ctrl+alt+b",
+        "when": "editorTextFocus && resourceLangId == c"
       }
     ],
     "menus": {
       "editor/context": [
         {
           "command": "graphics-h-runner.compileAndRun",
-          "when": "resourceLangId == cpp",
+          "when": "resourceLangId == cpp || resourceLangId == c",
           "group": "graphics_h@1"
         },
         {
           "command": "graphics-h-runner.compile",
-          "when": "resourceLangId == cpp",
+          "when": "resourceLangId == cpp || resourceLangId == c",
           "group": "graphics_h@2"
         }
       ],
       "view/title": [
+        {
+          "command": "graphics-h-runner.setupEverything",
+          "when": "view == graphics-h-runner.programs",
+          "group": "navigation@0"
+        },
         {
           "command": "graphics-h-runner.compileAndRun",
           "when": "view == graphics-h-runner.programs",
