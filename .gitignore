@@ -4,3 +4,4 @@ out/*.map
 build/
 docs/screenshots/*.png.tmp
 .DS_Store
+dist/

@@ -7,7 +7,7 @@
 
 # graphics.h Runner — BGI C++ Graphics Toolkit for VS Code
 
-[![Version](https://img.shields.io/badge/version-1.2.0-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.3.0-blue.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey.svg)](#per-os-setup)
 [![Tests](https://img.shields.io/badge/sample%20tests-9%2F%209%20passing-brightgreen.svg)](#tested--verified)
@@ -61,9 +61,9 @@ Extensions view (`Ctrl+Shift+X`), or from the command line:
 code --install-extension mythos0-labs.graphics-h-runner
 ```
 
-**From a GitHub release:** download `graphics-h-runner-1.2.0.vsix` from
+**From a GitHub release:** download `graphics-h-runner-1.3.0.vsix` from
 [Releases](../../releases), then in VS Code: `Extensions view → ⋯ → Install from VSIX…`
-(or `code --install-extension graphics-h-runner-1.2.0.vsix`).
+(or `code --install-extension graphics-h-runner-1.3.0.vsix`).
 
 **From source:**
 
@@ -128,6 +128,24 @@ The **graphics.h Runner** icon in the Activity Bar shows, from top to bottom:
 | `graphics-h-runner.extraLibPaths` | `[]` | Extra `-L` dirs (auto-managed by Full Setup) |
 | `graphics-h-runner.extraCompilerArgs` | `[]` | e.g. `["-std=c++17", "-Wall"]` |
 | `graphics-h-runner.showStatusBarItem` | `true` | Show the BGI status indicator |
+
+## Telemetry (automatic error collection)
+
+This extension collects **crash and error reports automatically** through
+[Sentry](https://sentry.io) so setup failures on any PC can be found and fixed
+without asking anyone to copy-paste logs. What this means in practice:
+
+- **Consent first** — nothing is ever sent unless VS Code telemetry is enabled
+  (`Settings → Telemetry → Telemetry Level` is not `Off`). Toggling that setting
+  enables or disables collection immediately; there is no separate opt-in.
+- **What is collected** — uncaught exceptions and unhandled rejections, plus
+  context that makes them diagnosable: stack traces, breadcrumbs (e.g. “compile
+  failed”, “Full Setup step: install-winbgim”), and tags such as OS, CPU
+  architecture, VS Code version and the detected graphics library.
+- **What is never collected** — your source code, file contents, compiler
+  output, file names from outside the breadcrumbs above, or anything you type.
+  User-identifying path segments (`C:\Users\<name>`, `/home/<name>`) are
+  scrubbed from every event before it leaves your machine.
 
 ## Tested & verified
 

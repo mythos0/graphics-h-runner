@@ -7,6 +7,9 @@
  * status-bar environment indicator.
  */
 
+/* Sentry automatic error collection — MUST stay the first import so the SDK is
+ * initialized before any other extension module loads (instrument-first rule). */
+import './instrument';
 import * as vscode from 'vscode';
 import { spawn } from 'child_process';
 import * as fs from 'fs';
@@ -41,6 +44,14 @@ import {
   classifySpawnFailure,
   NormalizeOptions
 } from './normalize';
+import {
+  initTelemetry,
+  onTelemetryConsentChanged,
+  addExtensionBreadcrumb,
+  captureExtensionError,
+  setRuntimeTags,
+  flushTelemetry
+} from './instrument';
 
 const OUTPUT_CHANNEL_NAME = 'graphics.h Runner';
 const TERMINAL_NAME = 'graphics.h Runner';
@@ -86,6 +97,17 @@ function getConfig(): ExtensionConfig {
 
 function log(line: string): void {
   output.appendLine(line);
+}
+
+/** Wrap a command handler with a breadcrumb so Sentry issues carry user context. */
+function trackedCommand<A extends unknown[], R>(
+  name: string,
+  fn: (...args: A) => R
+): (...args: A) => R {
+  return (...args: A) => {
+    addExtensionBreadcrumb('ui.command', name);
+    return fn(...args);
+  };
 }
 
 /* ---------------- full setup (0 -> running) ---------------- */
@@ -205,9 +227,11 @@ async function runFullSetup(context: vscode.ExtensionContext): Promise<void> {
             await addPathsToSetting('extraIncludePaths', [res.includeDir]);
             await addPathsToSetting('extraLibPaths', [res.libDir]);
             summary.push('SDL_bgi downloaded, patched, built and installed into a user folder (no admin rights needed).');
+            addExtensionBreadcrumb('setup.step', 'install-sdl_bgi ok');
           } catch (e) {
             output.appendLine('[setup] SDL_bgi install error: ' + String(e));
             summary.push('SDL_bgi auto-install FAILED: ' + String(e));
+            captureExtensionError(e, { setup_step: 'install-sdl_bgi', platform: platform });
           }
         } else if (step.kind === 'auto' && step.id === 'install-compiler-winget') {
           /* half-setup fast path: a compiler may already be on disk (previous
@@ -222,6 +246,7 @@ async function runFullSetup(context: vscode.ExtensionContext): Promise<void> {
             progress.report({ message: p.message.slice(0, 110) })
           );
           log('[setup] winget: ' + winget.detail);
+          addExtensionBreadcrumb('setup.step', 'install-compiler-winget', { ok: String(winget.ok) });
           const found = await findWorkingGpp();
           if (found) {
             await setCompilerPathSetting(found.gppPath);
@@ -246,9 +271,11 @@ async function runFullSetup(context: vscode.ExtensionContext): Promise<void> {
               dl.log.forEach((l) => output.appendLine('[setup] ' + l));
               await setCompilerPathSetting(dl.gppPath);
               summary.push(`Compiler downloaded, verified (sha256) and installed automatically: ${dl.gppPath}`);
+              addExtensionBreadcrumb('setup.step', 'install-compiler-download ok');
             } catch (e) {
               output.appendLine('[setup] direct download error: ' + String(e));
               summary.push('Direct compiler download FAILED: ' + String(e));
+              captureExtensionError(e, { setup_step: 'install-compiler-download', platform: platform });
             }
           }
         } else if (step.kind === 'auto' && step.id === 'install-winbgim') {
@@ -257,9 +284,11 @@ async function runFullSetup(context: vscode.ExtensionContext): Promise<void> {
             await addPathsToSetting('extraIncludePaths', [res.includeDir]);
             await addPathsToSetting('extraLibPaths', [res.libDir]);
             summary.push('WinBGIM (graphics.h / winbgim.h / libbgi.a) installed into the extension folder.');
+            addExtensionBreadcrumb('setup.step', 'install-winbgim ok');
           } catch (e) {
             output.appendLine('[setup] WinBGIM install error: ' + String(e));
             summary.push('WinBGIM auto-install FAILED: ' + String(e));
+            captureExtensionError(e, { setup_step: 'install-winbgim', platform: platform });
           }
         } else if (step.kind === 'terminal') {
           summary.push(`ACTION NEEDED (run in a terminal): ${step.command}`);
@@ -283,6 +312,10 @@ async function runFullSetup(context: vscode.ExtensionContext): Promise<void> {
               ? `VERIFIED: graphics.h is ready (library: ${res.bestLibrary}). Press Ctrl+Alt+R inside a graphics.h program to run it.`
               : 'NOT READY YET — finish the ACTION NEEDED items above, then re-run Full Setup.'
           );
+          addExtensionBreadcrumb('setup.verify', res.graphicsReady ? 'ready' : 'not ready', {
+            compilerOk: String(res.compilerCheck.ok),
+            bestLibrary: String(res.bestLibrary || '')
+          });
         }
       }
     }
@@ -291,6 +324,7 @@ async function runFullSetup(context: vscode.ExtensionContext): Promise<void> {
   output.show(true);
   output.appendLine('=== Full Setup summary ===');
   summary.forEach((s) => output.appendLine('- ' + s));
+  addExtensionBreadcrumb('setup', 'full setup finished', { steps: String(summary.length) });
 
   const needsAction = summary.some((s) => s.startsWith('ACTION NEEDED'));
   if (needsAction) {
@@ -403,6 +437,7 @@ async function compileSource(sourceFile: string): Promise<CompileResult> {
         child.on('close', (code: number | null) => {
           if (code === 0) {
             log('[compile] success');
+            addExtensionBreadcrumb('compile', 'ok', { file: path.basename(sourceFile) });
             done('ok');
             return;
           }
@@ -420,6 +455,7 @@ async function compileSource(sourceFile: string): Promise<CompileResult> {
       })
   );
 
+  addExtensionBreadcrumb('compile', result, { file: path.basename(sourceFile) });
   return result;
 }
 
@@ -455,6 +491,7 @@ function runBinary(sourceFile: string): void {
       });
       child.unref();
       log('[run] ' + bin + ' (detached)');
+      addExtensionBreadcrumb('run', 'detached', { file: path.basename(bin) });
       return;
     } catch {
       runInTerminal(bin, platform);
@@ -618,6 +655,10 @@ async function runDoctor(verbose: boolean): Promise<DoctorResult> {
   doctorCache = res;
   updateStatusBar();
   programsView?.setDoctorResult(res);
+  addExtensionBreadcrumb('doctor', res.graphicsReady ? 'ready' : 'not ready', {
+    compilerOk: String(res.compilerCheck.ok),
+    bestLibrary: String(res.bestLibrary || '')
+  });
 
   log('=== Setup Doctor ===');
   log(`platform      : ${res.platform}`);
@@ -716,6 +757,7 @@ async function openProgram(program: LoadedProgram): Promise<void> {
     }
   } catch (e) {
     vscode.window.showErrorMessage('Could not open program: ' + String(e));
+    captureExtensionError(e, { command: 'openProgram' });
   }
 }
 
@@ -737,6 +779,19 @@ function showGuide(context: vscode.ExtensionContext): void {
 export function activate(context: vscode.ExtensionContext): void {
   output = vscode.window.createOutputChannel(OUTPUT_CHANNEL_NAME);
   context.subscriptions.push(output);
+
+  /* ---- automatic error collection (Sentry — see instrument.ts) ---- */
+  initTelemetry(); /* consent may have flipped since module load */
+  setRuntimeTags({
+    'vscode.version': String(vscode.version || 'unknown'),
+    'vscode.app_host': String(vscode.env.appHost || 'unknown'),
+    'vscode.uri_scheme': String(vscode.env.uriScheme || 'unknown')
+  });
+  context.subscriptions.push(
+    vscode.env.onDidChangeTelemetryEnabled((enabled: boolean) => {
+      onTelemetryConsentChanged(enabled);
+    })
+  );
 
   statusItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 1000);
   statusItem.name = 'graphics.h environment';
@@ -760,70 +815,95 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.window.registerTreeDataProvider('graphics-h-runner.programs', viewProvider),
 
-    vscode.commands.registerCommand('graphics-h-runner.openProgram', (program: LoadedProgram) => {
-      void openProgram(program);
-    })
+    vscode.commands.registerCommand(
+      'graphics-h-runner.openProgram',
+      trackedCommand('openProgram', (program: LoadedProgram) => {
+        void openProgram(program);
+      })
+    )
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('graphics-h-runner.compileAndRun', async () => {
+    vscode.commands.registerCommand(
+      'graphics-h-runner.compileAndRun',
+      trackedCommand('compileAndRun', async () => {
       const file = await getTargetSourceFile();
       if (!file) {
         return;
       }
-      const result = await compileSource(file);
-      if (result === 'ok') {
+        const result = await compileSource(file);
+        if (result === 'ok') {
+          runBinary(file);
+        } else if (result === 'no-compiler') {
+          showNoCompilerHelp();
+        } else {
+          showCompileFailure(file);
+        }
+      })
+    ),
+
+    vscode.commands.registerCommand(
+      'graphics-h-runner.compile',
+      trackedCommand('compile', async () => {
+      const file = await getTargetSourceFile();
+      if (!file) {
+        return;
+      }
+        const result = await compileSource(file);
+        if (result === 'ok') {
+          vscode.window.showInformationMessage(
+            `Compiled OK: ${path.basename(binaryPathFor(file, currentPlatform()))}`
+          );
+        } else if (result === 'no-compiler') {
+          showNoCompilerHelp();
+        } else {
+          showCompileFailure(file);
+        }
+      })
+    ),
+
+    vscode.commands.registerCommand(
+      'graphics-h-runner.run',
+      trackedCommand('run', async () => {
+        const file = await getTargetSourceFile();
+        if (!file) {
+          return;
+        }
         runBinary(file);
-      } else if (result === 'no-compiler') {
-        showNoCompilerHelp();
-      } else {
-        showCompileFailure(file);
-      }
-    }),
+      })
+    ),
 
-    vscode.commands.registerCommand('graphics-h-runner.compile', async () => {
-      const file = await getTargetSourceFile();
-      if (!file) {
-        return;
-      }
-      const result = await compileSource(file);
-      if (result === 'ok') {
-        vscode.window.showInformationMessage(
-          `Compiled OK: ${path.basename(binaryPathFor(file, currentPlatform()))}`
-        );
-      } else if (result === 'no-compiler') {
-        showNoCompilerHelp();
-      } else {
-        showCompileFailure(file);
-      }
-    }),
+    vscode.commands.registerCommand(
+      'graphics-h-runner.doctor',
+      trackedCommand('doctor', async () => {
+        await runDoctor(true).catch(() => undefined);
+      })
+    ),
 
-    vscode.commands.registerCommand('graphics-h-runner.run', async () => {
-      const file = await getTargetSourceFile();
-      if (!file) {
-        return;
-      }
-      runBinary(file);
-    }),
+    vscode.commands.registerCommand(
+      'graphics-h-runner.setupEverything',
+      trackedCommand('setupEverything', () => {
+        void runFullSetup(context).catch((e) => {
+          log('[setup] crashed: ' + String(e));
+          captureExtensionError(e, { command: 'setupEverything' });
+          vscode.window.showErrorMessage('Full Setup failed: ' + String(e));
+        });
+      })
+    ),
 
-    vscode.commands.registerCommand('graphics-h-runner.doctor', async () => {
-      await runDoctor(true).catch(() => undefined);
-    }),
+    vscode.commands.registerCommand(
+      'graphics-h-runner.insertTemplate',
+      trackedCommand('insertTemplate', () => {
+        void insertTemplate();
+      })
+    ),
 
-    vscode.commands.registerCommand('graphics-h-runner.setupEverything', () => {
-      void runFullSetup(context).catch((e) => {
-        log('[setup] crashed: ' + String(e));
-        vscode.window.showErrorMessage('Full Setup failed: ' + String(e));
-      });
-    }),
-
-    vscode.commands.registerCommand('graphics-h-runner.insertTemplate', () => {
-      void insertTemplate();
-    }),
-
-    vscode.commands.registerCommand('graphics-h-runner.showGuide', () => {
-      showGuide(context);
-    }),
+    vscode.commands.registerCommand(
+      'graphics-h-runner.showGuide',
+      trackedCommand('showGuide', () => {
+        showGuide(context);
+      })
+    ),
 
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration(CONFIG_PREFIX)) {
@@ -836,8 +916,10 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 
   log('graphics.h Runner activated.');
+  addExtensionBreadcrumb('lifecycle', 'activated');
 }
 
-export function deactivate(): void {
-  /* nothing to clean up */
+export async function deactivate(): Promise<void> {
+  /* give queued Sentry events a moment to leave before the host tears us down */
+  await flushTelemetry(2000);
 }

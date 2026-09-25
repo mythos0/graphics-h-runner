@@ -1,5 +1,42 @@
 # ChangeLog
 
+## 1.3.0 — 2026-09-25
+
+Automatic error collection via Sentry, so setup/compile failures on any PC are
+reported and diagnosable without asking users to copy-paste logs.
+
+### Added
+- **Automatic error collection (Sentry JS SDK, `@sentry/node`)**: uncaught
+  exceptions and unhandled rejections from the extension are captured
+  automatically and grouped into Sentry issues with stack traces, breadcrumbs
+  and context tags (OS, architecture, VS Code version, graphics library mode).
+- **Breadcrumbs on every key flow** — doctor results, compile starts/results,
+  program runs, each Full Setup step, and every command invocation appear in the
+  trail leading up to an error.
+- **Setup failures are reported even when handled** — winget, direct compiler
+  download, WinBGIM and SDL_bgi step failures inside Full Setup are captured
+  with a `setup_step` tag, so fresh-PC problems surface without a bug report.
+- **Privacy-first by design**:
+  - respects VS Code's telemetry consent — nothing is captured unless
+    `telemetry.telemetryLevel` is not `off` (`vscode.env.isTelemetryEnabled`);
+    toggling the VS Code setting enables/disables collection live;
+  - user-identifying path segments (`C:\Users\<name>`, `/home/<name>`, home
+    directory) are scrubbed from messages, stack frames, breadcrumbs and tags
+    before anything leaves the machine;
+  - no source code, file contents, or compiler output are ever sent.
+- **Extension-host safety**: the uncaught-exception handler is configured with
+  `exitEvenIfOtherHandlersAreRegistered: false` — errors are captured while the
+  shared extension host (and every other extension) keeps running.
+- Events are flushed on extension shutdown; queued events survive deactivation.
+- The extension now ships as a **single esbuild bundle** (`dist/extension.js`,
+  unminified so stack frames stay readable) with the SDK included — install size
+  and load behaviour stay lean.
+
+### Verified
+- End-to-end delivery confirmed from the real instrumented app: genuine
+  uncaught-exception and unhandled-rejection triggers both reached Sentry
+  (transport flush = true), and the process survived the uncaught exception.
+
 ## 1.2.0 — 2026-09-25
 
 Robustness across every kind of PC (fresh / half-setup / messy settings) and a

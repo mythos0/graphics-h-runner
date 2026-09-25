@@ -2,7 +2,7 @@
   "name": "graphics-h-runner",
   "displayName": "graphics.h Runner — BGI C++ Graphics Toolkit",
   "description": "Compile & run C++ graphics.h programs (WinBGIM / SDL_bgi) with one keypress. Auto-detects graphics.h, applies the right linker flags per OS, auto-installs everything from zero, and ships a sidebar with 9 runnable examples, a Setup Doctor, snippets and templates.",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "publisher": "mythos0-labs",
   "author": {
     "name": "Department of CSE, Dhaka International University",
@@ -63,7 +63,7 @@
     "onLanguage:c",
     "onView:graphics-h-runner.programs"
   ],
-  "main": "./out/extension.js",
+  "main": "./dist/extension.js",
   "contributes": {
     "viewsContainers": {
       "activitybar": [
@@ -166,19 +166,25 @@
         },
         "graphics-h-runner.extraIncludePaths": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "default": [],
           "description": "Extra include directories passed as -I (useful when SDL_bgi or WinBGIM is installed in a non-standard location)."
         },
         "graphics-h-runner.extraLibPaths": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "default": [],
           "description": "Extra library directories passed as -L."
         },
         "graphics-h-runner.extraCompilerArgs": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "default": [],
           "description": "Extra arguments passed to the compiler, e.g. [\"-std=c++17\", \"-Wall\"]."
         },
@@ -271,13 +277,15 @@
     ]
   },
   "scripts": {
-    "vscode:prepublish": "npm run compile",
+    "vscode:prepublish": "npm run compile && npm run bundle",
     "compile": "tsc -p ./",
+    "bundle": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --platform=node --format=cjs --target=node18 --external:vscode --sourcemap=external --legal-comments=none --log-level=warning",
     "watch": "tsc -watch -p ./"
   },
   "devDependencies": {
     "@types/node": "^20.14.0",
     "@types/vscode": "^1.80.0",
+    "esbuild": "^0.28.2",
     "typescript": "^5.4.5"
   },
   "repository": {
@@ -287,5 +295,8 @@
   "bugs": {
     "url": "https://github.com/mythos0/graphics-h-runner/issues"
   },
-  "homepage": "https://github.com/mythos0/graphics-h-runner#readme"
+  "homepage": "https://github.com/mythos0/graphics-h-runner#readme",
+  "dependencies": {
+    "@sentry/node": "^10.75.3"
+  }
 }
