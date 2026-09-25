@@ -50,7 +50,7 @@ Press **`Ctrl+Alt+R`** → compiled with the right linker flags → graphics win
 Extensions view (`Ctrl+Shift+X`), or from the command line:
 
 ```bash
-code --install-extension mythos0.graphics-h-runner
+code --install-extension mythos0-labs.graphics-h-runner
 ```
 
 **From a GitHub release:** download `graphics-h-runner-1.0.0.vsix` from
@@ -202,7 +202,7 @@ Publishing is fully automated from GitHub:
 - Both need one repository secret: **`VSCE_PAT`** — an Azure DevOps PAT with
   *Organization: all accessible organizations* and *Scopes: Marketplace → Manage*
   (create at dev.azure.com → User settings → Personal access tokens).
-- Marketplace listing page: <https://marketplace.visualstudio.com/items?itemName=mythos0.graphics-h-runner>
+- Marketplace listing page: <https://marketplace.visualstudio.com/items?itemName=mythos0-labs.graphics-h-runner>
 - OpenVSX (optional): `npx ovsx publish --pat $OPEN_VSX_TOKEN`.
 
 ## License

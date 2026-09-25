@@ -58,7 +58,7 @@ jobs:
         # Marketplace auth problems must never block the tag + release below.
         continue-on-error: true
         if: steps.ver.outputs.changed == 'true' && env.VSCE_PAT != ''
-        run: npx @vscode/vsce publish --no-dependencies
+        run: npx @vscode/vsce publish --skip-duplicate --no-dependencies
 
       - name: Tag and create GitHub Release
         if: steps.ver.outputs.changed == 'true'

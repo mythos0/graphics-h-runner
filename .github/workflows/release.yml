@@ -40,7 +40,7 @@ jobs:
         # Marketplace auth problems must never block the GitHub Release below.
         continue-on-error: true
         if: env.VSCE_PAT != ''
-        run: npx @vscode/vsce publish --no-dependencies
+        run: npx @vscode/vsce publish --skip-duplicate --no-dependencies
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
