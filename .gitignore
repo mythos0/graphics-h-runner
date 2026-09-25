@@ -1,0 +1,6 @@
+node_modules/
+out/*.map
+*.vsix
+build/
+docs/screenshots/*.png.tmp
+.DS_Store

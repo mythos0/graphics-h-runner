@@ -1,0 +1,73 @@
+name: Auto Publish (version bump on main -> Marketplace)
+
+# Every push to main: if package.json's version changed in the commit,
+# the extension is built, published to the VS Code Marketplace and a
+# GitHub Release with the .vsix is created automatically.
+# Requires the VSCE_PAT repository secret (Azure DevOps PAT with
+# Marketplace -> Manage scope).
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  VSCE_PAT: ${{ secrets.VSCE_PAT }}
+
+jobs:
+  auto-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Detect version change
+        id: ver
+        run: |
+          set -e
+          OLD=$(git show HEAD~1:package.json 2>/dev/null | jq -r '.version // empty' || echo "")
+          NEW=$(jq -r '.version' package.json)
+          echo "old=${OLD:-<none>} new=$NEW"
+          if [ -n "$NEW" ] && [ "$OLD" != "$NEW" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "version=$NEW" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install dependencies
+        if: steps.ver.outputs.changed == 'true'
+        run: npm install --no-audit --no-fund
+
+      - name: Unit smoke tests (sidebar + catalog)
+        if: steps.ver.outputs.changed == 'true'
+        run: node test/view-tests.js
+
+      - name: Package .vsix
+        if: steps.ver.outputs.changed == 'true'
+        run: npx @vscode/vsce package --no-dependencies
+
+      - name: Publish to VS Code Marketplace
+        if: steps.ver.outputs.changed == 'true' && env.VSCE_PAT != ''
+        run: npx @vscode/vsce publish --no-dependencies
+
+      - name: Tag and create GitHub Release
+        if: steps.ver.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NEWVER: ${{ steps.ver.outputs.version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -f "v$NEWVER"
+          git push origin "v$NEWVER" || true
+          gh release create "v$NEWVER" graphics-h-runner-*.vsix \
+            --title "v$NEWVER" --generate-notes || \
+            gh release upload "v$NEWVER" graphics-h-runner-*.vsix --clobber

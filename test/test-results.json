@@ -1,0 +1,143 @@
+{
+  "doctor": {
+    "graphicsReady": true,
+    "bestLibrary": "sdl_bgi"
+  },
+  "results": [
+    {
+      "sample": "01_hello_graphics.cpp",
+      "detected": true,
+      "library": "sdl_bgi",
+      "compileOk": true,
+      "runOk": true,
+      "exitCode": 0,
+      "shot": "/home/z/my-project/graphics-h-runner/docs/screenshots/01_hello_graphics.png",
+      "analysis": {
+        "nonblack": 0.0499,
+        "unique_colors": 5
+      },
+      "cmd": "g++ -I/home/z/my-project/bgi-env/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include/x86_64-linux-gnu /home/z/my-project/graphics-h-runner/samples/01_hello_graphics.cpp -o /home/z/my-project/graphics-h-runner/build/01_hello_graphics -L/home/z/my-project/bgi-env/usr/lib -Wl,-rpath,/home/z/my-project/bgi-env/usr/lib -L/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -Wl,-rpath,/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -lSDL_bgi -lSDL2 -lm",
+      "stderrTail": ""
+    },
+    {
+      "sample": "02_shapes_showcase.cpp",
+      "detected": true,
+      "library": "sdl_bgi",
+      "compileOk": true,
+      "runOk": true,
+      "exitCode": 0,
+      "shot": "/home/z/my-project/graphics-h-runner/docs/screenshots/02_shapes_showcase.png",
+      "analysis": {
+        "nonblack": 0.0992,
+        "unique_colors": 16
+      },
+      "cmd": "g++ -I/home/z/my-project/bgi-env/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include/x86_64-linux-gnu /home/z/my-project/graphics-h-runner/samples/02_shapes_showcase.cpp -o /home/z/my-project/graphics-h-runner/build/02_shapes_showcase -L/home/z/my-project/bgi-env/usr/lib -Wl,-rpath,/home/z/my-project/bgi-env/usr/lib -L/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -Wl,-rpath,/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -lSDL_bgi -lSDL2 -lm",
+      "stderrTail": ""
+    },
+    {
+      "sample": "03_bouncing_ball.cpp",
+      "detected": true,
+      "library": "sdl_bgi",
+      "compileOk": true,
+      "runOk": true,
+      "exitCode": 0,
+      "shot": "/home/z/my-project/graphics-h-runner/docs/screenshots/03_bouncing_ball.png",
+      "analysis": {
+        "nonblack": 0.0169,
+        "unique_colors": 5
+      },
+      "cmd": "g++ -I/home/z/my-project/bgi-env/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include/x86_64-linux-gnu /home/z/my-project/graphics-h-runner/samples/03_bouncing_ball.cpp -o /home/z/my-project/graphics-h-runner/build/03_bouncing_ball -L/home/z/my-project/bgi-env/usr/lib -Wl,-rpath,/home/z/my-project/bgi-env/usr/lib -L/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -Wl,-rpath,/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -lSDL_bgi -lSDL2 -lm",
+      "stderrTail": ""
+    },
+    {
+      "sample": "04_moving_car.cpp",
+      "detected": true,
+      "library": "sdl_bgi",
+      "compileOk": true,
+      "runOk": true,
+      "exitCode": 0,
+      "shot": "/home/z/my-project/graphics-h-runner/docs/screenshots/04_moving_car.png",
+      "analysis": {
+        "nonblack": 0.0874,
+        "unique_colors": 8
+      },
+      "cmd": "g++ -I/home/z/my-project/bgi-env/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include/x86_64-linux-gnu /home/z/my-project/graphics-h-runner/samples/04_moving_car.cpp -o /home/z/my-project/graphics-h-runner/build/04_moving_car -L/home/z/my-project/bgi-env/usr/lib -Wl,-rpath,/home/z/my-project/bgi-env/usr/lib -L/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -Wl,-rpath,/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -lSDL_bgi -lSDL2 -lm",
+      "stderrTail": ""
+    },
+    {
+      "sample": "05_tricolor_flag.cpp",
+      "detected": true,
+      "library": "sdl_bgi",
+      "compileOk": true,
+      "runOk": true,
+      "exitCode": 0,
+      "shot": "/home/z/my-project/graphics-h-runner/docs/screenshots/05_tricolor_flag.png",
+      "analysis": {
+        "nonblack": 0.5241,
+        "unique_colors": 8
+      },
+      "cmd": "g++ -I/home/z/my-project/bgi-env/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include/x86_64-linux-gnu /home/z/my-project/graphics-h-runner/samples/05_tricolor_flag.cpp -o /home/z/my-project/graphics-h-runner/build/05_tricolor_flag -L/home/z/my-project/bgi-env/usr/lib -Wl,-rpath,/home/z/my-project/bgi-env/usr/lib -L/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -Wl,-rpath,/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -lSDL_bgi -lSDL2 -lm",
+      "stderrTail": ""
+    },
+    {
+      "sample": "06_fractal_tree.cpp",
+      "detected": true,
+      "library": "sdl_bgi",
+      "compileOk": true,
+      "runOk": true,
+      "exitCode": 0,
+      "shot": "/home/z/my-project/graphics-h-runner/docs/screenshots/06_fractal_tree.png",
+      "analysis": {
+        "nonblack": 0.0268,
+        "unique_colors": 10
+      },
+      "cmd": "g++ -I/home/z/my-project/bgi-env/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include/x86_64-linux-gnu /home/z/my-project/graphics-h-runner/samples/06_fractal_tree.cpp -o /home/z/my-project/graphics-h-runner/build/06_fractal_tree -L/home/z/my-project/bgi-env/usr/lib -Wl,-rpath,/home/z/my-project/bgi-env/usr/lib -L/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -Wl,-rpath,/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -lSDL_bgi -lSDL2 -lm",
+      "stderrTail": ""
+    },
+    {
+      "sample": "07_mandelbrot.cpp",
+      "detected": true,
+      "library": "sdl_bgi",
+      "compileOk": true,
+      "runOk": true,
+      "exitCode": 0,
+      "shot": "/home/z/my-project/graphics-h-runner/docs/screenshots/07_mandelbrot.png",
+      "analysis": {
+        "nonblack": 0.1981,
+        "unique_colors": 16
+      },
+      "cmd": "g++ -I/home/z/my-project/bgi-env/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include/x86_64-linux-gnu /home/z/my-project/graphics-h-runner/samples/07_mandelbrot.cpp -o /home/z/my-project/graphics-h-runner/build/07_mandelbrot -L/home/z/my-project/bgi-env/usr/lib -Wl,-rpath,/home/z/my-project/bgi-env/usr/lib -L/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -Wl,-rpath,/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -lSDL_bgi -lSDL2 -lm",
+      "stderrTail": ""
+    },
+    {
+      "sample": "08_mouse_paint.cpp",
+      "detected": true,
+      "library": "sdl_bgi",
+      "compileOk": true,
+      "runOk": true,
+      "exitCode": 0,
+      "shot": "/home/z/my-project/graphics-h-runner/docs/screenshots/08_mouse_paint.png",
+      "analysis": {
+        "nonblack": 0.6369,
+        "unique_colors": 10
+      },
+      "cmd": "g++ -I/home/z/my-project/bgi-env/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include/x86_64-linux-gnu /home/z/my-project/graphics-h-runner/samples/08_mouse_paint.cpp -o /home/z/my-project/graphics-h-runner/build/08_mouse_paint -L/home/z/my-project/bgi-env/usr/lib -Wl,-rpath,/home/z/my-project/bgi-env/usr/lib -L/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -Wl,-rpath,/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -lSDL_bgi -lSDL2 -lm",
+      "stderrTail": ""
+    },
+    {
+      "sample": "09_keyboard_paddle.cpp",
+      "detected": true,
+      "library": "sdl_bgi",
+      "compileOk": true,
+      "runOk": true,
+      "exitCode": 0,
+      "shot": "/home/z/my-project/graphics-h-runner/docs/screenshots/09_keyboard_paddle.png",
+      "analysis": {
+        "nonblack": 0.0961,
+        "unique_colors": 7
+      },
+      "cmd": "g++ -I/home/z/my-project/bgi-env/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include/x86_64-linux-gnu /home/z/my-project/graphics-h-runner/samples/09_keyboard_paddle.cpp -o /home/z/my-project/graphics-h-runner/build/09_keyboard_paddle -L/home/z/my-project/bgi-env/usr/lib -Wl,-rpath,/home/z/my-project/bgi-env/usr/lib -L/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -Wl,-rpath,/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -lSDL_bgi -lSDL2 -lm",
+      "stderrTail": ""
+    }
+  ]
+}

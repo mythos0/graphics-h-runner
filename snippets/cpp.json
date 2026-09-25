@@ -1,0 +1,79 @@
+{
+  "gfxprog": {
+    "prefix": "gfxprog",
+    "body": [
+      "#include <graphics.h>",
+      "",
+      "int main ( )",
+      "{",
+      "    initwindow(${1:640}, ${2:480});",
+      "",
+      "    setbkcolor(BLACK);",
+      "    cleardevice();",
+      "",
+      "    ${3:// draw here}",
+      "",
+      "    getch();",
+      "    closegraph();",
+      "    return 0;",
+      "}"
+    ],
+    "description": "graphics.h full program skeleton"
+  },
+  "gfx-anim": {
+    "prefix": "gfx-anim",
+    "body": [
+      "int x = ${1:100}, y = ${2:100}, dx = ${3:5}, dy = ${4:4};",
+      "int maxx = getmaxx(), maxy = getmaxy();",
+      "while (!kbhit()) {",
+      "    cleardevice();",
+      "    ${5:// draw frame}",
+      "    delay(${6:20});",
+      "    x += dx;  y += dy;",
+      "    if (x < 0 || x > maxx) dx = -dx;",
+      "    if (y < 0 || y > maxy) dy = -dy;",
+      "}"
+    ],
+    "description": "graphics.h animation loop with delay()"
+  },
+  "gfx-mouse": {
+    "prefix": "gfx-mouse",
+    "body": [
+      "if (ismouseclick(WM_LBUTTONDOWN)) {",
+      "    int mx, my;",
+      "    getmouseclick(WM_LBUTTONDOWN, mx, my);",
+      "    ${1:// use mx, my}",
+      "    clearmouseclick(WM_LBUTTONDOWN);",
+      "}"
+    ],
+    "description": "graphics.h left mouse click handler"
+  },
+  "gfx-kbd": {
+    "prefix": "gfx-kbd",
+    "body": [
+      "if (kbhit()) {",
+      "    int key = getch();",
+      "    ${1:// handle key}",
+      "}"
+    ],
+    "description": "graphics.h keyboard poll block"
+  },
+  "gfx-text": {
+    "prefix": "gfx-text",
+    "body": [
+      "setcolor(${1:WHITE});",
+      "settextstyle(${2:DEFAULT_FONT}, ${3:HORIZ_DIR}, ${4:2});",
+      "outtextxy(${5:100}, ${6:100}, (char*)\"${7:Hello!}\");"
+    ],
+    "description": "graphics.h styled text block"
+  },
+  "gfx-bar": {
+    "prefix": "gfx-bar",
+    "body": [
+      "setcolor(${1:YELLOW});",
+      "setfillstyle(${2:SOLID_FILL}, ${3:RED});",
+      "bar(${4:x1}, ${5:y1}, ${6:x2}, ${7:y2});"
+    ],
+    "description": "graphics.h filled bar block"
+  }
+}

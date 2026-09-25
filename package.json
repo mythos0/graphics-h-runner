@@ -1,0 +1,275 @@
+{
+  "name": "graphics-h-runner",
+  "displayName": "graphics.h Runner — BGI C++ Graphics Toolkit",
+  "description": "Compile & run C++ graphics.h programs (WinBGIM / SDL_bgi) with one keypress. Auto-detects graphics.h, applies the right linker flags per OS, auto-installs everything from zero, and ships a sidebar with 9 runnable examples, a Setup Doctor, snippets and templates.",
+  "version": "1.0.0",
+  "publisher": "mythos0",
+  "author": {
+    "name": "MYTHOS0",
+    "url": "https://github.com/mythos0"
+  },
+  "license": "MIT",
+  "icon": "icon.png",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Snippets",
+    "Other"
+  ],
+  "galleryBanner": {
+    "color": "#312e81",
+    "theme": "dark"
+  },
+  "badges": [
+    {
+      "url": "https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-blue",
+      "href": "https://github.com/mythos0/graphics-h-runner",
+      "description": "Platforms"
+    },
+    {
+      "url": "https://img.shields.io/badge/Tests-9%2F9%20screenshot%20verified-brightgreen",
+      "href": "https://github.com/mythos0/graphics-h-runner/tree/main/docs/screenshots",
+      "description": "Sample tests"
+    },
+    {
+      "url": "https://img.shields.io/github/v/tag/mythos0/graphics-h-runner?label=release&sort=semver",
+      "href": "https://github.com/mythos0/graphics-h-runner/releases",
+      "description": "Latest release"
+    }
+  ],
+  "markdown": "github",
+  "qna": "marketplace",
+  "keywords": [
+    "cpp",
+    "c++",
+    "graphics.h",
+    "bgi",
+    "winbgim",
+    "sdl_bgi",
+    "turbo c",
+    "graphics",
+    "compile",
+    "run",
+    "mingw",
+    "beginner",
+    "student",
+    "computer graphics",
+    "cmake-free"
+  ],
+  "activationEvents": [
+    "onLanguage:cpp",
+    "onLanguage:c",
+    "onView:graphics-h-runner.programs"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "graphics-h-runner",
+          "title": "graphics.h Runner",
+          "icon": "media/activity-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "graphics-h-runner": [
+        {
+          "id": "graphics-h-runner.programs",
+          "name": "graphics.h Programs",
+          "when": "true"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "graphics-h-runner.compileAndRun",
+        "title": "Compile & Run",
+        "category": "graphics.h",
+        "icon": "$(play)"
+      },
+      {
+        "command": "graphics-h-runner.compile",
+        "title": "Compile",
+        "category": "graphics.h",
+        "icon": "$(file-binary)"
+      },
+      {
+        "command": "graphics-h-runner.run",
+        "title": "Run Last Build",
+        "category": "graphics.h"
+      },
+      {
+        "command": "graphics-h-runner.doctor",
+        "title": "Setup Doctor — Check Environment",
+        "category": "graphics.h",
+        "icon": "$(check)"
+      },
+      {
+        "command": "graphics-h-runner.setupEverything",
+        "title": "Full Setup — Install Everything (0 to running)",
+        "category": "graphics.h"
+      },
+      {
+        "command": "graphics-h-runner.insertTemplate",
+        "title": "Insert Code Template",
+        "category": "graphics.h"
+      },
+      {
+        "command": "graphics-h-runner.showGuide",
+        "title": "Show Setup Guide",
+        "category": "graphics.h",
+        "icon": "$(book)"
+      },
+      {
+        "command": "graphics-h-runner.openProgram",
+        "title": "Open Example Program",
+        "category": "graphics.h",
+        "icon": "$(go-to-file)"
+      }
+    ],
+    "configuration": {
+      "title": "graphics.h Runner",
+      "properties": {
+        "graphics-h-runner.compilerPath": {
+          "type": "string",
+          "default": "g++",
+          "description": "Path to the C++ compiler executable (g++ from MinGW-w64 on Windows, or any g++/clang++ on Linux/macOS)."
+        },
+        "graphics-h-runner.autoDetect": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "When `#include <graphics.h>` is detected, automatically compile with BGI linker flags. When disabled, BGI flags are always applied for every build."
+        },
+        "graphics-h-runner.linuxLibrary": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "sdl_bgi",
+            "libgraph"
+          ],
+          "enumDescriptions": [
+            "Prefer SDL_bgi, fall back to libgraph (uses Setup Doctor probe results)",
+            "SDL_bgi (-lSDL_bgi -lSDL2 -lm)",
+            "libgraph (-lgraph)"
+          ],
+          "default": "auto",
+          "description": "Which graphics.h implementation to link against on Linux/macOS."
+        },
+        "graphics-h-runner.staticLinkWindows": {
+          "type": "boolean",
+          "default": true,
+          "description": "Windows only: add -static-libgcc -static-libstdc++ so the produced .exe runs without MinGW runtime DLLs."
+        },
+        "graphics-h-runner.extraIncludePaths": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "Extra include directories passed as -I (useful when SDL_bgi or WinBGIM is installed in a non-standard location)."
+        },
+        "graphics-h-runner.extraLibPaths": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "Extra library directories passed as -L."
+        },
+        "graphics-h-runner.extraCompilerArgs": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "Extra arguments passed to the compiler, e.g. [\"-std=c++17\", \"-Wall\"]."
+        },
+        "graphics-h-runner.showStatusBarItem": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show the BGI environment indicator in the status bar. Clicking it runs the Setup Doctor."
+        }
+      }
+    },
+    "keybindings": [
+      {
+        "command": "graphics-h-runner.compileAndRun",
+        "key": "ctrl+alt+r",
+        "when": "editorTextFocus && resourceLangId == cpp"
+      },
+      {
+        "command": "graphics-h-runner.compile",
+        "key": "ctrl+alt+b",
+        "when": "editorTextFocus && resourceLangId == cpp"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "graphics-h-runner.compileAndRun",
+          "when": "resourceLangId == cpp",
+          "group": "graphics_h@1"
+        },
+        {
+          "command": "graphics-h-runner.compile",
+          "when": "resourceLangId == cpp",
+          "group": "graphics_h@2"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "graphics-h-runner.compileAndRun",
+          "when": "view == graphics-h-runner.programs",
+          "group": "navigation@1"
+        },
+        {
+          "command": "graphics-h-runner.compile",
+          "when": "view == graphics-h-runner.programs",
+          "group": "navigation@2"
+        },
+        {
+          "command": "graphics-h-runner.doctor",
+          "when": "view == graphics-h-runner.programs",
+          "group": "navigation@3"
+        },
+        {
+          "command": "graphics-h-runner.showGuide",
+          "when": "view == graphics-h-runner.programs",
+          "group": "navigation@4"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "graphics-h-runner.openProgram",
+          "when": "view == graphics-h-runner.programs && viewItem == program",
+          "group": "inline"
+        }
+      ]
+    },
+    "snippets": [
+      {
+        "language": "cpp",
+        "path": "./snippets/cpp.json"
+      },
+      {
+        "language": "c",
+        "path": "./snippets/cpp.json"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/vscode": "^1.80.0",
+    "typescript": "^5.4.5"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mythos0/graphics-h-runner.git"
+  },
+  "bugs": {
+    "url": "https://github.com/mythos0/graphics-h-runner/issues"
+  },
+  "homepage": "https://github.com/mythos0/graphics-h-runner#readme"
+}
