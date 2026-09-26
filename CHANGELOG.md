@@ -1,5 +1,29 @@
 # ChangeLog
 
+## 1.4.5 — 2026-09-26
+
+Programs now run in the VS Code integrated terminal so console input and
+output work exactly as students expect.
+
+### Fixed
+- **Programs could not take input or show output** on Windows: the compiled
+  .exe was launched detached with its standard streams discarded, so
+  `cin`/`scanf`/`getch()` had nothing to read and `printf`/`cout` output was
+  invisible. Programs that mix graphics with console I/O (e.g. asking for a
+  choice with `cin >>`, printing scores with `cout`) now work properly.
+- Removed a leftover dead source file (`programsView.ts`) that broke strict
+  recompiles from a clean checkout.
+
+### Changed
+- **Run in terminal**: the compiled program now runs inside the VS Code
+  integrated terminal. The graphics window opens as before, and the terminal
+  provides a real console — type input, see output, and press any key for
+  `getch()`-style pauses. On Windows the runner terminal is pinned to
+  `cmd.exe` (identical behavior on every machine regardless of the user's
+  default shell profile) and the compiler's bin directory is prepended to the
+  terminal PATH so non-statically-linked executables still find their runtime
+  DLLs. **Stop** disposes the runner terminal, closing the graphics program.
+
 ## 1.4.4 — 2026-09-26
 
 Production-hardening release: a broken example, a panel layout refresh and

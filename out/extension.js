@@ -451,44 +451,33 @@ function runBinary(sourceFile) {
         });
         return;
     }
-    /* Windows: launch the .exe directly (detached). This is immune to whichever
-     * shell the user's terminal profile uses (PowerShell/cmd/Git Bash quoting
-     * differences), and the graphics window lives on its own. */
-    if (platform === 'windows') {
-        try {
-            const child = (0, child_process_1.spawn)(bin, [], {
-                cwd: path.dirname(bin),
-                env: compilerEnv(bin),
-                detached: true,
-                stdio: 'ignore',
-                windowsHide: false
-            });
-            child.on('error', (e) => {
-                log('[run] detached launch failed: ' + e.message + ' — falling back to terminal');
-                (0, instrument_1.captureExtensionError)(e, { stage: 'run-launch', platform, file: path.basename(bin) });
-                runInTerminal(bin, platform);
-            });
-            child.unref();
-            lastRunChild = child;
-            lastRunTerminal = undefined;
-            log('[run] ' + bin + ' (detached)');
-            (0, instrument_1.addExtensionBreadcrumb)('run', 'detached', { file: path.basename(bin) });
-            return;
-        }
-        catch {
-            runInTerminal(bin, platform);
-            return;
-        }
-    }
+    /* Always run inside the integrated terminal: the graphics window opens as
+     * usual, AND the terminal gives the program a real console — cin/scanf/getch
+     * input works and printf/cout output is visible. The old detached launch had
+     * no stdio at all, so interactive programs could neither read input nor show
+     * output. */
     runInTerminal(bin, platform);
 }
 function runInTerminal(bin, platform) {
-    const term = vscode.window.terminals.find((t) => t.name === TERMINAL_NAME && !t.exitStatus) ||
-        vscode.window.createTerminal(TERMINAL_NAME);
+    /* Windows: pin the terminal to cmd.exe instead of the user's default
+     * profile — the quoted-path invocation below behaves identically in cmd on
+     * every machine, whereas `& "path"` breaks on cmd/Git Bash profiles and a
+     * bare quoted path is rejected by PowerShell's argument parser. The compiler
+     * bin dir is prepended to the terminal's PATH so non-statically-linked exes
+     * can still find their runtime DLLs. */
+    const isWindows = platform === 'windows';
+    const existing = vscode.window.terminals.find((t) => t.name === TERMINAL_NAME && !t.exitStatus);
+    const term = existing ||
+        vscode.window.createTerminal(isWindows
+            ? { name: TERMINAL_NAME, shellPath: 'cmd.exe', env: compilerEnv(bin) }
+            : { name: TERMINAL_NAME, env: compilerEnv(bin) });
     term.show(true);
     const abs = path.resolve(bin);
-    const cmd = platform === 'windows' ? `& "${abs}"` : `"${abs}"`;
-    log('[run] ' + cmd);
+    const cmd = `"${abs}"`; /* executes in cmd.exe and POSIX shells alike */
+    log('[run] ' + cmd + (isWindows ? ' (cmd.exe terminal)' : ''));
+    (0, instrument_1.addExtensionBreadcrumb)('run', isWindows ? 'terminal-cmd' : 'terminal', {
+        file: path.basename(bin)
+    });
     term.sendText(cmd, true);
     lastRunTerminal = term;
 }
