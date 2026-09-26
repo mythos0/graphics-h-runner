@@ -1,5 +1,35 @@
 # ChangeLog
 
+## 1.4.6 — 2026-09-26
+
+Terminal-launch fix for every Windows setup plus a new DDA line-drawing
+example with live terminal I/O.
+
+### Fixed
+- **"The terminal process failed to launch: Path to shell executable
+  \"cmd.exe\" does not exist"** — v1.4.5 pinned the Windows runner terminal
+  to a bare `cmd.exe`, which some VS Code setups cannot resolve. The compiled
+  program is now spawned **directly as the terminal's process** — no shell is
+  involved at all, so there is nothing to resolve or quote. The program keeps
+  its real console (stdin input + visible output) and the graphics window
+  opens as usual. Running a new program now replaces the previous runner
+  terminal, and the terminal takes focus so prompts can be answered
+  immediately.
+- **Fireworks sample could crash the window** (intermittent SIGSEGV on some
+  machines): its particle arrays were read before initialization, feeding a
+  garbage color index into the palette. All arrays are now zero-initialized;
+  20 consecutive runs verified crash-free.
+
+### Added
+- **New example: "DDA Line (Terminal Input)"** (19 examples total): type two
+  endpoints in the terminal, the program prints dx/dy/steps, the increment
+  values and **every generated DDA point**, and plots the line pixel by
+  pixel in a graphics window with math-style axes (y grows upward from the
+  window centre). Falls back to a demo line when stdin is closed, so it
+  self-exits everywhere. Useful alongside the classic direct-equation
+  approach — which divides by zero for vertical lines and hardcodes the
+  screen centre; the DDA example avoids both pitfalls.
+
 ## 1.4.5 — 2026-09-26
 
 Programs now run in the VS Code integrated terminal so console input and

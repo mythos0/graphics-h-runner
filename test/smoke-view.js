@@ -5,7 +5,7 @@
  *
  * Validates:
  *  1. all three environment states render the right pill + CTA
- *  2. 18 program cards with Run + Open buttons
+ *  2. 19 program cards with Run + Open buttons
  *  3. 8 action buttons wired to COMMAND_META ids, each with its own color
  *  4. CSP + nonce + script tag + version are present; no logo, and the
  *     footer carries the "Powered by Department of CSE …" credit
@@ -78,12 +78,12 @@ check('checking state: amber pill', () => {
   assert.ok(h.includes('Checking environment'), 'no checking copy');
 });
 
-check('18 program cards, each with Run + Open', () => {
+check('19 program cards, each with Run + Open', () => {
   const h = html({});
   const runs = (h.match(/data-run="/g) || []).length;
   const opens = (h.match(/data-open="/g) || []).length;
-  assert.strictEqual(runs, 18, 'data-run count ' + runs);
-  assert.strictEqual(opens, 18, 'data-open count ' + opens);
+  assert.strictEqual(runs, 19, 'data-run count ' + runs);
+  assert.strictEqual(opens, 19, 'data-open count ' + opens);
   assert.ok(h.includes('Winking Smiley') && h.includes('Fireworks Show') && h.includes('Warp Starfield'), 'fun programs missing');
 });
 

@@ -13,8 +13,11 @@ int main ( )
     setbkcolor(BLACK);
 
     const int MAXP = 120;
-    int px[MAXP], py[MAXP], pvx[MAXP], pvy[MAXP], pc[MAXP];
-    int alive[MAXP];
+    /* NOTE: every particle array MUST be zero-initialized — drawing a
+     * "particle" from an uninitialized slot feeds a garbage color index
+     * into setfillstyle(), which crashes the SDL_bgi palette read. */
+    int px[MAXP] = {0}, py[MAXP] = {0}, pvx[MAXP] = {0}, pvy[MAXP] = {0}, pc[MAXP] = {0};
+    int alive[MAXP] = {0};
     int rocketX = -1, rocketY = -1, rocketV = 0, targetY = 0;
     bool rocketFlying = false;
     int flashX = -1, flashY = -1, flashAge = 0;   /* bright burst center */

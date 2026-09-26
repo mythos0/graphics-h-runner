@@ -57,7 +57,8 @@ const SAMPLE_META: ProgramMeta[] = [
   { id: 'spiral',     kind: 'sample', filename: '15_rainbow_spiral.cpp',  title: 'Rainbow Spiral',      description: 'Ever-growing rotating rainbow spiral',  emoji: '🌈', tag: 'fun' },
   { id: 'heli',       kind: 'sample', filename: '16_helicopter.cpp',      title: 'Helicopter',          description: 'Heli over a night city, spinning rotor',emoji: '🚁', tag: 'fun' },
   { id: 'sunset',     kind: 'sample', filename: '17_sunset.cpp',          title: 'Sunset Scene',        description: 'Sun sinks, stars come out, moon rises', emoji: '🌅', tag: 'fun' },
-  { id: 'starfield',  kind: 'sample', filename: '18_starfield.cpp',       title: 'Warp Starfield',      description: 'Fly through space at warp speed',       emoji: '✨', tag: 'fun' }
+  { id: 'starfield',  kind: 'sample', filename: '18_starfield.cpp',       title: 'Warp Starfield',      description: 'Fly through space at warp speed',       emoji: '✨', tag: 'fun' },
+  { id: 'dda',        kind: 'sample', filename: '19_dda_line.cpp',        title: 'DDA Line (Terminal Input)', description: 'Type endpoints in the terminal, see every DDA step', emoji: '📏', tag: 'math' }
 ];
 
 export interface CommandMeta {

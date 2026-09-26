@@ -456,29 +456,42 @@ function runBinary(sourceFile) {
      * input works and printf/cout output is visible. The old detached launch had
      * no stdio at all, so interactive programs could neither read input nor show
      * output. */
-    runInTerminal(bin, platform);
+    runInTerminal(bin);
 }
-function runInTerminal(bin, platform) {
-    /* Windows: pin the terminal to cmd.exe instead of the user's default
-     * profile — the quoted-path invocation below behaves identically in cmd on
-     * every machine, whereas `& "path"` breaks on cmd/Git Bash profiles and a
-     * bare quoted path is rejected by PowerShell's argument parser. The compiler
-     * bin dir is prepended to the terminal's PATH so non-statically-linked exes
-     * can still find their runtime DLLs. */
-    const isWindows = platform === 'windows';
-    const existing = vscode.window.terminals.find((t) => t.name === TERMINAL_NAME && !t.exitStatus);
-    const term = existing ||
-        vscode.window.createTerminal(isWindows
-            ? { name: TERMINAL_NAME, shellPath: 'cmd.exe', env: compilerEnv(bin) }
-            : { name: TERMINAL_NAME, env: compilerEnv(bin) });
-    term.show(true);
+function runInTerminal(bin) {
+    /* Run the compiled program AS the terminal's root process — no shell is
+     * involved at all. v1.4.5 pinned Windows terminals to shellPath 'cmd.exe',
+     * a bare name VS Code could not resolve on some machines ("The terminal
+     * process failed to launch: Path to shell executable \"cmd.exe\" does not
+     * exist"); resolving or quoting ANY shell has the same class of risk. The
+     * exe is already verified with fs.existsSync by runBinary, so spawning it
+     * directly is the only failure-proof option: its stdin/stdout/stderr are
+     * wired to the terminal (cin/scanf/getch read input, printf/cout output is
+     * visible) while the graphics window opens as usual. The compiler bin dir
+     * is prepended to the environment so non-statically-linked exes still find
+     * their runtime DLLs. */
     const abs = path.resolve(bin);
-    const cmd = `"${abs}"`; /* executes in cmd.exe and POSIX shells alike */
-    log('[run] ' + cmd + (isWindows ? ' (cmd.exe terminal)' : ''));
-    (0, instrument_1.addExtensionBreadcrumb)('run', isWindows ? 'terminal-cmd' : 'terminal', {
-        file: path.basename(bin)
+    /* One runner terminal at a time: disposing the previous one also stops the
+     * program it was hosting, so a new Run cleanly replaces the old run. */
+    const previous = lastRunTerminal;
+    lastRunTerminal = undefined;
+    try {
+        if (previous) {
+            previous.dispose();
+        }
+    }
+    catch {
+        /* terminal was already closed */
+    }
+    const term = vscode.window.createTerminal({
+        name: TERMINAL_NAME,
+        shellPath: abs,
+        cwd: path.dirname(abs),
+        env: compilerEnv(bin)
     });
-    term.sendText(cmd, true);
+    term.show(false); /* focus the terminal so prompts can be answered at once */
+    log('[run] ' + abs + ' (as terminal process)');
+    (0, instrument_1.addExtensionBreadcrumb)('run', 'terminal-direct', { file: path.basename(abs) });
     lastRunTerminal = term;
 }
 /** Kill the most recently launched graphics program (Stop command). */

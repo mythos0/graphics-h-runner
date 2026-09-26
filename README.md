@@ -10,7 +10,7 @@
 [![Version](https://img.shields.io/badge/version-1.4.3-blue.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey.svg)](#per-os-setup)
-[![Tests](https://img.shields.io/badge/sample%20tests-18%2F18%20passing-brightgreen.svg)](#tested--verified)
+[![Tests](https://img.shields.io/badge/sample%20tests-19%2F19%20passing-brightgreen.svg)](#tested--verified)
 
 **Compile & run C++ programs that use `graphics.h` (BGI / WinBGIM / SDL_bgi) with one keypress.**
 One command sets up the whole toolchain from zero — compiler guidance, graphics library
@@ -49,7 +49,7 @@ Press **`Ctrl+Alt+R`** → compiled with the right linker flags → graphics win
 | **📊 Status bar indicator** | `✓ graphics.h` / `⚠ graphics.h` / `? graphics.h` at a glance. Click to run the Setup Doctor. |
 | **🛡️ Messy-settings healing** | Real-world PCs have messy configs. The extension heals them on every run: quoted paths (`"C:\...\g++.exe"`), `%ENV%`/`$VAR` variables, `~`, trailing slashes, **directory-instead-of-exe** paths, missing `.exe` suffixes, stale include/lib dirs from old installs (auto-pruned), and Windows' raw `-4058` spawn failures are all recognized and routed to the one-click fix instead of cryptic errors. |
 | **✂️ Snippets** | `gfxprog`, `gfx-anim`, `gfx-mouse`, `gfx-kbd`, `gfx-text`, `gfx-bar`. |
-| **🎮 18 example programs** | Classic starters plus fun ones: Winking Smiley, Bouncing Balls, Fireworks, Solar System, Aquarium, Rainbow Spiral, Helicopter, Sunset Scene, Warp Starfield — all auto-exiting and screenshot-verified. |
+| **🎮 19 example programs** | Classic starters plus fun ones: Winking Smiley, Bouncing Balls, Fireworks, Solar System, Aquarium, Rainbow Spiral, Helicopter, Sunset Scene, Warp Starfield, DDA Line (terminal input) — all auto-exiting and screenshot-verified. |
 
 ## Install
 
@@ -102,7 +102,7 @@ code --install-extension graphics-h-runner-*.vsix
 | `graphics.h: Setup Doctor` | — | Probe compiler + libraries, offer fixes |
 | `graphics.h: Complete graphics.h Run Setup` | — | The 0 → running bootstrap (compiler included) |
 | `graphics.h: Copy Compile Command` | — | Copy the exact compiler command line for the active file |
-| `graphics.h: Open Examples Folder` | — | Copy all 18 examples into the workspace and reveal them |
+| `graphics.h: Open Examples Folder` | — | Copy all 19 examples into the workspace and reveal them |
 | `graphics.h: Open Example Program` | — | Open any bundled sample as `filename.cpp` (panel) |
 | *F5 / Run and Debug* | `F5` | **Run graphics.h program** — compile & launch the active file |
 
@@ -114,7 +114,7 @@ The **graphics.h Runner** icon in the Activity Bar opens the modern panel:
    while anything is missing, a one-click **🚀 Complete Run Setup** button appears.
 2. **Actions grid** — Compile & Run, Complete Run Setup, Setup Doctor, Compile,
    Run Last Build, Stop Running Program, Copy Compile Command, Open Examples Folder.
-3. **Example Programs** — 18 emoji cards (tagged `classic`/`fun`/`math`/`interactive`).
+3. **Example Programs** — 19 emoji cards (tagged `classic`/`fun`/`math`/`interactive`).
    **▶ Run** opens the file, compiles and launches the graphics window in one click;
    **Open** just opens the source as `graphics-h-programs/<name>.cpp`.
 
