@@ -124,11 +124,17 @@ check('new commands registered: stop / copy / examples', () => {
   }
 });
 
-check('activity-bar view is a webview-typed view with stable id', () => {
+check('activity-bar view is declared type=webview with stable id', () => {
   const container = pkg.contributes.viewsContainers.activitybar[0];
   assert.strictEqual(container.id, 'graphics-h-runner');
   const view = pkg.contributes.views[container.id][0];
   assert.strictEqual(view.id, 'graphics-h-runner.programs');
+  /* REGRESSION (v1.4.0 bug): without type:"webview" VS Code creates a TREE pane,
+   * registerWebviewViewProvider never matches it, and the user sees
+   * "There is no data provider registered that can provide view data". */
+  assert.strictEqual(view.type, 'webview', 'view must be type=webview for the webview provider');
+  const src = fs.readFileSync(path.join(ROOT, 'src', 'panelView.ts'), 'utf8');
+  assert.ok(src.includes("VIEW_ID = 'graphics-h-runner.programs'"), 'provider must target the same view id');
 });
 
 check('debugger type graphics-h contributed with snippets', () => {

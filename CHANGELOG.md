@@ -1,5 +1,32 @@
 # ChangeLog
 
+## 1.4.1 — 2026-09-26
+
+Fixes the empty activity-bar panel reported on v1.4.0
+("There is no data provider registered that can provide view data").
+Two independent root causes, both fixed and now covered by a real
+VS Code activation test:
+
+### Fixed
+- **The panel view is now declared `"type": "webview"`** in the manifest.
+  v1.4.0 registered a `WebviewViewProvider` but the view declaration lacked
+  the webview type, so VS Code created a tree pane instead — and a tree pane
+  without a `TreeDataProvider` shows exactly that error.
+- **Sentry's module-load initialization no longer runs at module load.**
+  On newer VS Code hosts (with extensions targeting older `engines`), reading
+  the `navigator` global raises a migration-trap error; the Sentry SDK touches
+  `navigator` while setting up, which could crash the extension's module
+  evaluation before anything registered — same visible symptom, empty panel.
+  Initialization now happens inside `activate()`, and a navigator guard
+  replaces the trapped global with a benign stub so automatic error
+  collection keeps working on those hosts.
+
+### Added
+- **Real extension-host verification**: the test suite now launches an actual
+  VS Code instance (`@vscode/test-electron`), activates the extension, focuses
+  the panel, runs the Setup Doctor and scans the workbench logs for the
+  data-provider error — v1.4.0 would have failed this test.
+
 ## 1.4.0 — 2026-09-26
 
 The activity-bar panel becomes a real webpage, F5 runs graphics programs, the

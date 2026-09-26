@@ -169,13 +169,53 @@ function scrubEvent(event) {
     return event;
 }
 /**
+ * VS Code's extension host (engines ^1.80 profile on newer VS Code) traps
+ * reads of the new `navigator` global with a PendingMigrationError. The
+ * Sentry SDK reads `navigator` while setting up its integrations, which
+ * would crash the extension's module load on those hosts (seen as
+ * "There is no data provider registered..." because activation never
+ * finishes). Probe it safely and, when trapped, replace it with a benign
+ * stub so the SDK keeps working.
+ */
+function installNavigatorGuard() {
+    const g = globalThis;
+    try {
+        void g.navigator; /* may throw the host's migration trap */
+        if (typeof g.navigator !== 'undefined') {
+            return; /* real navigator available — nothing to do */
+        }
+    }
+    catch {
+        /* trapped getter — fall through and replace it */
+    }
+    try {
+        Object.defineProperty(globalThis, 'navigator', {
+            value: {
+                userAgent: 'VSCode-Extension-Host',
+                language: 'en-US',
+                platform: process.platform,
+                hardwareConcurrency: 2
+            },
+            configurable: true,
+            writable: true
+        });
+    }
+    catch {
+        /* could not override — the try/catch around Sentry.init keeps the
+         * extension alive (telemetry simply stays off for this session) */
+    }
+}
+/**
  * Initialize Sentry (no-op when already active or when VS Code telemetry is off).
- * Safe to call repeatedly — e.g. at module load and again inside activate().
+ * Safe to call repeatedly — called inside activate(), never at module load:
+ * the extension's module evaluation must be able to fail without taking the
+ * whole panel down.
  */
 function initTelemetry() {
     if (telemetryActive || !telemetryAllowed()) {
         return;
     }
+    installNavigatorGuard();
     try {
         Sentry.init({
             dsn: SENTRY_DSN,
@@ -294,7 +334,8 @@ async function flushTelemetry(timeoutMs = 2000) {
         return false;
     }
 }
-/* Initialize immediately at module load — this module is the first import of the
- * extension entry, matching the Sentry "instrument loaded first" rule for Node.js. */
-initTelemetry();
+/* NOTE: no top-level init here. Even though this module is the first import
+ * of the extension entry (instrument-first ordering), initialization happens
+ * in activate() — a throw during module evaluation would prevent the panel/
+ * tree/command registrations entirely (v1.4.0 regression on newer VS Code). */
 //# sourceMappingURL=instrument.js.map
