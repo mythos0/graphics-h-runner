@@ -1,8 +1,8 @@
 {
   "name": "graphics-h-runner",
   "displayName": "graphics.h Runner — BGI C++ Graphics Toolkit",
-  "description": "Compile & run C++ graphics.h programs (WinBGIM / SDL_bgi) with one keypress or F5. Auto-detects graphics.h, applies the right linker flags per OS, auto-installs everything from zero, and ships a modern sidebar with 19 runnable examples, a Setup Doctor and snippets.",
-  "version": "1.4.6",
+  "description": "Compile & run C++ graphics.h programs (WinBGIM / SDL_bgi) with one keypress or F5. Auto-detects graphics.h, applies the right linker flags per OS, auto-installs everything from zero, runs programs in a real terminal (stdin/stdout), surfaces compiler errors in the Problems panel, and ships a sidebar with 23 runnable examples (Turbo C++ classics, conio.h keyboard pads, DDA line input) plus a Setup Doctor and snippets.",
+  "version": "1.4.8",
   "publisher": "mythos0-labs",
   "author": {
     "name": "Department of CSE, Dhaka International University",
@@ -29,7 +29,7 @@
       "description": "Platforms"
     },
     {
-      "url": "https://img.shields.io/badge/Tests-18%2F18%20screenshot%20verified-brightgreen",
+      "url": "https://img.shields.io/badge/Tests-23%2F23%20screenshot%20verified-brightgreen",
       "href": "https://github.com/mythos0/graphics-h-runner/tree/main/docs/screenshots",
       "description": "Sample tests"
     },
@@ -42,21 +42,25 @@
   "markdown": "github",
   "qna": "marketplace",
   "keywords": [
-    "cpp",
-    "c++",
-    "graphics.h",
-    "bgi",
-    "winbgim",
-    "sdl_bgi",
-    "turbo c",
-    "graphics",
-    "compile",
-    "run",
-    "mingw",
     "beginner",
-    "student",
+    "bgi",
+    "c++",
+    "cmake-free",
+    "compile",
     "computer graphics",
-    "cmake-free"
+    "conio.h",
+    "cpp",
+    "dda",
+    "graphics",
+    "graphics.h",
+    "mingw",
+    "problem matcher",
+    "run",
+    "sdl_bgi",
+    "student",
+    "turbo c",
+    "turbo c++",
+    "winbgim"
   ],
   "activationEvents": [
     "onLanguage:cpp",
@@ -275,6 +279,11 @@
         "command": "graphics-h-runner.compile",
         "key": "ctrl+alt+b",
         "when": "editorTextFocus && resourceLangId == c"
+      },
+      {
+        "command": "graphics-h-runner.stopProgram",
+        "key": "ctrl+alt+s",
+        "when": "true"
       }
     ],
     "menus": {

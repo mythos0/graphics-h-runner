@@ -7,10 +7,10 @@
 
 # graphics.h Runner — BGI C++ Graphics Toolkit for VS Code
 
-[![Version](https://img.shields.io/badge/version-1.4.3-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.4.8-blue.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey.svg)](#per-os-setup)
-[![Tests](https://img.shields.io/badge/sample%20tests-19%2F19%20passing-brightgreen.svg)](#tested--verified)
+[![Tests](https://img.shields.io/badge/sample%20tests-23%2F23%20passing-brightgreen.svg)](#tested--verified)
 
 **Compile & run C++ programs that use `graphics.h` (BGI / WinBGIM / SDL_bgi) with one keypress.**
 One command sets up the whole toolchain from zero — compiler guidance, graphics library
@@ -41,15 +41,16 @@ Press **`Ctrl+Alt+R`** → compiled with the right linker flags → graphics win
 | Feature | What it does |
 |---|---|
 | **⚡ Complete graphics.h Run Setup** | One command bootstraps **everything** — including the C++ compiler itself on Windows (winget auto-install, or a sha256-verified direct download fallback; per-user, **no admin rights**) — then installs WinBGIM/SDL_bgi automatically (download → patch → build → install → paths wired into settings) and re-verifies the whole toolchain live. System packages that need a password are handed to the terminal as copy-paste commands. |
-| **🎨 Modern webpage-style panel (Activity Bar)** | The graphics.h icon opens a styled dashboard, not a plain tree: gradient hero with the DIU logo, a live **environment card** (Ready / Not ready / Checking) with a one-click **Complete Run Setup** fix while anything is missing, an action grid, and **18 emoji program cards** — each with **▶ Run** (open + compile + launch in one click) and **Open** buttons. Responsive for narrow sidebars; identical look in light & dark themes. |
+| **🎨 Modern webpage-style panel (Activity Bar)** | The graphics.h icon opens a styled dashboard, not a plain tree: title row with the **DIU badge** in the top-right corner, a live status pill (Ready / Not ready / Checking) with a one-click **Complete Run Setup** fix while anything is missing, an action grid that **stays put**, and **23 emoji program cards** in a collapsible section that **scrolls inside its own container** — each with **▶ Run** (open + compile + launch in one click) and **Open** buttons. Responsive for narrow sidebars; identical look in light & dark themes. |
 | **🩺 Setup Doctor** | Probes your compiler and *every* candidate graphics library by actually compiling a `graphics.h` probe. Reports exactly what is missing with per-OS fixes, and offers **Fix automatically**. |
 | **🔍 graphics.h auto-detect** | When `#include <graphics.h>` is present, BGI linker flags are applied automatically. Files without it still compile as plain C++. |
 | **▶️ Compile & Run — 4 ways** | `Ctrl+Alt+R` (compile & run), `Ctrl+Alt+B` (compile), the editor **▶ run-button dropdown** (right beside the C/C++ "Run C++ File" entry), and **F5 → "Run graphics.h program"** via a built-in run-only debug adapter. |
 | **🧰 Per-OS linker recipes** | Windows (WinBGIM): `-lbgi -lgdi32 -lcomdlg32 -luuid -loleaut32 -lole32` + static linking. Linux (SDL_bgi): `-lSDL_bgi -lSDL2 -lm`, or libgraph: `-lgraph`. macOS: SDL_bgi via Homebrew SDL2. Custom library prefixes get matching `-Wl,-rpath` automatically. |
-| **📊 Status bar indicator** | `✓ graphics.h` / `⚠ graphics.h` / `? graphics.h` at a glance. Click to run the Setup Doctor. |
+| **📊 Status bar indicator** | `✓ graphics.h` / `⚠ graphics.h` / `? graphics.h` at a glance, switching to **Compiling…** and **click-to-STOP while a program runs**. Click runs the Setup Doctor when idle. |
+| **🐛 Compiler errors in the Problems panel** | g++/gcc output is parsed into clickable file:line diagnostics with inline squiggles — compile errors are visible where you edit, not only in the output. |
 | **🛡️ Messy-settings healing** | Real-world PCs have messy configs. The extension heals them on every run: quoted paths (`"C:\...\g++.exe"`), `%ENV%`/`$VAR` variables, `~`, trailing slashes, **directory-instead-of-exe** paths, missing `.exe` suffixes, stale include/lib dirs from old installs (auto-pruned), and Windows' raw `-4058` spawn failures are all recognized and routed to the one-click fix instead of cryptic errors. |
 | **✂️ Snippets** | `gfxprog`, `gfx-anim`, `gfx-mouse`, `gfx-kbd`, `gfx-text`, `gfx-bar`. |
-| **🎮 19 example programs** | Classic starters plus fun ones: Winking Smiley, Bouncing Balls, Fireworks, Solar System, Aquarium, Rainbow Spiral, Helicopter, Sunset Scene, Warp Starfield, DDA Line (terminal input) — all auto-exiting and screenshot-verified. |
+| **🎮 23 example programs** | Classic starters, Turbo C++ classics (`bar3d`/`pieslice`/`sector`/`floodfill`/fill-pattern tours, viewport clipping, `getimage`/`putimage` sprites), a **conio.h** keyboard drawing pad (`kbhit`/`getch`), fun ones (Fireworks, Solar System, Aquarium, Helicopter, Warp Starfield) and **DDA Line with terminal input** — all auto-exiting and screenshot-verified. |
 
 ## Install
 
@@ -98,11 +99,11 @@ code --install-extension graphics-h-runner-*.vsix
 | `graphics.h: Compile & Run` | `Ctrl+Alt+R` | Compile (with BGI flags when needed) and run |
 | `graphics.h: Compile` | `Ctrl+Alt+B` | Compile only |
 | `graphics.h: Run Last Build` | — | Run the previously built binary |
-| `graphics.h: Stop Running Program` | — | Kill the last launched graphics window |
+| `graphics.h: Stop Running Program` | `Ctrl+Alt+S` | Kill the last launched graphics window |
 | `graphics.h: Setup Doctor` | — | Probe compiler + libraries, offer fixes |
 | `graphics.h: Complete graphics.h Run Setup` | — | The 0 → running bootstrap (compiler included) |
 | `graphics.h: Copy Compile Command` | — | Copy the exact compiler command line for the active file |
-| `graphics.h: Open Examples Folder` | — | Copy all 19 examples into the workspace and reveal them |
+| `graphics.h: Open Examples Folder` | — | Copy all 23 examples into the workspace and reveal them |
 | `graphics.h: Open Example Program` | — | Open any bundled sample as `filename.cpp` (panel) |
 | *F5 / Run and Debug* | `F5` | **Run graphics.h program** — compile & launch the active file |
 
@@ -110,13 +111,18 @@ code --install-extension graphics-h-runner-*.vsix
 
 The **graphics.h Runner** icon in the Activity Bar opens the modern panel:
 
-1. **Hero + live status** — DIU branding and a Ready / Not ready / Checking pill;
-   while anything is missing, a one-click **🚀 Complete Run Setup** button appears.
+1. **Hero + live status** — a Ready / Not ready / Checking pill with the
+   **DIU badge in the title row's top-right corner**; while anything is missing,
+   a one-click **🚀 Complete Run Setup** button appears.
 2. **Actions grid** — Compile & Run, Complete Run Setup, Setup Doctor, Compile,
-   Run Last Build, Stop Running Program, Copy Compile Command, Open Examples Folder.
-3. **Example Programs** — 19 emoji cards (tagged `classic`/`fun`/`math`/`interactive`).
-   **▶ Run** opens the file, compiles and launches the graphics window in one click;
-   **Open** just opens the source as `graphics-h-programs/<name>.cpp`.
+   Run Last Build, Stop Running Program, Copy Compile Command, Open Examples
+   Folder. The actions **stay put** while you browse programs.
+3. **Example Programs** — 23 emoji cards (tagged `classic`/`fun`/`math`/`interactive`)
+   in a **collapsed-by-default section**: tap the header to expand, and the list
+   **scrolls inside its own container** like a second tab below the actions
+   (the choice is remembered). **▶ Run** opens the file, compiles and launches
+   the graphics window in one click; **Open** just opens the source as
+   `graphics-h-programs/<name>.cpp`.
 
 ## Extension settings
 

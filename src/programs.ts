@@ -58,7 +58,11 @@ const SAMPLE_META: ProgramMeta[] = [
   { id: 'heli',       kind: 'sample', filename: '16_helicopter.cpp',      title: 'Helicopter',          description: 'Heli over a night city, spinning rotor',emoji: '🚁', tag: 'fun' },
   { id: 'sunset',     kind: 'sample', filename: '17_sunset.cpp',          title: 'Sunset Scene',        description: 'Sun sinks, stars come out, moon rises', emoji: '🌅', tag: 'fun' },
   { id: 'starfield',  kind: 'sample', filename: '18_starfield.cpp',       title: 'Warp Starfield',      description: 'Fly through space at warp speed',       emoji: '✨', tag: 'fun' },
-  { id: 'dda',        kind: 'sample', filename: '19_dda_line.cpp',        title: 'DDA Line (Terminal Input)', description: 'Type endpoints in the terminal, see every DDA step', emoji: '📏', tag: 'math' }
+  { id: 'dda',        kind: 'sample', filename: '19_dda_line.cpp',        title: 'DDA Line (Terminal Input)', description: 'Type endpoints in the terminal, see every DDA step', emoji: '📏', tag: 'math' },
+  { id: 'turbos',     kind: 'sample', filename: '20_turbo_tour.cpp',      title: 'Turbo C++ Graphics Tour',   description: 'bar3d, pieslice, sector, floodfill, fill patterns',  emoji: '🏛️', tag: 'classic' },
+  { id: 'viewport',   kind: 'sample', filename: '21_viewport_bounce.cpp', title: 'Viewport & Clipping',       description: 'Two clipped panes with bouncing balls inside',       emoji: '🖼️', tag: 'classic' },
+  { id: 'sprite',     kind: 'sample', filename: '22_sprite_ride.cpp',     title: 'Sprite Animation',          description: 'getimage/putimage rocket over a starfield',          emoji: '🚀', tag: 'fun' },
+  { id: 'coniopaint', kind: 'sample', filename: '23_conio_paint.cpp',     title: 'Conio Keyboard Paint',      description: 'conio.h kbhit/getch drawing pad with a menu bar',    emoji: '⌨️', tag: 'interactive' }
 ];
 
 export interface CommandMeta {

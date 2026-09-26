@@ -62,6 +62,7 @@ const programsTree_1 = require("./programsTree");
 const debugAdapter_1 = require("./debugAdapter");
 const normalize_1 = require("./normalize");
 const instrument_1 = require("./instrument");
+const diagnostics_1 = require("./diagnostics");
 const OUTPUT_CHANNEL_NAME = 'graphics.h Runner';
 const TERMINAL_NAME = 'graphics.h Runner';
 const CONFIG_PREFIX = 'graphics-h-runner.';
@@ -74,6 +75,9 @@ let catalog = [];
 let lastRunChild = null;
 let lastRunTerminal;
 let storageDir; /* globalStorage — real files for folder-less windows */
+let diagnostics;
+/* live run feedback for the status bar: idle -> compiling -> running -> idle */
+let runState = 'idle';
 /** Existence-probe options for the normalizers (real filesystem). */
 function normOpts() {
     return { platform: (0, toolchain_1.currentPlatform)() };
@@ -364,6 +368,8 @@ async function compileSource(sourceFile) {
     const cfg = getConfig();
     const plan = resolvePlan(sourceFile, cfg);
     log('[compile] ' + plan.commandLine);
+    setRunState('compiling');
+    let compilerText = '';
     const result = await vscode.window.withProgress({
         location: vscode.ProgressLocation.Notification,
         title: `graphics.h: compiling ${path.basename(sourceFile)}…`,
@@ -390,7 +396,14 @@ async function compileSource(sourceFile) {
             return;
         }
         child.stdout?.on('data', (d) => output.append(d.toString()));
-        child.stderr?.on('data', (d) => output.append(d.toString()));
+        child.stderr?.on('data', (d) => {
+            output.append(d.toString());
+            /* kept for the Problems panel + the failure breadcrumb */
+            compilerText += d.toString();
+            if (compilerText.length > 131072) {
+                compilerText = compilerText.slice(-65536); /* keep the tail */
+            }
+        });
         child.on('error', (e) => {
             const kind = (0, normalize_1.classifySpawnFailure)({ errorCode: e.code, closeCode: null });
             if (kind === 'no-compiler') {
@@ -422,25 +435,71 @@ async function compileSource(sourceFile) {
             }
         });
     }));
+    setRunState('idle');
     (0, instrument_1.addExtensionBreadcrumb)('compile', result, { file: path.basename(sourceFile) });
-    if (result === 'failed') {
-        /* compile failures are the #1 "examples won't run" report — capture with
-         * context so the next one arrives in Sentry with platform + file info */
-        (0, instrument_1.captureExtensionError)(new Error(`g++ exited non-zero for ${path.basename(sourceFile)}`), {
-            stage: 'compile',
-            platform: (0, toolchain_1.currentPlatform)(),
-            file: path.basename(sourceFile)
+    if (result === 'ok') {
+        diagnostics?.delete(vscode.Uri.file(sourceFile));
+    }
+    else if (result === 'failed') {
+        /* Compile errors are the NORMAL edit-compile loop for a graphics.h
+         * teaching tool — they belong in the Problems panel and the output
+         * channel, NOT in the telemetry error inbox (a single student session
+         * could otherwise raise dozens of "g++ exited non-zero" issues). The
+         * first error lines ride along as a breadcrumb so any genuinely
+         * unrelated crash in the same session still carries compiler context. */
+        publishCompilerDiagnostics(sourceFile, compilerText);
+        const firstErrors = compilerText
+            .split(/\r?\n/)
+            .filter((l) => /:\s+(fatal error|error):/.test(l))
+            .slice(0, 3)
+            .join(' | ');
+        (0, instrument_1.addExtensionBreadcrumb)('compile', 'failed', {
+            file: path.basename(sourceFile),
+            errors: (firstErrors || 'no error lines captured').slice(0, 600)
         });
     }
     return result;
+}
+/** Parse the compiler's output and surface it in the Problems panel. */
+function publishCompilerDiagnostics(sourceFile, compilerText) {
+    if (!diagnostics) {
+        return;
+    }
+    try {
+        const parsed = (0, diagnostics_1.capCompilerDiagnostics)((0, diagnostics_1.parseCompilerOutput)(compilerText), 200);
+        diagnostics.clear();
+        const byFile = new Map();
+        for (const d of parsed) {
+            const file = path.resolve(path.dirname(sourceFile), d.file);
+            const line = Math.max(0, d.line - 1);
+            const col = Math.max(0, (d.column || 1) - 1);
+            const range = new vscode.Range(line, col, line, col + 1);
+            const sev = d.severity === 'error'
+                ? vscode.DiagnosticSeverity.Error
+                : d.severity === 'warning'
+                    ? vscode.DiagnosticSeverity.Warning
+                    : vscode.DiagnosticSeverity.Information;
+            const diag = new vscode.Diagnostic(range, d.message, sev);
+            diag.source = 'g++';
+            const list = byFile.get(file) || [];
+            list.push(diag);
+            byFile.set(file, list);
+        }
+        for (const [file, list] of byFile) {
+            diagnostics.set(vscode.Uri.file(file), list);
+        }
+    }
+    catch {
+        /* diagnostics must never break the compile flow */
+    }
 }
 function runBinary(sourceFile) {
     const platform = (0, toolchain_1.currentPlatform)();
     const bin = (0, toolchain_1.binaryPathFor)(sourceFile, platform);
     if (!fs.existsSync(bin)) {
-        (0, instrument_1.captureExtensionError)(new Error('run: binary not found'), {
-            stage: 'run',
-            platform,
+        /* expected UX (Run before Compile) — the dialog below is the fix,
+         * telemetry noise is not: breadcrumb only. */
+        (0, instrument_1.addExtensionBreadcrumb)('run', 'binary not found', {
             file: path.basename(sourceFile),
             bin: path.basename(bin)
         });
@@ -493,6 +552,7 @@ function runInTerminal(bin) {
     log('[run] ' + abs + ' (as terminal process)');
     (0, instrument_1.addExtensionBreadcrumb)('run', 'terminal-direct', { file: path.basename(abs) });
     lastRunTerminal = term;
+    setRunState('running');
 }
 /** Kill the most recently launched graphics program (Stop command). */
 async function stopRunningProgram() {
@@ -500,6 +560,7 @@ async function stopRunningProgram() {
     const term = lastRunTerminal;
     lastRunChild = null;
     lastRunTerminal = undefined;
+    setRunState('idle');
     if (child && child.pid && child.exitCode === null) {
         try {
             if ((0, toolchain_1.currentPlatform)() === 'windows') {
@@ -604,16 +665,38 @@ function showNoCompilerHelp() {
     });
 }
 /* ---------------- status bar ---------------- */
+function setRunState(state) {
+    if (runState === state) {
+        return;
+    }
+    runState = state;
+    updateStatusBar();
+}
 function updateStatusBar() {
     if (!statusItem) {
         return;
     }
     const cfg = getConfig();
-    statusItem.text = '$(circle-outline) graphics.h';
     if (!cfg.showStatusBarItem) {
         statusItem.hide();
         return;
     }
+    if (runState === 'compiling') {
+        statusItem.text = '$(sync~spin) graphics.h';
+        statusItem.command = 'graphics-h-runner.doctor';
+        statusItem.tooltip = 'Compiling your program…';
+        statusItem.show();
+        return;
+    }
+    if (runState === 'running') {
+        statusItem.text = '$(debug-stop) graphics.h';
+        statusItem.command = 'graphics-h-runner.stopProgram';
+        statusItem.tooltip = 'A graphics program is RUNNING — click to stop it (Ctrl+Alt+S).';
+        statusItem.show();
+        return;
+    }
+    statusItem.command = 'graphics-h-runner.doctor';
+    statusItem.text = '$(circle-outline) graphics.h';
     statusItem.show();
     if (!doctorCache) {
         statusItem.text = '$(circle-outline) graphics.h';
@@ -832,6 +915,9 @@ async function handlePanelClick(msg) {
 function activate(context) {
     output = vscode.window.createOutputChannel(OUTPUT_CHANNEL_NAME);
     context.subscriptions.push(output);
+    /* compile errors -> Problems panel: clickable file:line entries + squiggles */
+    diagnostics = vscode.languages.createDiagnosticCollection('graphics.h Runner');
+    context.subscriptions.push(diagnostics);
     /* ---- automatic error collection (Sentry — see instrument.ts) ---- */
     (0, instrument_1.setTelemetryContext)({ extensionRoot: context.extensionPath, extensionMode: context.extensionMode });
     (0, instrument_1.initTelemetry)(); /* consent may have flipped since module load */
@@ -868,7 +954,9 @@ function activate(context) {
             if (ev === 'fallback') {
                 log('[panel] webview failed to load — switching to the list view automatically');
                 (0, instrument_1.addExtensionBreadcrumb)('panel', 'webview fallback engaged');
-                (0, instrument_1.captureExtensionError)(new Error('webview failed to load (no pong after retry render)'), {
+                /* resilience WORKED here (automatic retry + list-view fallback):
+                 * warning-level visibility, not an error issue */
+                (0, instrument_1.captureExtensionWarning)('webview failed to load (no pong after retry render)', {
                     stage: 'webview-fallback'
                 });
                 void (async () => {
@@ -1001,6 +1089,7 @@ function activate(context) {
     }), vscode.window.onDidCloseTerminal((t) => {
         if (t === lastRunTerminal) {
             lastRunTerminal = undefined;
+            setRunState('idle');
         }
     }));
     log('graphics.h Runner activated.');

@@ -50,6 +50,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.GhPanelProvider = void 0;
 const vscode = __importStar(require("vscode"));
 const crypto_1 = require("crypto");
+const path = __importStar(require("path"));
 const panelHtml_1 = require("./panelHtml");
 const programs_1 = require("./programs");
 const webviewHealth_1 = require("./webviewHealth");
@@ -94,7 +95,10 @@ class GhPanelProvider {
     }
     resolveWebviewView(view) {
         this.view = view;
-        view.webview.options = { enableScripts: true };
+        view.webview.options = {
+            enableScripts: true,
+            localResourceRoots: [vscode.Uri.file(path.join(this.extensionRoot, 'media'))]
+        };
         this.health = webviewHealth_1.WebviewHealth.create({
             onEvent: (ev) => this.notify(ev),
             ping: () => {
@@ -206,7 +210,12 @@ class GhPanelProvider {
             return '';
         }
         const nonce = (0, crypto_1.randomBytes)(12).toString('hex');
+        /* university badge for the title row's empty top-right corner */
+        const logoUri = this.view.webview
+            .asWebviewUri(vscode.Uri.file(path.join(this.extensionRoot, 'media', 'diu-logo.png')))
+            .toString();
         return (0, panelHtml_1.buildPanelHtml)({
+            logoUri,
             programs: this.programs.map((p) => ({
                 id: p.id,
                 title: p.title,

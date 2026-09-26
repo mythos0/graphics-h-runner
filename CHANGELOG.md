@@ -1,5 +1,63 @@
 # ChangeLog
 
+## 1.4.8 — 2026-09-26
+
+### Fixed
+- **The DIU badge was not wired into the live panel in 1.4.7** (the wiring
+  change sat in a patch batch that failed halfway; the badge showed in test
+  previews, which pass the logo URI explicitly, but the real panel never
+  received it). The panel provider now serves `media/diu-logo.png` as a
+  webview resource and passes it to the page; `localResourceRoots` is scoped
+  to `media/` again. 1.4.7 shipped everything else in this release note.
+
+## 1.4.7 — 2026-09-26
+
+Panel redesign per user feedback, Turbo C++ / conio.h examples, compiler
+diagnostics in the Problems panel, and a quieter Sentry error inbox.
+
+### Added
+- **Turbo C++ & conio.h example pack (WinBGIM stays the default library; 23
+  examples total)**: "Turbo C++ Graphics Tour" (bar3d, pieslice, sector,
+  floodfill, fill patterns, dashed lines), "Viewport & Clipping"
+  (setviewport/clearviewport with two clipped panes), "Sprite Animation"
+  (getimage/putimage rocket over a starfield), and "Conio Keyboard Paint"
+  (a conio.h kbhit/getch drawing pad with a menu bar). Every sample compiles
+  on WinBGIM (Windows) and SDL_bgi (Linux/macOS) and auto-exits.
+- **Compiler errors in the Problems panel**: g++ output is parsed into
+  clickable file:line diagnostics (errors, warnings, notes) with inline
+  squiggles; a clean build clears them.
+- **Status bar now tracks the run**: `Compiling…` while the toolchain runs,
+  and a click-to-STOP indicator while a graphics program is running; back to
+  the environment indicator when idle.
+- **Ctrl+Alt+S** stops the running graphics program from anywhere.
+- The "Open Examples Folder" hint and every count now follow the real
+  catalog size automatically.
+
+### Changed
+- **Panel, per user feedback**: the ready-state "Everything is ready" card is
+  gone (the green pill + chips carry the ready message); Example Programs are
+  **collapsed by default** — tap the section header to expand, and the list
+  **scrolls inside its own container** like a second tab below the actions,
+  so the action buttons stay put; the choice is remembered across re-renders.
+  The **DIU badge** now sits in the empty top-right corner of the title row
+  (responsive: smaller but never stretched on narrow sidebars), and the
+  footer credit stays pinned to the bottom.
+
+### Fixed
+- **Sentry inbox noise**: user-code compile errors are no longer reported as
+  telemetry errors (they are the normal edit-compile loop — now visible in
+  the Problems panel instead; the first error lines ride along as
+  breadcrumbs), the webview-fallback event is downgraded to a warning
+  (resilience working as designed), and uncaught crashes/rejections from
+  OTHER extensions in the shared host (e.g. frame-less "Cannot find package
+  'prettier'" rejections) are dropped even when they carry no frames.
+- Sprite-animation sample: background "restore" via a captured bitmap cannot
+  erase on SDL_bgi (transparent alpha in the captured bitmap) — the sample
+  now erases with cleardevice() + opaque primitive redraws, the portable
+  pattern; also fixed the missing initial draw that left an orphaned sprite
+  in the classic XOR variant, and viewport labels that clearviewport()
+  wiped each frame.
+
 ## 1.4.6 — 2026-09-26
 
 Terminal-launch fix for every Windows setup plus a new DDA line-drawing

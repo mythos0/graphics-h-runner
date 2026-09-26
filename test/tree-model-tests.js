@@ -4,7 +4,7 @@
  * (src/programsTree.ts -> out/programsTree.js) — no vscode needed.
  *
  * Contract: the list view mirrors the webview panel — the same 8 actions and
- * the same 19 example programs — and every program click runs through a
+ * the same 23 example programs — and every program click runs through a
  * single registered command with the program id as its argument.
  */
 'use strict';
@@ -30,16 +30,16 @@ const catalog = loadProgramCatalog(ROOT);
 
 console.log('tree-model-tests — fallback list view model\n');
 
-check('model = 2 sections + 8 actions + 19 programs', () => {
+check('model = 2 sections + 8 actions + 23 programs', () => {
   const m = buildTreeModel(catalog);
   const sections = m.filter((e) => e.kind === 'section');
   const actions = m.filter((e) => e.kind === 'action');
   const programs = m.filter((e) => e.kind === 'program');
   assert.strictEqual(sections.length, 2, 'section count ' + sections.length);
   assert.strictEqual(actions.length, COMMAND_META.length, 'action count ' + actions.length);
-  assert.strictEqual(programs.length, 19, 'program count ' + programs.length);
+  assert.strictEqual(programs.length, 23, 'program count ' + programs.length);
   assert.strictEqual(sections[0].label, 'Actions');
-  assert.ok(/Example Programs \(19\)/.test(sections[1].label), 'programs section label wrong: ' + sections[1].label);
+  assert.ok(/Example Programs \(23\)/.test(sections[1].label), 'programs section label wrong: ' + sections[1].label);
 });
 
 check('actions mirror COMMAND_META ids and command ids 1:1', () => {
@@ -65,7 +65,7 @@ check('every program is wired to the run command with its id as argument data', 
     assert.ok(/\.cpp$/.test(p.filename), 'filename not a .cpp for ' + p.id);
     ids.add(p.id);
   }
-  assert.strictEqual(ids.size, 19, 'duplicate program ids in the tree model');
+  assert.strictEqual(ids.size, 23, 'duplicate program ids in the tree model');
   for (const loaded of catalog) {
     assert.ok(ids.has(loaded.id), 'catalog program missing from tree: ' + loaded.id);
   }

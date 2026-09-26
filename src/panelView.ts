@@ -15,6 +15,7 @@
 
 import * as vscode from 'vscode';
 import { randomBytes } from 'crypto';
+import * as path from 'path';
 import { buildPanelHtml, buildFallbackPanelHtml, PanelStatus } from './panelHtml';
 import { COMMAND_META, LoadedProgram } from './programs';
 import { WebviewHealth, WebviewEvent } from './webviewHealth';
@@ -90,7 +91,10 @@ export class GhPanelProvider implements vscode.WebviewViewProvider {
 
   resolveWebviewView(view: vscode.WebviewView): void {
     this.view = view;
-    view.webview.options = { enableScripts: true };
+    view.webview.options = {
+      enableScripts: true,
+      localResourceRoots: [vscode.Uri.file(path.join(this.extensionRoot, 'media'))]
+    };
 
     this.health = WebviewHealth.create({
       onEvent: (ev) => this.notify(ev),
@@ -214,7 +218,12 @@ export class GhPanelProvider implements vscode.WebviewViewProvider {
       return '';
     }
     const nonce = randomBytes(12).toString('hex');
+    /* university badge for the title row's empty top-right corner */
+    const logoUri = this.view.webview
+      .asWebviewUri(vscode.Uri.file(path.join(this.extensionRoot, 'media', 'diu-logo.png')))
+      .toString();
     return buildPanelHtml({
+      logoUri,
       programs: this.programs.map((p) => ({
         id: p.id,
         title: p.title,

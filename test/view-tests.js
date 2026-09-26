@@ -4,7 +4,7 @@
  * package.json wiring (activity-bar view, commands, debugger, menus).
  *
  * Validates (without a VS Code UI):
- *   1. the program catalog loads 19 samples (0 templates — templates were
+ *   1. the program catalog loads 23 samples (0 templates — templates were
  *      removed in v1.4.0)
  *   2. every source really includes <graphics.h>
  *   3. catalog sources match the bundled samples on disk byte-for-byte
@@ -37,11 +37,11 @@ function check(name, fn) {
 
 console.log('view-tests — catalog + package.json wiring\n');
 
-check('catalog loads 19 samples, 0 templates', () => {
+check('catalog loads 23 samples, 0 templates', () => {
   const catalog = loadProgramCatalog(ROOT);
-  assert.strictEqual(catalog.filter((p) => p.kind === 'sample').length, 19, 'sample count');
+  assert.strictEqual(catalog.filter((p) => p.kind === 'sample').length, 23, 'sample count');
   assert.strictEqual(catalog.filter((p) => p.kind === 'template').length, 0, 'template count');
-  assert.strictEqual(catalog.length, 19, 'total count');
+  assert.strictEqual(catalog.length, 23, 'total count');
 });
 
 check('every sample source includes <graphics.h>', () => {
@@ -59,12 +59,12 @@ check('catalog sources match bundled samples byte-for-byte', () => {
   }
 });
 
-check('filenames unique + sorted numbering 01..19', () => {
+check('filenames unique + sorted numbering 01..23', () => {
   const catalog = loadProgramCatalog(ROOT);
   const names = catalog.map((p) => p.filename);
   assert.strictEqual(new Set(names).size, names.length, 'duplicate filenames');
   names.forEach((n) => assert.ok(n.endsWith('.cpp'), n + ' not .cpp'));
-  for (let i = 1; i <= 19; i++) {
+  for (let i = 1; i <= 23; i++) {
     const prefix = String(i).padStart(2, '0') + '_';
     assert.ok(names.some((n) => n.startsWith(prefix)), 'missing sample #' + prefix);
   }

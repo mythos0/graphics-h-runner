@@ -5,12 +5,15 @@
  *
  * Validates:
  *  1. all three environment states render the right pill + CTA
- *  2. 19 program cards with Run + Open buttons
- *  3. 8 action buttons wired to COMMAND_META ids, each with its own color
- *  4. CSP + nonce + script tag + version are present; no logo, and the
- *     footer carries the "Powered by Department of CSE …" credit
- *  5. dangerous text is HTML-escaped
+ *  2. 23 program cards with Run + Open buttons
+ *  3. 8 action buttons wired to COMMAND_META ids, exactly one green accent
+ *  4. CSP + nonce + script tag + version are present; the DIU badge renders
+ *     in the title row when a logoUri is given, and the footer carries the
+ *     "Powered by Department of CSE …" credit
+ *  5. dangerous text is HTML-escaped (including the logo URI)
  *  6. busy label markup would be safe (script-side escaping)
+ *  7. ready state renders NO environment card (removed in v1.4.7)
+ *  8. Example Programs: collapsed by default, scrolls inside its container
  */
 'use strict';
 const path = require('path');
@@ -36,14 +39,17 @@ function check(name, fn) {
   }
 }
 
-function html(status) {
+const LOGO = 'https://*.vscode-cdn.net/media/diu-logo.png';
+
+function html(status, logoUri) {
   return buildPanelHtml({
     programs,
     commands: COMMAND_META,
     status: Object.assign({ state: 'ready', library: 'SDL_bgi', compilerOk: true, platform: 'linux', busy: false, busyLabel: null }, status),
     version: '1.4.0',
     nonce: 'testnonce123',
-    cspSource: 'https://*.vscode-cdn.net'
+    cspSource: 'https://*.vscode-cdn.net',
+    logoUri: logoUri === undefined ? LOGO : logoUri
   });
 }
 
@@ -78,13 +84,14 @@ check('checking state: amber pill', () => {
   assert.ok(h.includes('Checking environment'), 'no checking copy');
 });
 
-check('19 program cards, each with Run + Open', () => {
+check('23 program cards, each with Run + Open', () => {
   const h = html({});
   const runs = (h.match(/data-run="/g) || []).length;
   const opens = (h.match(/data-open="/g) || []).length;
-  assert.strictEqual(runs, 19, 'data-run count ' + runs);
-  assert.strictEqual(opens, 19, 'data-open count ' + opens);
+  assert.strictEqual(runs, 23, 'data-run count ' + runs);
+  assert.strictEqual(opens, 23, 'data-open count ' + opens);
   assert.ok(h.includes('Winking Smiley') && h.includes('Fireworks Show') && h.includes('Warp Starfield'), 'fun programs missing');
+  assert.ok(h.includes('Turbo C++ Graphics Tour') && h.includes('Conio Keyboard Paint') && h.includes('Sprite Animation'), 'new v1.4.7 programs missing');
 });
 
 check('8 action buttons carrying COMMAND_META ids', () => {
@@ -125,20 +132,32 @@ check('dark neutral theme: flat background, no blueish gradients', () => {
   assert.ok(!h.includes('#171538') && !h.includes('#7c5cff') && !h.includes('#22d3ee'), 'old indigo/violet palette leaked');
 });
 
-check('header layout: identity + env card left, action buttons beside them; programs full-width below', () => {
+check('header layout: identity left, action buttons beside them; programs zone below', () => {
   const h = html({});
-  const header = h.slice(h.indexOf('class="header"'), h.indexOf('class="sec"'));
+  const header = h.slice(h.indexOf('class="header"'), h.indexOf('class="programs-zone"'));
   assert.ok(header.includes('graphics.h Runner'), 'title not in the header');
   assert.ok(header.includes('id="env-pill"'), 'status pill not in the header');
   assert.ok(header.includes('class="chip"'), 'version/platform chips not in the header');
-  assert.ok(header.includes('id="env-card"'), 'env status card not in the header');
-  assert.ok(header.indexOf('id="env-card"') < header.indexOf('id="cmd-compileAndRun"'),
-    'action buttons are not beside the identity/status block');
-  const below = h.slice(h.indexOf('class="sec"'));
+  assert.ok(header.indexOf('id="cmd-compileAndRun"') > header.indexOf('class="hero"'),
+    'action buttons are not beside the identity block');
+  const below = h.slice(h.indexOf('class="programs-zone"'));
   assert.ok(below.includes('id="programs"'), 'program cards missing below the header');
   assert.ok(below.includes('class="foot"'), 'footer missing below the header');
   assert.ok(h.includes('@media (min-width: 620px)'), 'wide-header media query missing');
   assert.ok(!h.includes('col-side') && !h.includes('col-main'), 'old two-pane classes leaked');
+});
+
+check('ready state: NO environment card at all (removed in v1.4.7)', () => {
+  const h = html({});
+  assert.ok(!h.includes('Everything is ready'), 'ready env card still rendered');
+  assert.ok(!h.includes('id="env-card"'), 'env-card element leaked in ready state');
+  assert.ok(!h.includes('id="env-cta"'), 'setup CTA leaked in ready state');
+});
+
+check('not-ready state: env card with the setup CTA still renders', () => {
+  const h = html({ state: 'not-ready', compilerOk: false, library: null });
+  assert.ok(h.includes('id="env-card"'), 'env card missing in not-ready state');
+  assert.ok(h.includes('Environment needs setup'), 'not-ready copy missing');
 });
 
 check('CSP: nonce script + cspSource in img-src, no inline handlers', () => {
@@ -149,16 +168,27 @@ check('CSP: nonce script + cspSource in img-src, no inline handlers', () => {
   assert.ok(!/\son\w+="/.test(h), 'inline event handler found');
 });
 
-check('branding: no logo / no hero credit, Powered-by footer credit, title + version', () => {
+check('branding: DIU badge in the title row, no hero text credit, Powered-by footer', () => {
   const h = html({});
-  assert.ok(!h.includes('<img'), 'logo image tag still present');
+  const imgs = h.match(/<img class="diu-logo"[^>]*>/g) || [];
+  assert.strictEqual(imgs.length, 1, 'expected exactly one diu-logo img, got ' + imgs.length);
+  assert.ok(imgs[0].includes('src="' + LOGO + '"'), 'logo src is not the webview uri');
+  assert.ok(imgs[0].includes('alt='), 'logo alt missing');
+  assert.ok(h.includes('brand-row'), 'title-row brand container missing');
+  /* no TEXT credit in the hero (attribute title on the badge is fine) */
+  const hero = h.slice(h.indexOf('class="header"'), h.indexOf('class="header-actions"'));
+  const heroText = hero.replace(/<[^>]+>/g, ' ');
+  assert.ok(!heroText.includes('Dhaka International University'), 'university credit leaked into hero text');
   assert.ok(!h.includes('made by'), 'old made-by wording present');
   assert.ok(!h.includes('made with'), 'old made-with wording present');
-  const hero = h.slice(0, h.indexOf('class="foot"'));
-  assert.ok(!hero.includes('Dhaka International University'), 'university credit leaked into hero');
   assert.ok(h.includes('Powered by Department of CSE, Dhaka International University, Bangladesh.'), 'footer credit missing');
   assert.ok(h.includes('graphics.h Runner'), 'title missing');
   assert.ok(h.includes('v1.4.0'), 'version missing');
+  /* no logoUri -> no img at all (defensive) */
+  assert.ok(!html({}, null).includes('<img'), 'img rendered without a logoUri');
+  /* hostile logoUri must be escaped */
+  const evil = html({}, '"><script>alert(1)</script>');
+  assert.ok(!evil.includes('<script>alert(1)'), 'logoUri not escaped');
 });
 
 check('XSS: hostile title/description are escaped', () => {
@@ -204,6 +234,29 @@ check('hero button: exactly one, it is Compile & Run, full-width alone on its ro
   assert.strictEqual(grid, 7, 'secondary buttons not in the grid: ' + grid);
   assert.ok(h.includes('repeat(2, minmax(0, 1fr))'), '2-per-row grid rule missing');
   assert.ok(h.includes('@media (max-width: 299px)'), 'very-narrow single-column fallback missing');
+});
+
+check('example programs: collapsed by default, remembered, scroll inside their zone', () => {
+  const h = html({});
+  assert.ok(h.includes('id="programs-sec"'), 'toggle section header missing');
+  assert.ok(h.includes('id="programs" class="collapsed"'), 'program list is not collapsed by default');
+  assert.ok(h.includes('aria-expanded="false"'), 'toggle not announced collapsed');
+  assert.ok(h.includes('chev'), 'collapse chevron missing');
+  assert.ok(h.includes('tap to expand'), 'collapsed hint missing');
+  assert.ok(h.includes('programs-zone'), 'programs flex zone missing');
+  assert.ok(h.includes('overflow-y:auto'), 'internal scrollbar rule missing');
+  assert.ok(h.includes("vscode.getState() && vscode.getState().programsOpen"), 'expanded state not persisted via webview state');
+  assert.ok(h.includes("vscode.setState({ programsOpen: !programsOpen() })"), 'toggle does not persist its state');
+  assert.ok(h.includes("progSec.addEventListener('click', togglePrograms)"), 'toggle click not wired');
+  assert.ok(h.includes("progSec.addEventListener('keydown'"), 'toggle keyboard support missing');
+  assert.ok(h.includes('height:100vh'), 'fixed-height page layout missing');
+  assert.ok(h.includes('margin-top:auto'), 'footer not pinned to the bottom');
+});
+
+check('dynamic program count in the examples hint', () => {
+  const h = html({});
+  assert.ok(h.includes('all 23 programs'), 'examples hint not driven by the catalog length');
+  assert.ok(h.includes('23 programs · tap to expand'), 'section count header wrong');
 });
 
 check('liveness: page pongs on load and answers pings (service-worker watchdog)', () => {

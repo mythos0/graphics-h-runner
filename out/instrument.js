@@ -58,6 +58,7 @@ exports.isTelemetryActive = isTelemetryActive;
 exports.setTelemetryContext = setTelemetryContext;
 exports.onTelemetryConsentChanged = onTelemetryConsentChanged;
 exports.captureExtensionError = captureExtensionError;
+exports.captureExtensionWarning = captureExtensionWarning;
 exports.addExtensionBreadcrumb = addExtensionBreadcrumb;
 exports.setRuntimeTags = setRuntimeTags;
 exports.flushTelemetry = flushTelemetry;
@@ -266,6 +267,43 @@ function isAttributableToUs(event) {
     return false;
 }
 /**
+ * True when the event references ANOTHER extension's install folder — seen
+ * live: frame-less "Cannot find package 'prettier' imported from
+ * .vscode\extensions\esbenp.prettier-vscode-..." unhandled rejections that
+ * carry no frames to attribute (shared extension host, not our code).
+ */
+function referencesOtherExtension(event) {
+    try {
+        const paths = [];
+        if (typeof event.message === 'string') {
+            paths.push(event.message);
+        }
+        for (const ex of event.exception?.values || []) {
+            if (typeof ex.value === 'string') {
+                paths.push(ex.value);
+            }
+            for (const f of ex.stacktrace?.frames || []) {
+                if (typeof f.filename === 'string') {
+                    paths.push(f.filename);
+                }
+                if (typeof f.abs_path === 'string') {
+                    paths.push(f.abs_path);
+                }
+            }
+        }
+        for (const p of paths) {
+            const m = p.match(/\.vscode[/\\]+extensions[/\\]+([^/\\'"\s:]+)/i);
+            if (m && !m[1].toLowerCase().startsWith('mythos0-labs.graphics-h-runner')) {
+                return true;
+            }
+        }
+    }
+    catch {
+        /* filtering must never break delivery */
+    }
+    return false;
+}
+/**
  * Initialize Sentry (no-op when already active or when VS Code telemetry is off).
  * Safe to call repeatedly — called inside activate(), never at module load:
  * the extension's module evaluation must be able to fail without taking the
@@ -297,10 +335,13 @@ function initTelemetry() {
                 if (!telemetryAllowed()) {
                     return null;
                 }
-                /* Auto-captured process-wide crashes must belong to this extension.
-                 * Handled captures (tag ghr.source=handled) always pass. */
-                const isAuto = (event.exception?.values || []).some((ex) => String(ex.mechanism?.type || '').startsWith('auto.node'));
-                if (isAuto && !isAttributableToUs(event)) {
+                /* Anything NOT captured deliberately by our own code must belong to
+                 * this extension: no frames at all (frame-less module-loader
+                 * rejections), frames in another extension's folder, or paths naming
+                 * another extension — all dropped. Handled captures (tag
+                 * ghr.source=handled) always pass. */
+                const handled = (event.tags || {})['ghr.source'] === 'handled';
+                if (!handled && (referencesOtherExtension(event) || !isAttributableToUs(event))) {
                     return null; /* another extension's / the host's own crash — not ours */
                 }
                 return scrubEvent(event);
@@ -362,6 +403,29 @@ function captureExtensionError(error, tags) {
                 }
             }
             return scope;
+        });
+    }
+    catch {
+        /* ignore */
+    }
+}
+/** Capture a handled-but-notable condition at WARNING level (the webview
+ *  fallback engaging is resilience working as designed — visibility without
+ *  polluting the error inbox). */
+function captureExtensionWarning(message, tags) {
+    if (!telemetryActive) {
+        return;
+    }
+    try {
+        Sentry.withScope((scope) => {
+            scope.setLevel('warning');
+            scope.setTag('ghr.source', 'handled');
+            if (tags) {
+                for (const [key, value] of Object.entries(tags)) {
+                    scope.setTag(key, scrubText(value));
+                }
+            }
+            Sentry.captureMessage(message);
         });
     }
     catch {

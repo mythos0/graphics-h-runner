@@ -55,16 +55,18 @@ function envCard(status) {
       </div>
     </div>`;
     }
-    return `
-  <div class="card env-card env-ok" id="env-card">
-    <div class="env-main">
-      <div class="env-title">✅ Everything is ready</div>
-      <div class="env-sub">Compiler OK · library <b>${esc(status.library || '?')}</b> · open a program below and press <b>Ctrl+Alt+R</b>.</div>
-    </div>
-  </div>`;
+    /* Ready state renders NOTHING: the green pill + platform/version chips
+     * already carry the "you are good to go" message, and the extra card only
+     * pushed the actions down (removed on user request, v1.4.7). */
+    return '';
 }
-function actionButtons(commands) {
+function actionButtons(commands, programCount) {
     return commands
+        .map((raw) => {
+        /* keep the hint honest — the example catalog grows every release */
+        const c = raw.id === 'cmd-examples' ? { ...raw, hint: `all ${programCount} programs` } : raw;
+        return c;
+    })
         .map((c) => `<button class="btn${c.primary ? ' btn-accent btn-hero' : ''}" data-cmd="${esc(c.commandId)}" id="${esc(c.id)}" title="${esc(c.title)}">
            <span class="btn-ico">${c.icon}</span>
            <span class="btn-body"><span class="btn-title">${esc(c.title)}</span><span class="btn-hint">${esc(c.hint)}</span></span>
@@ -88,7 +90,7 @@ function programCards(programs) {
         .join('\n        ');
 }
 function buildPanelHtml(opts) {
-    const { programs, commands, status, version, nonce, cspSource } = opts;
+    const { programs, commands, status, version, nonce, cspSource, logoUri } = opts;
     const platformName = status.platform === 'windows' ? 'Windows · WinBGIM' : status.platform === 'macos' ? 'macOS · SDL_bgi' : 'Linux · SDL_bgi';
     return `<!DOCTYPE html>
 <html lang="en">
@@ -105,13 +107,23 @@ function buildPanelHtml(opts) {
     --ok:#34d399; --bad:#f87171; --wait:#fbbf24;
   }
   * { box-sizing:border-box; margin:0; padding:0; }
+  /* fixed-height page: header + actions stay put, only the programs list
+     scrolls (inside its own container, like a second tab below the actions) */
   body {
     font-family:'Segoe UI', system-ui, -apple-system, sans-serif;
     background:var(--bg);
-    color:var(--txt); padding:14px 12px 20px;
+    color:var(--txt); padding:14px 12px 14px;
+    height:100vh; display:flex; flex-direction:column; overflow:hidden;
   }
   .hero { padding:2px 2px 6px; }
   .hero h1 { font-size:19px; letter-spacing:.3px; color:#f3f5f8; }
+  /* title row: title left, university badge fills only the empty top-right */
+  .brand-row { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; min-width:0; }
+  .diu-logo { height:34px; width:auto; max-width:104px; object-fit:contain;
+    flex:0 0 auto; border-radius:5px; box-shadow:0 1px 5px rgba(0,0,0,.45); }
+  @media (max-width: 360px) {
+    .diu-logo { height:28px; max-width:84px; }
+  }
   .pill { display:inline-flex; align-items:center; gap:7px; font-size:11.5px; font-weight:600;
     padding:5px 13px; border-radius:999px; margin-top:10px; border:1px solid; }
   .pill-ok   { color:var(--ok);   border-color:rgba(52,211,153,.4);  background:rgba(52,211,153,.09); }
@@ -158,7 +170,7 @@ function buildPanelHtml(opts) {
   /* header layout: the action buttons live in the same header row as the
      title / status pill / version chips and fill the empty space beside
      them; on a narrow sidebar they wrap below the title block */
-  .header { display:flex; flex-direction:column; }
+  .header { display:flex; flex-direction:column; flex:0 0 auto; }
   .header-actions { margin-top:6px; }
   /* secondary actions: 2 per row under the hero button (kept even on narrow
      panes; only very narrow sidebars collapse to one column) */
@@ -171,6 +183,20 @@ function buildPanelHtml(opts) {
     .hero { flex:1 1 250px; min-width:0; }
     .header-actions { flex:0 0 360px; margin-top:0; }
   }
+
+  /* programs zone: the section bar is the toggle; the list scrolls inside */
+  .programs-zone { flex:1 1 auto; min-height:0; display:flex; flex-direction:column; }
+  #programs { flex:1 1 auto; min-height:0; overflow-y:auto; overscroll-behavior:contain;
+    margin:0 -2px; padding:0 2px; }
+  #programs.collapsed { display:none; }
+  .sec-toggle { cursor:pointer; user-select:none; border-radius:8px; padding:2px; }
+  .sec-toggle:hover h2, .sec-toggle:hover .count { color:var(--txt); }
+  .chev { font-size:9px; color:var(--txt-dim); display:inline-block; margin-left:6px; transition:transform .12s; }
+  .chev-open { transform:rotate(90deg); }
+  #programs::-webkit-scrollbar { width:8px; }
+  #programs::-webkit-scrollbar-thumb { background:rgba(255,255,255,.14); border-radius:4px; }
+  #programs::-webkit-scrollbar-thumb:hover { background:rgba(255,255,255,.26); }
+  #programs::-webkit-scrollbar-track { background:transparent; }
 
   .sec { display:flex; align-items:baseline; justify-content:space-between; margin:14px 2px 0; }
   .sec-tight { margin:0 2px 7px; }
@@ -196,15 +222,15 @@ function buildPanelHtml(opts) {
     border:1px solid var(--card-line); border-radius:8px; padding:4px 10px; cursor:pointer; transition:.15s; white-space:nowrap; }
   .mini-btn:hover { background:rgba(255,255,255,.15); }
 
-  .foot { font-size:10.5px; color:var(--txt-dim); margin-top:16px; line-height:1.7;
-    border-top:1px solid var(--card-line); padding-top:10px; }
+  .foot { font-size:10.5px; color:var(--txt-dim); margin-top:auto; line-height:1.7;
+    border-top:1px solid var(--card-line); padding-top:10px; flex:0 0 auto; }
   .foot b { color:var(--txt); }
   .kbd { background:rgba(255,255,255,.09); border:1px solid var(--card-line); border-radius:5px; padding:1px 6px; font-size:10px; }
   .chip { display:inline-block; font-size:10px; color:var(--txt-dim); border:1px solid var(--card-line); border-radius:999px; padding:2px 10px; margin:0 3px; }
 
   /* narrow activity-bar sidebar: stack card actions inline */
   @media (max-width: 360px) {
-    body { padding:10px 9px 16px; }
+    body { padding:10px 9px 12px; }
     .prog { flex-wrap:wrap; }
     .prog-body { flex:1 1 calc(100% - 110px); }
     .prog-actions { flex-direction:row; width:100%; justify-content:flex-end; }
@@ -214,7 +240,10 @@ function buildPanelHtml(opts) {
 <body>
   <div class="header">
     <div class="hero">
-      <h1>graphics.h Runner</h1>
+      <div class="brand-row">
+        <h1>graphics.h Runner</h1>
+        ${logoUri ? `<img class="diu-logo" src="${esc(logoUri)}" alt="Daffodil International University — Department of CSE" title="Powered by the Department of CSE, Dhaka International University">` : ''}
+      </div>
       ${statusPill(status)}
       <div class="chips"><span class="chip">${platformName}</span><span class="chip">v${esc(version)}</span></div>
       ${envCard(status)}
@@ -223,14 +252,20 @@ function buildPanelHtml(opts) {
     <div class="header-actions">
       <div class="sec sec-tight"><h2>Actions</h2></div>
       <div class="stack">
-        ${actionButtons(commands)}
+        ${actionButtons(commands, programs.length)}
       </div>
     </div>
   </div>
 
-  <div class="sec"><h2>Example Programs</h2><span class="count">${programs.length} programs · click Run or Open</span></div>
-  <div id="programs">
-    ${programCards(programs)}
+  <div class="programs-zone">
+    <div class="sec sec-toggle" id="programs-sec" role="button" tabindex="0" aria-expanded="false"
+         title="Show / hide the example programs">
+      <h2>Example Programs<span class="chev" id="programs-chev">▶</span></h2>
+      <span class="count" id="programs-count">${programs.length} programs · tap to expand</span>
+    </div>
+    <div id="programs" class="collapsed">
+      ${programCards(programs)}
+    </div>
   </div>
 
   <div class="foot">
@@ -246,6 +281,38 @@ function buildPanelHtml(opts) {
        webview (service-worker race) never answers, which the extension
        detects and recovers from (retry render / list-view fallback) */
     vscode.postMessage({ type: 'pong' });
+    /* Example Programs: collapsed by default; the choice is remembered
+       across panel re-renders via the webview's persisted state */
+    var progSec = document.getElementById('programs-sec');
+    var progList = document.getElementById('programs');
+    var progChev = document.getElementById('programs-chev');
+    var progCount = document.getElementById('programs-count');
+    function programsOpen() {
+      try { return !!(vscode.getState() && vscode.getState().programsOpen); }
+      catch (e) { return false; }
+    }
+    function applyProgramsState() {
+      var open = programsOpen();
+      if (progList) { progList.classList.toggle('collapsed', !open); }
+      if (progChev) { progChev.className = open ? 'chev chev-open' : 'chev'; }
+      if (progCount && progCount.textContent) {
+        progCount.textContent = progCount.textContent
+          .replace(/ · (tap to expand|click Run or Open)$/,
+                   open ? ' · click Run or Open' : ' · tap to expand');
+      }
+      if (progSec) { progSec.setAttribute('aria-expanded', open ? 'true' : 'false'); }
+    }
+    function togglePrograms() {
+      try { vscode.setState({ programsOpen: !programsOpen() }); } catch (e) {}
+      applyProgramsState();
+    }
+    if (progSec) {
+      progSec.addEventListener('click', togglePrograms);
+      progSec.addEventListener('keydown', function (ev) {
+        if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); togglePrograms(); }
+      });
+    }
+    applyProgramsState();
     document.addEventListener('click', function (ev) {
       var el = ev.target;
       while (el && el !== document.body) {
