@@ -7,10 +7,10 @@
 
 # graphics.h Runner — BGI C++ Graphics Toolkit for VS Code
 
-[![Version](https://img.shields.io/badge/version-1.3.0-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.4.0-blue.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey.svg)](#per-os-setup)
-[![Tests](https://img.shields.io/badge/sample%20tests-9%2F%209%20passing-brightgreen.svg)](#tested--verified)
+[![Tests](https://img.shields.io/badge/sample%20tests-18%2F18%20passing-brightgreen.svg)](#tested--verified)
 
 **Compile & run C++ programs that use `graphics.h` (BGI / WinBGIM / SDL_bgi) with one keypress.**
 One command sets up the whole toolchain from zero — compiler guidance, graphics library
