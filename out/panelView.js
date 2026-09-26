@@ -222,7 +222,8 @@ class GhPanelProvider {
                 description: p.description,
                 emoji: p.emoji,
                 filename: p.filename,
-                tag: p.tag
+                tag: p.tag,
+                lab: !!p.lab
             })),
             commands: programs_1.COMMAND_META,
             status: this.currentStatus(),

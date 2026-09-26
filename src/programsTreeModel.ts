@@ -44,7 +44,7 @@ export const TREE_RUN_COMMAND = 'graphics-h-runner.runSample';
  * Pure model: actions first, then every example program.
  */
 export function buildTreeModel(
-  programs: Array<Pick<LoadedProgram, 'id' | 'title' | 'description' | 'filename'>>,
+  programs: Array<Pick<LoadedProgram, 'id' | 'title' | 'description' | 'filename' | 'lab'>>,
   runCommandId: string = TREE_RUN_COMMAND
 ): TreeEntry[] {
   const entries: TreeEntry[] = [
@@ -53,12 +53,14 @@ export function buildTreeModel(
   for (const c of COMMAND_META) {
     entries.push({ kind: 'action', id: c.id, label: c.title, hint: c.hint, commandId: c.commandId });
   }
+  const main = programs.filter((p) => !p.lab);
+  const lab = programs.filter((p) => p.lab);
   entries.push({
     kind: 'section',
     id: 'tree-section-programs',
-    label: `Example Programs (${programs.length})`
+    label: `Example Programs (${main.length})`
   });
-  for (const p of programs) {
+  for (const p of main) {
     entries.push({
       kind: 'program',
       id: p.id,
@@ -67,6 +69,23 @@ export function buildTreeModel(
       filename: p.filename,
       runCommandId
     });
+  }
+  if (lab.length > 0) {
+    entries.push({
+      kind: 'section',
+      id: 'tree-section-lab',
+      label: `Computer Graphics Lab (${lab.length})`
+    });
+    for (const p of lab) {
+      entries.push({
+        kind: 'program',
+        id: p.id,
+        label: p.title,
+        description: p.description,
+        filename: p.filename,
+        runCommandId
+      });
+    }
   }
   return entries;
 }

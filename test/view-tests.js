@@ -4,8 +4,7 @@
  * package.json wiring (activity-bar view, commands, debugger, menus).
  *
  * Validates (without a VS Code UI):
- *   1. the program catalog loads 23 samples (0 templates — templates were
- *      removed in v1.4.0)
+ *   1. the program catalog loads 31 samples (23 classic + 8 lab, 0 templates)
  *   2. every source really includes <graphics.h>
  *   3. catalog sources match the bundled samples on disk byte-for-byte
  *   4. filenames are unique, .cpp-suffixed, every card carries an emoji + tag
@@ -37,11 +36,11 @@ function check(name, fn) {
 
 console.log('view-tests — catalog + package.json wiring\n');
 
-check('catalog loads 23 samples, 0 templates', () => {
+check('catalog loads 31 samples (23 + 8 lab), 0 templates', () => {
   const catalog = loadProgramCatalog(ROOT);
-  assert.strictEqual(catalog.filter((p) => p.kind === 'sample').length, 23, 'sample count');
+  assert.strictEqual(catalog.filter((p) => p.kind === 'sample').length, 31, 'sample count');
   assert.strictEqual(catalog.filter((p) => p.kind === 'template').length, 0, 'template count');
-  assert.strictEqual(catalog.length, 23, 'total count');
+  assert.strictEqual(catalog.length, 31, 'total count');
 });
 
 check('every sample source includes <graphics.h>', () => {
@@ -59,19 +58,19 @@ check('catalog sources match bundled samples byte-for-byte', () => {
   }
 });
 
-check('filenames unique + sorted numbering 01..23', () => {
+check('filenames unique + sorted numbering 01..31', () => {
   const catalog = loadProgramCatalog(ROOT);
   const names = catalog.map((p) => p.filename);
   assert.strictEqual(new Set(names).size, names.length, 'duplicate filenames');
   names.forEach((n) => assert.ok(n.endsWith('.cpp'), n + ' not .cpp'));
-  for (let i = 1; i <= 23; i++) {
+  for (let i = 1; i <= 31; i++) {
     const prefix = String(i).padStart(2, '0') + '_';
     assert.ok(names.some((n) => n.startsWith(prefix)), 'missing sample #' + prefix);
   }
 });
 
 check('every program card has emoji + valid tag', () => {
-  const validTags = new Set(['classic', 'fun', 'math', 'interactive']);
+  const validTags = new Set(['classic', 'fun', 'math', 'interactive', 'lab']);
   for (const p of loadProgramCatalog(ROOT)) {
     assert.ok(p.emoji && p.emoji.length >= 1 && p.emoji.length <= 4, p.id + ' emoji missing');
     assert.ok(validTags.has(p.tag), p.id + ' bad tag: ' + p.tag);
@@ -135,6 +134,19 @@ check('activity-bar view is declared type=webview with stable id', () => {
   assert.strictEqual(view.type, 'webview', 'view must be type=webview for the webview provider');
   const src = fs.readFileSync(path.join(ROOT, 'src', 'panelView.ts'), 'utf8');
   assert.ok(src.includes("VIEW_ID = 'graphics-h-runner.programs'"), 'provider must target the same view id');
+});
+
+check('v1.5.0: 8 lab catalog entries + renamed extension surfaces', () => {
+  const lab = loadProgramCatalog(ROOT).filter((p) => p.lab);
+  assert.strictEqual(lab.length, 8, 'lab count ' + lab.length);
+  const ids = new Set(lab.map((p) => p.id));
+  for (const id of ['coordview', 'pixelinspector', 'ddalab', 'bresenhamline', 'bresenhamcircle', 'midpointellipse', 'transforms', 'clipping']) {
+    assert.ok(ids.has(id), 'missing lab id: ' + id);
+  }
+  assert.strictEqual(pkg.displayName, 'graphics.h Runner. One-click Setup', 'displayName wrong');
+  assert.strictEqual(pkg.contributes.viewsContainers.activitybar[0].title, 'Graphics.h CPP Program Runner One-click setup', 'container title wrong');
+  assert.strictEqual(pkg.contributes.views['graphics-h-runner'][0].name, 'Graphics.h CPP Program Runner One-click setup', 'view name wrong');
+  assert.strictEqual(pkg.contributes.views['graphics-h-runner'][0].type, 'webview', 'view type drifted');
 });
 
 check('debugger type graphics-h contributed with snippets', () => {

@@ -230,7 +230,8 @@ export class GhPanelProvider implements vscode.WebviewViewProvider {
         description: p.description,
         emoji: p.emoji,
         filename: p.filename,
-        tag: p.tag
+        tag: p.tag,
+        lab: !!p.lab
       })),
       commands: COMMAND_META,
       status: this.currentStatus(),

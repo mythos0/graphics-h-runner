@@ -11,7 +11,7 @@ const { loadProgramCatalog, COMMAND_META } = require(path.join(__dirname, '..', 
 
 const ROOT = path.join(__dirname, '..');
 const programs = loadProgramCatalog(ROOT).map((p) => ({
-  id: p.id, title: p.title, description: p.description, emoji: p.emoji, filename: p.filename, tag: p.tag
+  id: p.id, title: p.title, description: p.description, emoji: p.emoji, filename: p.filename, tag: p.tag, lab: !!p.lab
 }));
 
 const STUB_N = `<script nonce="previewnonce">function acquireVsCodeApi(){var s={};return {postMessage:function(){},getState:function(){return s;},setState:function(v){s=v;}};}</script>`;
@@ -21,7 +21,7 @@ function make(status, name) {
     programs,
     commands: COMMAND_META,
     status,
-    version: '1.4.0',
+    version: '1.5.0',
     nonce: 'previewnonce',
     logoUri: 'https://raw.githubusercontent.com/mythos0/graphics-h-runner/main/media/diu-logo.png',
     cspSource: 'https://file+.vscode-resource.vscode-cdn.net'

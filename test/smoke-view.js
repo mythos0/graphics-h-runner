@@ -5,7 +5,8 @@
  *
  * Validates:
  *  1. all three environment states render the right pill + CTA
- *  2. 23 program cards with Run + Open buttons
+ *  2. 31 program cards (23 + 8 lab) with Run + Open buttons, split into
+ *     the Example Programs list and the Computer Graphics Lab section
  *  3. 7 action buttons wired to COMMAND_META ids (Open Examples Folder
  *     removed in v1.4.9), exactly one green accent
  *  4. CSP + nonce + script tag + version are present; the DIU badge sits on
@@ -26,7 +27,7 @@ const { buildPanelHtml } = require(path.join(ROOT, 'out', 'panelHtml'));
 const { loadProgramCatalog, COMMAND_META } = require(path.join(ROOT, 'out', 'programs'));
 
 const programs = loadProgramCatalog(ROOT).map((p) => ({
-  id: p.id, title: p.title, description: p.description, emoji: p.emoji, filename: p.filename, tag: p.tag
+  id: p.id, title: p.title, description: p.description, emoji: p.emoji, filename: p.filename, tag: p.tag, lab: !!p.lab
 }));
 
 let failures = 0;
@@ -85,14 +86,25 @@ check('checking state: amber pill', () => {
   assert.ok(h.includes('Checking environment'), 'no checking copy');
 });
 
-check('23 program cards, each with Run + Open', () => {
+check('31 program cards (23 + 8 lab), each with Run + Open', () => {
   const h = html({});
   const runs = (h.match(/data-run="/g) || []).length;
   const opens = (h.match(/data-open="/g) || []).length;
-  assert.strictEqual(runs, 23, 'data-run count ' + runs);
-  assert.strictEqual(opens, 23, 'data-open count ' + opens);
+  assert.strictEqual(runs, 31, 'data-run count ' + runs);
+  assert.strictEqual(opens, 31, 'data-open count ' + opens);
   assert.ok(h.includes('Winking Smiley') && h.includes('Fireworks Show') && h.includes('Warp Starfield'), 'fun programs missing');
   assert.ok(h.includes('Turbo C++ Graphics Tour') && h.includes('Conio Keyboard Paint') && h.includes('Sprite Animation'), 'new v1.4.7 programs missing');
+  /* split: the classic list first, the lab list below it */
+  const labAt = h.indexOf('id="lab-sec"');
+  assert.ok(labAt > 0, 'lab section missing');
+  const main = h.slice(0, labAt);
+  const lab = h.slice(labAt);
+  assert.strictEqual((main.match(/data-run="/g) || []).length, 23, 'main list should carry 23 cards');
+  assert.strictEqual((lab.match(/data-run="/g) || []).length, 8, 'lab list should carry 8 cards');
+  for (const t of ['Coordinate Viewer', 'Pixel Inspector', 'DDA Line Lab', 'Bresenham Line Lab', 'Bresenham Circle Lab', 'Midpoint Ellipse Lab', '2D Transformations Lab', 'Cohen-Sutherland Clipping']) {
+    assert.ok(lab.includes(t), 'lab program missing: ' + t);
+  }
+  assert.strictEqual((h.match(/tag tag-lab/g) || []).length, 8, 'lab tag count wrong');
 });
 
 check('7 action buttons carrying COMMAND_META ids (no Open Examples Folder)', () => {
@@ -276,17 +288,59 @@ check('example programs: collapsed by default, remembered, scroll inside their z
   assert.ok(h.includes('programs-zone'), 'programs flex zone missing');
   assert.ok(h.includes('overflow-y:auto'), 'internal scrollbar rule missing');
   assert.ok(h.includes("vscode.getState() && vscode.getState().programsOpen"), 'expanded state not persisted via webview state');
-  assert.ok(h.includes("vscode.setState({ programsOpen: !programsOpen() })"), 'toggle does not persist its state');
+  assert.ok(h.includes('st.programsOpen = !programsOpen(); vscode.setState(st)'), 'toggle does not persist its state');
   assert.ok(h.includes("progSec.addEventListener('click', togglePrograms)"), 'toggle click not wired');
   assert.ok(h.includes("progSec.addEventListener('keydown'"), 'toggle keyboard support missing');
   assert.ok(h.includes('height:100vh'), 'fixed-height page layout missing');
   assert.ok(h.includes('margin-top:auto'), 'footer not pinned to the bottom');
 });
 
+check('Computer Graphics Lab: own section below Example Programs, collapsed + persisted', () => {
+  const h = html({});
+  assert.ok(h.includes('id="lab-sec"'), 'lab section header missing');
+  assert.ok(h.includes('Computer Graphics Lab'), 'lab section title missing');
+  assert.ok(h.includes('id="lab-programs" class="collapsed"'), 'lab list not collapsed by default');
+  assert.ok(h.includes('8 lab programs · tap to expand'), 'lab count header wrong');
+  assert.ok(h.indexOf('id="programs-sec"') < h.indexOf('id="lab-sec"'), 'lab section must sit below Example Programs');
+  assert.ok(h.indexOf('id="lab-programs"') < h.indexOf('class="foot"'), 'lab list must stay above the footer');
+  assert.ok(h.includes('vscode.getState().labOpen'), 'lab expanded state not persisted');
+  assert.ok(h.includes('st.labOpen = !labOpen(); vscode.setState(st)'), 'lab toggle does not merge persisted state');
+  assert.ok(h.includes('st.programsOpen = !programsOpen(); vscode.setState(st)'), 'programs toggle does not merge persisted state');
+  assert.ok(h.includes("labSec.addEventListener('click', toggleLab)"), 'lab toggle click not wired');
+  assert.ok(h.includes("labSec.addEventListener('keydown'"), 'lab toggle keyboard support missing');
+});
+
+check('help "?" button beside the title opens a searchable graphics.h cheat sheet', () => {
+  const h = html({});
+  const heroAt = h.indexOf('class="hero"');
+  const hero = h.slice(heroAt, h.indexOf('class="status-row"'));
+  assert.ok(hero.includes('<h1>graphics.h Runner</h1>'), 'hero title missing');
+  assert.ok(hero.includes('id="help-btn"'), 'help button missing beside the title');
+  assert.ok(hero.includes('class="hero-row"'), 'hero row layout missing');
+  assert.ok(hero.includes('>?</button>'), 'help button text missing');
+  assert.ok(h.includes('class="cheat-overlay"'), 'cheat overlay missing');
+  assert.ok(h.includes('graphics.h Cheat Sheet'), 'cheat sheet heading missing');
+  assert.ok(h.includes('id="cheat-q"'), 'cheat search input missing');
+  assert.ok(h.includes('id="cheat-close"'), 'cheat close button missing');
+  assert.ok(h.includes('id="cheat-empty"'), 'cheat no-results row missing');
+  const fns = (h.match(/class="cheat-fn"/g) || []).length;
+  assert.ok(fns >= 40, 'too few cheat entries: ' + fns);
+  for (const sig of ['initwindow(width, height', 'putpixel(x, y, color)', 'setfillstyle(pattern, color)', 'outtextxy(x, y', 'floodfill(x, y, border)', 'getmouseclick(kind', 'ismouseclick(kind', 'kbhit()', 'putimage(l, t, bitmap, verb)', 'setviewport(l, t, r, b, clip)', 'textheight("t")']) {
+    assert.ok(h.includes(sig), 'cheat entry missing: ' + sig);
+  }
+  assert.ok(h.includes('filterCheat'), 'cheat search filter not wired');
+  assert.ok(h.includes("ev.key === 'Escape'"), 'Esc close missing');
+  assert.ok(h.includes("cheatOv.addEventListener('click'"), 'backdrop close missing');
+  /* the help button is not a command button and must not post commands */
+  const btn = h.slice(h.indexOf('id="help-btn"') - 200, h.indexOf('id="help-btn"') + 400);
+  assert.ok(!btn.includes('data-cmd'), 'help button must not carry a data-cmd');
+});
+
 check('program count lives in the section header (per-button hint gone)', () => {
   const h = html({});
   assert.ok(!h.includes('all 23 programs'), 'old per-button count hint still rendered');
   assert.ok(h.includes('23 programs · tap to expand'), 'section count header wrong');
+  assert.ok(h.includes('8 lab programs · tap to expand'), 'lab count header wrong');
 });
 
 check('liveness: page pongs on load and answers pings (service-worker watchdog)', () => {

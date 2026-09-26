@@ -22,12 +22,14 @@ function buildTreeModel(programs, runCommandId = exports.TREE_RUN_COMMAND) {
     for (const c of programs_1.COMMAND_META) {
         entries.push({ kind: 'action', id: c.id, label: c.title, hint: c.hint, commandId: c.commandId });
     }
+    const main = programs.filter((p) => !p.lab);
+    const lab = programs.filter((p) => p.lab);
     entries.push({
         kind: 'section',
         id: 'tree-section-programs',
-        label: `Example Programs (${programs.length})`
+        label: `Example Programs (${main.length})`
     });
-    for (const p of programs) {
+    for (const p of main) {
         entries.push({
             kind: 'program',
             id: p.id,
@@ -36,6 +38,23 @@ function buildTreeModel(programs, runCommandId = exports.TREE_RUN_COMMAND) {
             filename: p.filename,
             runCommandId
         });
+    }
+    if (lab.length > 0) {
+        entries.push({
+            kind: 'section',
+            id: 'tree-section-lab',
+            label: `Computer Graphics Lab (${lab.length})`
+        });
+        for (const p of lab) {
+            entries.push({
+                kind: 'program',
+                id: p.id,
+                label: p.title,
+                description: p.description,
+                filename: p.filename,
+                runCommandId
+            });
+        }
     }
     return entries;
 }

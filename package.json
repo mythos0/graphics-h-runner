@@ -1,8 +1,8 @@
 {
   "name": "graphics-h-runner",
-  "displayName": "graphics.h Runner — BGI C++ Graphics Toolkit",
-  "description": "Compile & run C++ graphics.h programs (WinBGIM / SDL_bgi) with one keypress or F5. Auto-detects graphics.h, applies the right linker flags per OS, auto-installs everything from zero, runs programs in a real terminal (stdin/stdout), surfaces compiler errors in the Problems panel, and ships a sidebar with 23 runnable examples (Turbo C++ classics, conio.h keyboard pads, DDA line input) plus a Setup Doctor and snippets.",
-  "version": "1.4.9",
+  "displayName": "graphics.h Runner. One-click Setup",
+  "description": "Compile & run C++ graphics.h programs (WinBGIM / SDL_bgi) with one keypress or F5. Auto-detects graphics.h, applies the right linker flags per OS, auto-installs everything from zero, runs programs in a real terminal (stdin/stdout), surfaces compiler errors in the Problems panel, and ships a sidebar with 31 runnable examples (Turbo C++ classics, conio.h keyboard pads, DDA line input) plus a Computer Graphics Lab — coordinate viewer, pixel inspector, DDA, Bresenham, circle, ellipse, transforms, clipping — a searchable graphics.h cheat sheet, and a Setup Doctor.",
+  "version": "1.5.0",
   "publisher": "mythos0-labs",
   "author": {
     "name": "Department of CSE, Dhaka International University",
@@ -29,7 +29,7 @@
       "description": "Platforms"
     },
     {
-      "url": "https://img.shields.io/badge/Tests-23%2F23%20screenshot%20verified-brightgreen",
+      "url": "https://img.shields.io/badge/Tests-31%2F31%20screenshot%20verified-brightgreen",
       "href": "https://github.com/mythos0/graphics-h-runner/tree/main/docs/screenshots",
       "description": "Sample tests"
     },
@@ -75,7 +75,7 @@
       "activitybar": [
         {
           "id": "graphics-h-runner",
-          "title": "graphics.h Runner",
+          "title": "Graphics.h CPP Program Runner One-click setup",
           "icon": "media/activity-icon.svg"
         }
       ]
@@ -85,7 +85,7 @@
         {
           "type": "webview",
           "id": "graphics-h-runner.programs",
-          "name": "graphics.h Programs",
+          "name": "Graphics.h CPP Program Runner One-click setup",
           "when": "true"
         },
         {

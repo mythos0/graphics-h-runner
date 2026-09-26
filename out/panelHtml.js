@@ -85,7 +85,11 @@ function programCards(programs) {
         .join('\n        ');
 }
 function buildPanelHtml(opts) {
-    const { programs, commands, status, version, nonce, cspSource, logoUri } = opts;
+    const { commands, status, version, nonce, cspSource, logoUri } = opts;
+    /* two sections: the classic catalog first, the Computer Graphics Lab
+       (coordinate viewer, algorithm labs, pixel inspector) below it */
+    const programs = opts.programs.filter((p) => !p.lab);
+    const labPrograms = opts.programs.filter((p) => p.lab);
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -183,17 +187,17 @@ function buildPanelHtml(opts) {
 
   /* programs zone: the section bar is the toggle; the list scrolls inside */
   .programs-zone { flex:1 1 auto; min-height:0; display:flex; flex-direction:column; }
-  #programs { flex:1 1 auto; min-height:0; overflow-y:auto; overscroll-behavior:contain;
-    margin:0 -2px; padding:0 2px; }
-  #programs.collapsed { display:none; }
+  #programs, #lab-programs { flex:1 1 auto; min-height:0; overflow-y:auto;
+    overscroll-behavior:contain; margin:0 -2px; padding:0 2px; }
+  #programs.collapsed, #lab-programs.collapsed { display:none; }
   .sec-toggle { cursor:pointer; user-select:none; border-radius:8px; padding:2px; }
   .sec-toggle:hover h2, .sec-toggle:hover .count { color:var(--txt); }
   .chev { font-size:9px; color:var(--txt-dim); display:inline-block; margin-left:6px; transition:transform .12s; }
   .chev-open { transform:rotate(90deg); }
-  #programs::-webkit-scrollbar { width:8px; }
-  #programs::-webkit-scrollbar-thumb { background:rgba(255,255,255,.14); border-radius:4px; }
-  #programs::-webkit-scrollbar-thumb:hover { background:rgba(255,255,255,.26); }
-  #programs::-webkit-scrollbar-track { background:transparent; }
+  #programs::-webkit-scrollbar, #lab-programs::-webkit-scrollbar { width:8px; }
+  #programs::-webkit-scrollbar-thumb, #lab-programs::-webkit-scrollbar-thumb { background:rgba(255,255,255,.14); border-radius:4px; }
+  #programs::-webkit-scrollbar-thumb:hover, #lab-programs::-webkit-scrollbar-thumb:hover { background:rgba(255,255,255,.26); }
+  #programs::-webkit-scrollbar-track, #lab-programs::-webkit-scrollbar-track { background:transparent; }
 
   .sec { display:flex; align-items:baseline; justify-content:space-between; margin:14px 2px 0; }
   .sec-tight { margin:0 2px 7px; }
@@ -227,6 +231,54 @@ function buildPanelHtml(opts) {
   .kbd { background:rgba(255,255,255,.09); border:1px solid var(--card-line); border-radius:5px; padding:1px 6px; font-size:10px; }
   .chip { display:inline-block; font-size:10px; color:var(--txt-dim); border:1px solid var(--card-line); border-radius:999px; padding:2px 10px; margin:0 3px; }
 
+  /* hero row: the panel title with the "?" cheat-sheet button right
+     beside it (the question mark opens a searchable graphics.h
+     reference — functions, colors, keyboard, mouse, animation) */
+  .hero-row { display:flex; align-items:center; gap:8px; min-width:0; }
+  .help-btn { width:22px; height:22px; flex:0 0 22px; border-radius:50%;
+    border:1px solid var(--card-line); background:rgba(255,255,255,.07);
+    color:var(--txt-dim); font-size:12.5px; font-weight:700; line-height:1;
+    cursor:pointer; transition:.15s; padding:0; }
+  .help-btn:hover { color:var(--txt); border-color:rgba(255,255,255,.3); background:rgba(255,255,255,.14); }
+  /* lab tag gets the ready-green tint — every lab program is verified */
+  .tag-lab { background:rgba(52,211,153,.14); color:#8fe3c4; }
+  .sec-gap { height:6px; flex:0 0 auto; }
+
+  /* cheat sheet overlay: fixed backdrop + scrollable reference card.
+     Pure client-side — no host round-trip, Esc or backdrop closes. */
+  .cheat-overlay { position:fixed; inset:0; background:rgba(5,8,12,.72);
+    display:none; z-index:80; padding:12px; }
+  .cheat-overlay.open { display:flex; align-items:flex-start; justify-content:center; }
+  .cheat-sheet { width:100%; max-width:560px; max-height:100%; display:flex; flex-direction:column;
+    background:#141821; border:1px solid var(--card-line); border-radius:12px;
+    box-shadow:0 18px 50px rgba(0,0,0,.55); overflow:hidden; }
+  .cheat-head { display:flex; align-items:center; gap:8px; padding:11px 12px;
+    border-bottom:1px solid var(--card-line); flex:0 0 auto; }
+  .cheat-head h3 { font-size:13.5px; color:#f3f5f8; flex:1 1 auto; }
+  .cheat-close { width:24px; height:24px; flex:0 0 24px; border-radius:7px;
+    border:1px solid var(--card-line); background:rgba(255,255,255,.07);
+    color:var(--txt-dim); font-size:13px; cursor:pointer; line-height:1; }
+  .cheat-close:hover { color:var(--txt); background:rgba(255,255,255,.15); }
+  .cheat-q { margin:10px 12px 0; padding:8px 10px; font-size:12px; color:var(--txt);
+    background:rgba(255,255,255,.06); border:1px solid var(--card-line);
+    border-radius:8px; outline:none; width:calc(100% - 24px); }
+  .cheat-q:focus { border-color:rgba(255,255,255,.25); }
+  .cheat-q::placeholder { color:var(--txt-dim); }
+  .cheat-body { overflow-y:auto; padding:10px 12px 14px; flex:1 1 auto; }
+  .cheat-cat { margin-top:10px; }
+  .cheat-cat h4 { font-size:10px; text-transform:uppercase; letter-spacing:1.4px;
+    color:var(--txt-dim); margin-bottom:6px; }
+  .cheat-fn { padding:6px 8px; border:1px solid var(--card-line); border-radius:8px;
+    margin-bottom:5px; background:rgba(255,255,255,.03); }
+  .cheat-fn code { display:block; font-family:Consolas, monospace; font-size:11px;
+    color:var(--ok); }
+  .cheat-fn span { display:block; font-size:10.8px; color:var(--txt-dim);
+    margin-top:2px; line-height:1.4; }
+  #cheat-empty { display:none; font-size:11.5px; color:var(--txt-dim); padding:10px 2px; }
+  .cheat-foot { flex:0 0 auto; border-top:1px solid var(--card-line); padding:8px 12px;
+    font-size:10px; color:var(--txt-dim); }
+  .cheat-foot .kbd { margin:0 2px; }
+
   /* narrow activity-bar sidebar: stack card actions inline */
   @media (max-width: 360px) {
     body { padding:10px 9px 12px; }
@@ -239,7 +291,10 @@ function buildPanelHtml(opts) {
 <body>
   <div class="header">
     <div class="hero">
-      <h1>graphics.h Runner</h1>
+      <div class="hero-row">
+        <h1>graphics.h Runner</h1>
+        <button class="help-btn" id="help-btn" type="button" title="graphics.h cheat sheet" aria-label="Open the graphics.h cheat sheet" aria-expanded="false">?</button>
+      </div>
       <div class="status-row">${statusPill(status)}<span class="chip">v${esc(version)}</span></div>
       ${envCard(status)}
     </div>
@@ -261,11 +316,114 @@ function buildPanelHtml(opts) {
     <div id="programs" class="collapsed">
       ${programCards(programs)}
     </div>
+
+    <div class="sec-gap"></div>
+    <div class="sec sec-toggle" id="lab-sec" role="button" tabindex="0" aria-expanded="false"
+         title="Show / hide the Computer Graphics Lab programs">
+      <h2>Computer Graphics Lab<span class="chev" id="lab-chev">▶</span></h2>
+      <span class="count" id="lab-count">${labPrograms.length} lab programs · tap to expand</span>
+    </div>
+    <div id="lab-programs" class="collapsed">
+      ${programCards(labPrograms)}
+    </div>
   </div>
 
   <div class="foot">
     <div class="credit"><b>Powered by Department of CSE, Dhaka International University, Bangladesh.</b></div>
     ${logoUri ? `<div class="foot-brand"><img class="diu-logo" src="${esc(logoUri)}" alt="Daffodil International University — Department of CSE" title="Powered by the Department of CSE, Dhaka International University"></div>` : ''}
+  </div>
+
+  <div class="cheat-overlay" id="cheat-overlay" role="dialog" aria-modal="true" aria-label="graphics.h cheat sheet">
+    <div class="cheat-sheet">
+      <div class="cheat-head">
+        <h3>graphics.h Cheat Sheet</h3>
+        <button class="cheat-close" id="cheat-close" type="button" title="Close (Esc)" aria-label="Close the cheat sheet">×</button>
+      </div>
+      <input class="cheat-q" id="cheat-q" type="text" placeholder="Search functions… try circle, mouse, fill, text" autocomplete="off">
+      <div class="cheat-body" id="cheat-body">
+        <div class="cheat-cat">
+          <h4>The screen coordinate system</h4>
+          <div class="cheat-fn"><code>(0,0) = the TOP-LEFT corner</code><span>+x grows right, +y grows DOWN. getmaxx()/getmaxy() are the last drawable pixels. The Coordinate Viewer lab program shows this live.</span></div>
+        </div>
+        <div class="cheat-cat">
+          <h4>Run it here</h4>
+          <div class="cheat-fn"><code>Ctrl+Alt+R  (or F5)</code><span>Compile &amp; run the open .cpp — the compiler and graphics library are installed automatically on first run.</span></div>
+          <div class="cheat-fn"><code>Ctrl+Alt+B</code><span>Compile only; compiler errors land in the Problems panel.</span></div>
+          <div class="cheat-fn"><code>Ctrl+Alt+S</code><span>Stop the running graphics program and its terminal.</span></div>
+        </div>
+        <div class="cheat-cat">
+          <h4>Setup &amp; lifecycle</h4>
+          <div class="cheat-fn"><code>initwindow(width, height, "title")</code><span>WinBGIM: open a graphics window (title optional; also 2 args on SDL_bgi).</span></div>
+          <div class="cheat-fn"><code>initgraph(&amp;gd, &amp;gm, "path")</code><span>Classic Turbo C++ style startup; detectgraph() picks a driver.</span></div>
+          <div class="cheat-fn"><code>closegraph()</code><span>Close the window and shut the graphics system down.</span></div>
+          <div class="cheat-fn"><code>cleardevice()</code><span>Erase the whole window (fill with the background color).</span></div>
+          <div class="cheat-fn"><code>getmaxx() / getmaxy()</code><span>Last drawable pixel in x / y.</span></div>
+          <div class="cheat-fn"><code>delay(ms)</code><span>Pause milliseconds — the heartbeat of every animation loop.</span></div>
+        </div>
+        <div class="cheat-cat">
+          <h4>Lines &amp; shapes</h4>
+          <div class="cheat-fn"><code>putpixel(x, y, color)</code><span>Color exactly one pixel (see getpixel below).</span></div>
+          <div class="cheat-fn"><code>line(x1, y1, x2, y2)</code><span>Straight line between two points.</span></div>
+          <div class="cheat-fn"><code>lineto(x, y) / linerel(dx, dy)</code><span>Line from the current position (absolute / relative).</span></div>
+          <div class="cheat-fn"><code>moveto(x, y) / moverel(dx, dy)</code><span>Move the current position without drawing.</span></div>
+          <div class="cheat-fn"><code>rectangle(left, top, right, bottom)</code><span>Outline rectangle.</span></div>
+          <div class="cheat-fn"><code>bar(left, top, right, bottom)</code><span>Filled bar in the current fill style (no outline).</span></div>
+          <div class="cheat-fn"><code>bar3d(l, t, r, b, depth, topflag)</code><span>3-D bar; topflag=1 draws the top face.</span></div>
+          <div class="cheat-fn"><code>circle(x, y, radius)</code><span>Circle outline.</span></div>
+          <div class="cheat-fn"><code>arc(x, y, start, end, radius)</code><span>Arc; angles in degrees, 0° at 3 o'clock, counter-clockwise.</span></div>
+          <div class="cheat-fn"><code>ellipse(x, y, start, end, xrad, yrad)</code><span>Elliptical arc; 0..360 for the full outline.</span></div>
+          <div class="cheat-fn"><code>fillellipse(x, y, xrad, yrad)</code><span>Filled ellipse.</span></div>
+          <div class="cheat-fn"><code>pieslice(x, y, start, end, radius)</code><span>Filled circular wedge.</span></div>
+          <div class="cheat-fn"><code>sector(x, y, start, end, xrad, yrad)</code><span>Filled elliptical wedge.</span></div>
+          <div class="cheat-fn"><code>drawpoly(n, pts) / fillpoly(n, pts)</code><span>Polygon outline / filled; pts is int[2n], repeat the first point to close.</span></div>
+        </div>
+        <div class="cheat-cat">
+          <h4>Colors &amp; filling</h4>
+          <div class="cheat-fn"><code>BLACK=0 BLUE GREEN CYAN RED MAGENTA BROWN LIGHTGRAY DARKGRAY LIGHTBLUE LIGHTGREEN LIGHTCYAN LIGHTRED LIGHTMAGENTA YELLOW WHITE=15</code><span>The 16 standard color constants (0..15) shared by every BGI implementation.</span></div>
+          <div class="cheat-fn"><code>setcolor(c) / setbkcolor(c)</code><span>Current drawing color / background color.</span></div>
+          <div class="cheat-fn"><code>setfillstyle(pattern, color)</code><span>Fill used by bar, fillpoly, pieslice, floodfill…</span></div>
+          <div class="cheat-fn"><code>floodfill(x, y, border)</code><span>Flood-fill the region around (x,y) until the border color is met.</span></div>
+          <div class="cheat-fn"><code>getpixel(x, y)</code><span>Color value of one pixel — the heart of a Pixel Inspector.</span></div>
+          <div class="cheat-fn"><code>COLOR(r, g, b)</code><span>24-bit color macro (WinBGIM / SDL_bgi extension).</span></div>
+          <div class="cheat-fn"><code>SOLID_FILL LINE_FILL SLASH_FILL BKSLASH_FILL HATCH_FILL XHATCH_FILL INTERLEAVE_FILL WIDE_DOT_FILL CLOSE_DOT_FILL EMPTY_FILL</code><span>setfillstyle() pattern constants.</span></div>
+        </div>
+        <div class="cheat-cat">
+          <h4>Text</h4>
+          <div class="cheat-fn"><code>outtextxy(x, y, "text")</code><span>Print a string at a pixel position (use a char buffer for numbers).</span></div>
+          <div class="cheat-fn"><code>settextstyle(font, dir, size)</code><span>DEFAULT_FONT, TRIPLEX_FONT, SMALL_FONT, SANS_SERIF_FONT, GOTHIC_FONT; HORIZ_DIR / VERT_DIR.</span></div>
+          <div class="cheat-fn"><code>settextjustify(h, v)</code><span>How x,y anchor the string (LEFT_TEXT, CENTER_TEXT, …).</span></div>
+          <div class="cheat-fn"><code>textheight("t") / textwidth("t")</code><span>Pixel metrics of a string in the current font.</span></div>
+        </div>
+        <div class="cheat-cat">
+          <h4>Keyboard</h4>
+          <div class="cheat-fn"><code>getch()</code><span>Wait for one key — keep the window open at the end of main().</span></div>
+          <div class="cheat-fn"><code>kbhit()</code><span>True when a key is waiting: the non-blocking poll for animation loops.</span></div>
+          <div class="cheat-fn"><code>0 / 224, then 72 80 75 77</code><span>Arrow keys send a prefix (0 or 224), then UP=72 DOWN=80 LEFT=75 RIGHT=77.</span></div>
+        </div>
+        <div class="cheat-cat">
+          <h4>Mouse (WinBGIM / SDL_bgi)</h4>
+          <div class="cheat-fn"><code>ismouseclick(kind)</code><span>True when that mouse event is queued.</span></div>
+          <div class="cheat-fn"><code>getmouseclick(kind, &amp;x, &amp;y)</code><span>Pop the event and read the pixel position.</span></div>
+          <div class="cheat-fn"><code>clearmouseclick(kind)</code><span>Drop queued events you do not handle.</span></div>
+          <div class="cheat-fn"><code>WM_MOUSEMOVE WM_LBUTTONDOWN WM_LBUTTONUP WM_RBUTTONDOWN WM_RBUTTONUP</code><span>The mouse event kinds.</span></div>
+          <div class="cheat-fn"><code>getpixel(x, y)</code><span>Pair the mouse position with a color — instant Pixel Inspector.</span></div>
+        </div>
+        <div class="cheat-cat">
+          <h4>Animation</h4>
+          <div class="cheat-fn"><code>imagesize(l, t, r, b)</code><span>Bytes needed to snapshot a rectangle.</span></div>
+          <div class="cheat-fn"><code>getimage(l, t, r, b, bitmap)</code><span>Snapshot a rectangle into a buffer.</span></div>
+          <div class="cheat-fn"><code>putimage(l, t, bitmap, verb)</code><span>Stamp it back: COPY_PUT, XOR_PUT, AND_PUT, OR_PUT, NOT_PUT — the classic sprite trick.</span></div>
+          <div class="cheat-fn"><code>setactivepage(p) / setvisualpage(p)</code><span>Double buffering where pages are supported.</span></div>
+        </div>
+        <div class="cheat-cat">
+          <h4>Viewport</h4>
+          <div class="cheat-fn"><code>setviewport(l, t, r, b, clip)</code><span>Draw inside a sub-window; coordinates become relative to it.</span></div>
+          <div class="cheat-fn"><code>clearviewport()</code><span>Erase only the current viewport.</span></div>
+        </div>
+        <div id="cheat-empty">No functions match your search.</div>
+      </div>
+      <div class="cheat-foot">WinBGIM is the default on Windows; SDL_bgi on Linux/macOS. Press <span class="kbd">Esc</span> to close.</div>
+    </div>
   </div>
 
 <script nonce="${nonce}">
@@ -297,7 +455,7 @@ function buildPanelHtml(opts) {
       if (progSec) { progSec.setAttribute('aria-expanded', open ? 'true' : 'false'); }
     }
     function togglePrograms() {
-      try { vscode.setState({ programsOpen: !programsOpen() }); } catch (e) {}
+      try { var st = vscode.getState() || {}; st.programsOpen = !programsOpen(); vscode.setState(st); } catch (e) {}
       applyProgramsState();
     }
     if (progSec) {
@@ -307,6 +465,89 @@ function buildPanelHtml(opts) {
       });
     }
     applyProgramsState();
+
+    /* Computer Graphics Lab: its own toggle, its own persisted state.
+       Both toggles MERGE into the saved state object so they never
+       wipe each other (vscode.setState replaces the whole state). */
+    var labSec = document.getElementById('lab-sec');
+    var labList = document.getElementById('lab-programs');
+    var labChev = document.getElementById('lab-chev');
+    var labCount = document.getElementById('lab-count');
+    function labOpen() {
+      try { return !!(vscode.getState() && vscode.getState().labOpen); }
+      catch (e) { return false; }
+    }
+    function applyLabState() {
+      var open = labOpen();
+      if (labList) { labList.classList.toggle('collapsed', !open); }
+      if (labChev) { labChev.className = open ? 'chev chev-open' : 'chev'; }
+      if (labCount && labCount.textContent) {
+        labCount.textContent = labCount.textContent
+          .replace(/ \u00b7 (tap to expand|click Run or Open)$/,
+                   open ? ' \u00b7 click Run or Open' : ' \u00b7 tap to expand');
+      }
+      if (labSec) { labSec.setAttribute('aria-expanded', open ? 'true' : 'false'); }
+    }
+    function toggleLab() {
+      try { var st = vscode.getState() || {}; st.labOpen = !labOpen(); vscode.setState(st); } catch (e) {}
+      applyLabState();
+    }
+    if (labSec) {
+      labSec.addEventListener('click', toggleLab);
+      labSec.addEventListener('keydown', function (ev) {
+        if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); toggleLab(); }
+      });
+    }
+    applyLabState();
+
+    /* graphics.h cheat sheet: opens from the ? button, searchable,
+       Esc / backdrop / × closes it. No host messages needed. */
+    var cheatOv = document.getElementById('cheat-overlay');
+    var helpBtn = document.getElementById('help-btn');
+    function filterCheat(raw) {
+      var qv = String(raw || '').toLowerCase();
+      var fns = document.querySelectorAll('.cheat-fn');
+      var hits = 0;
+      for (var i = 0; i < fns.length; i++) {
+        var show = !qv || fns[i].textContent.toLowerCase().indexOf(qv) !== -1;
+        fns[i].style.display = show ? '' : 'none';
+        if (show) { hits++; }
+      }
+      var cats = document.querySelectorAll('.cheat-cat');
+      for (var j = 0; j < cats.length; j++) {
+        var kids = cats[j].querySelectorAll('.cheat-fn');
+        var any = false;
+        for (var k = 0; k < kids.length; k++) {
+          if (kids[k].style.display !== 'none') { any = true; break; }
+        }
+        cats[j].style.display = any ? '' : 'none';
+      }
+      var empty = document.getElementById('cheat-empty');
+      if (empty) { empty.style.display = hits ? 'none' : ''; }
+    }
+    function openCheat() {
+      if (!cheatOv) { return; }
+      cheatOv.classList.add('open');
+      if (helpBtn) { helpBtn.setAttribute('aria-expanded', 'true'); }
+      var q = document.getElementById('cheat-q');
+      if (q) { q.value = ''; filterCheat(''); }
+      var body = document.getElementById('cheat-body');
+      if (body) { body.scrollTop = 0; }
+    }
+    function closeCheat() {
+      if (!cheatOv) { return; }
+      cheatOv.classList.remove('open');
+      if (helpBtn) { helpBtn.setAttribute('aria-expanded', 'false'); }
+    }
+    if (helpBtn) { helpBtn.addEventListener('click', function (ev) { ev.stopPropagation(); openCheat(); }); }
+    var cheatClose = document.getElementById('cheat-close');
+    if (cheatClose) { cheatClose.addEventListener('click', closeCheat); }
+    if (cheatOv) {
+      cheatOv.addEventListener('click', function (ev) { if (ev.target === cheatOv) { closeCheat(); } });
+    }
+    document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') { closeCheat(); } });
+    var cheatQ = document.getElementById('cheat-q');
+    if (cheatQ) { cheatQ.addEventListener('input', function () { filterCheat(cheatQ.value); }); }
     document.addEventListener('click', function (ev) {
       var el = ev.target;
       while (el && el !== document.body) {

@@ -1,5 +1,45 @@
 # ChangeLog
 
+## 1.5.0 — 2026-09-27
+
+The Computer Graphics Lab release: a dedicated lab section for the classic
+course algorithms, a searchable graphics.h cheat sheet, and a renamed,
+self-describing extension.
+
+### Added
+- **Computer Graphics Lab section** (below Example Programs) with 8 new
+  screenshot-verified programs — **31 examples total**:
+  - **Coordinate Viewer** — the screen coordinate system live: grid,
+    axes, origin marker, coordinate labels every 100 px and a 10-px snap;
+    toggle each feature with `G C O A S`, click to plot points (printed
+    in the terminal), the lecture point `(250,100)` always shown.
+  - **Pixel Inspector** — move the mouse to read any pixel's `X`, `Y`,
+    color name and classic VGA `RGB`; clicking prints a copy-ready
+    `X=.., Y=.., RGB=(..), COLOR=..` line in the terminal.
+  - **DDA Line Lab** — every DDA step plotted on a grid with the
+    `line()` reference underneath and the full step table in the terminal.
+  - **Bresenham Line Lab** — the all-integer algorithm (all octants)
+    with the decision-variable table.
+  - **Bresenham Circle Lab** — midpoint circle, 8-way symmetry, step
+    table, `circle()` reference.
+  - **Midpoint Ellipse Lab** — region 1 / region 2 in 4 quadrants.
+  - **2D Transformations Lab** — translate / rotate / scale a house with
+    real 2-D matrices (printed to the terminal on every keypress).
+  - **Cohen-Sutherland Clipping Lab** — outcodes (TBRL), verdicts and
+    clipped segments against a clip window.
+- **"?" cheat-sheet button** beside the panel title: a searchable
+  graphics.h reference (setup & lifecycle, shapes, colors & filling,
+  text, keyboard, mouse, animation, viewport) with Esc / backdrop close.
+- The fallback list view mirrors the lab as its own section.
+
+### Changed
+- **Extension renamed** on the Marketplace to **"graphics.h Runner.
+  One-click Setup"**; the activity-bar view title is now **"Graphics.h
+  CPP Program Runner One-click setup"** (was "graphics.h Runner" +
+  "graphics.h Programs").
+- Both panel section toggles now share the webview state safely
+  (toggling one no longer resets the other after a re-render).
+
 ## 1.4.9 — 2026-09-27
 
 Panel polish per user feedback, two production fixes from a new deep
