@@ -10,7 +10,6 @@
 
 import * as vscode from 'vscode';
 import { randomBytes } from 'crypto';
-import * as path from 'path';
 import { buildPanelHtml, PanelStatus } from './panelHtml';
 import { COMMAND_META, LoadedProgram } from './programs';
 
@@ -59,7 +58,7 @@ export class GhPanelProvider implements vscode.WebviewViewProvider {
 
   resolveWebviewView(view: vscode.WebviewView): void {
     this.view = view;
-    view.webview.options = { enableScripts: true, localResourceRoots: [vscode.Uri.file(path.join(this.extensionRoot, 'media'))] };
+    view.webview.options = { enableScripts: true };
     view.webview.html = this.renderHtml();
 
     view.webview.onDidReceiveMessage((msg: PanelClick) => {
@@ -120,9 +119,6 @@ export class GhPanelProvider implements vscode.WebviewViewProvider {
       return '';
     }
     const nonce = randomBytes(12).toString('hex');
-    const logoUri = this.view.webview
-      .asWebviewUri(vscode.Uri.file(path.join(this.extensionRoot, 'media', 'diu-logo.png')))
-      .toString();
     return buildPanelHtml({
       programs: this.programs.map((p) => ({
         id: p.id,
@@ -136,7 +132,6 @@ export class GhPanelProvider implements vscode.WebviewViewProvider {
       status: this.currentStatus(),
       version: this.version,
       nonce,
-      logoUri,
       cspSource: this.view.webview.cspSource
     });
   }

@@ -33,9 +33,20 @@ export interface PanelHtmlOptions {
   status: PanelStatus;
   version: string;
   nonce: string;
-  logoUri: string;
   cspSource: string;
 }
+
+/** One distinct accent color per action button (class suffix in panel CSS). */
+const BUTTON_COLORS: Record<string, string> = {
+  'cmd-compileAndRun': 'violet',
+  'cmd-setup': 'amber',
+  'cmd-doctor': 'emerald',
+  'cmd-compile': 'blue',
+  'cmd-run': 'cyan',
+  'cmd-stop': 'rose',
+  'cmd-copycmd': 'fuchsia',
+  'cmd-examples': 'lime'
+};
 
 function esc(s: string): string {
   return s
@@ -66,7 +77,7 @@ function envCard(status: PanelStatus): string {
           ? 'A C++ compiler was found, but the graphics library is missing. One click installs WinBGIM / SDL_bgi for you.'
           : 'No working C++ compiler found. One click installs the compiler + graphics library automatically — no admin rights needed.'}</div>
       </div>
-      <button class="btn btn-primary btn-lg" data-cmd="graphics-h-runner.setupEverything" id="env-cta">🚀 Complete Run Setup</button>
+      <button class="btn btn-color btn-amber btn-lg" data-cmd="graphics-h-runner.setupEverything" id="env-cta">🚀 Complete Run Setup</button>
     </div>`;
   }
   if (status.state === 'checking') {
@@ -91,7 +102,7 @@ function actionButtons(commands: CommandMeta[]): string {
   return commands
     .map(
       (c) =>
-        `<button class="btn${c.primary ? ' btn-primary' : ''}" data-cmd="${esc(c.commandId)}" id="${esc(c.id)}" title="${esc(c.title)}">
+        `<button class="btn btn-color btn-${BUTTON_COLORS[c.id] || 'violet'}" data-cmd="${esc(c.commandId)}" id="${esc(c.id)}" title="${esc(c.title)}">
            <span class="btn-ico">${c.icon}</span>
            <span class="btn-body"><span class="btn-title">${esc(c.title)}</span><span class="btn-hint">${esc(c.hint)}</span></span>
          </button>`
@@ -120,7 +131,7 @@ function programCards(programs: PanelProgramInfo[]): string {
 }
 
 export function buildPanelHtml(opts: PanelHtmlOptions): string {
-  const { programs, commands, status, version, nonce, logoUri, cspSource } = opts;
+  const { programs, commands, status, version, nonce, cspSource } = opts;
   const platformName =
     status.platform === 'windows' ? 'Windows · WinBGIM' : status.platform === 'macos' ? 'macOS · SDL_bgi' : 'Linux · SDL_bgi';
 
@@ -147,11 +158,9 @@ export function buildPanelHtml(opts: PanelHtmlOptions): string {
       linear-gradient(160deg, var(--bg1) 0%, var(--bg2) 55%, var(--bg3) 100%);
     color:var(--txt); padding:14px 12px 20px;
   }
-  .hero { text-align:center; padding:10px 6px 16px; }
-  .hero img { width:46px; height:46px; border-radius:12px; box-shadow:0 4px 18px rgba(124,92,255,.45); vertical-align:middle; }
-  .hero h1 { font-size:19px; letter-spacing:.4px; margin-top:8px;
+  .hero { text-align:center; padding:14px 6px 16px; }
+  .hero h1 { font-size:20px; letter-spacing:.4px;
     background:linear-gradient(90deg,#c7d2fe,#8de9ff); -webkit-background-clip:text; background-clip:text; color:transparent; }
-  .hero .by { font-size:11px; color:var(--txt-dim); margin-top:3px; }
   .pill { display:inline-flex; align-items:center; gap:7px; font-size:11.5px; font-weight:600;
     padding:5px 13px; border-radius:999px; margin-top:10px; border:1px solid; }
   .pill-ok   { color:var(--ok);   border-color:rgba(52,211,153,.4);  background:rgba(52,211,153,.1); }
@@ -178,9 +187,19 @@ export function buildPanelHtml(opts: PanelHtmlOptions): string {
   .btn-body { display:flex; flex-direction:column; }
   .btn-title { font-size:12.5px; font-weight:600; }
   .btn-hint { font-size:10.5px; color:var(--txt-dim); }
-  .btn-primary { background:linear-gradient(135deg, var(--acc1), #5b8def); border-color:transparent; }
-  .btn-primary:hover { background:linear-gradient(135deg,#8f73ff,#6b9bff); }
-  .btn-primary .btn-hint { color:rgba(255,255,255,.75); }
+  /* each action button carries its own accent color */
+  .btn-color { background:linear-gradient(135deg, var(--bc1), var(--bc2)); border-color:transparent; }
+  .btn-color:hover { background:linear-gradient(135deg, var(--bc1h), var(--bc2h)); border-color:transparent; }
+  .btn-color .btn-ico { background:rgba(255,255,255,.2); }
+  .btn-color .btn-hint { color:rgba(255,255,255,.78); }
+  .btn-violet   { --bc1:#7c5cff; --bc2:#5b8def; --bc1h:#8f73ff; --bc2h:#6b9bff; }
+  .btn-amber    { --bc1:#f59e0b; --bc2:#f97316; --bc1h:#fbbf24; --bc2h:#fb923c; }
+  .btn-emerald  { --bc1:#10b981; --bc2:#059669; --bc1h:#34d399; --bc2h:#10b981; }
+  .btn-blue     { --bc1:#3b82f6; --bc2:#6366f1; --bc1h:#60a5fa; --bc2h:#818cf8; }
+  .btn-cyan     { --bc1:#06b6d4; --bc2:#0ea5e9; --bc1h:#22d3ee; --bc2h:#38bdf8; }
+  .btn-rose     { --bc1:#f43f5e; --bc2:#e11d48; --bc1h:#fb7185; --bc2h:#f43f5e; }
+  .btn-fuchsia  { --bc1:#d946ef; --bc2:#c026d3; --bc1h:#e879f9; --bc2h:#d946ef; }
+  .btn-lime     { --bc1:#65a30d; --bc2:#84cc16; --bc1h:#84cc16; --bc2h:#a3e635; }
   .btn-lg { width:auto; padding:10px 16px; font-size:13px; font-weight:700; border-radius:11px; }
   .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px; }
 
@@ -211,6 +230,8 @@ export function buildPanelHtml(opts: PanelHtmlOptions): string {
 
   .foot { text-align:center; font-size:10.5px; color:var(--txt-dim); margin-top:16px; line-height:1.7; }
   .foot b { color:var(--txt); }
+  .foot .credit { margin-top:7px; padding-top:7px; border-top:1px solid var(--card-line);
+    font-weight:600; color:var(--txt); font-size:10.5px; }
   .kbd { background:rgba(255,255,255,.09); border:1px solid var(--card-line); border-radius:5px; padding:1px 6px; font-size:10px; }
   .chip { display:inline-block; font-size:10px; color:var(--txt-dim); border:1px solid var(--card-line); border-radius:999px; padding:2px 10px; margin:0 3px; }
 
@@ -226,9 +247,7 @@ export function buildPanelHtml(opts: PanelHtmlOptions): string {
 </head>
 <body>
   <div class="hero">
-    <img src="${logoUri}" alt="logo">
     <h1>graphics.h Runner</h1>
-    <div class="by">made by Department of CSE, Dhaka International University, Bangladesh</div>
     ${statusPill(status)}
     <div style="margin-top:9px"><span class="chip">${platformName}</span><span class="chip">v${esc(version)}</span></div>
   </div>
@@ -247,7 +266,8 @@ export function buildPanelHtml(opts: PanelHtmlOptions): string {
 
   <div class="foot">
     Inside a .cpp file just press <span class="kbd">Ctrl+Alt+R</span> (or F5 → “Run graphics.h program”).<br>
-    <b>made with 💜 by DIU CSE</b> · errors are reported automatically (VS Code telemetry setting respected)
+    errors are reported automatically (VS Code telemetry setting respected)
+    <div class="credit">Powered by Department of CSE, Dhaka International University, Bangladesh.</div>
   </div>
 
 <script nonce="${nonce}">

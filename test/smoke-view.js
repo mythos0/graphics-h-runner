@@ -6,8 +6,9 @@
  * Validates:
  *  1. all three environment states render the right pill + CTA
  *  2. 18 program cards with Run + Open buttons
- *  3. 8 action buttons wired to COMMAND_META ids
- *  4. CSP + nonce + script tag + DIU credit + version are present
+ *  3. 8 action buttons wired to COMMAND_META ids, each with its own color
+ *  4. CSP + nonce + script tag + version are present; no logo, and the
+ *     footer carries the "Powered by Department of CSE …" credit
  *  5. dangerous text is HTML-escaped
  *  6. busy label markup would be safe (script-side escaping)
  */
@@ -42,7 +43,6 @@ function html(status) {
     status: Object.assign({ state: 'ready', library: 'SDL_bgi', compilerOk: true, platform: 'linux', busy: false, busyLabel: null }, status),
     version: '1.4.0',
     nonce: 'testnonce123',
-    logoUri: 'https://file-globals.example/logo.png',
     cspSource: 'https://*.vscode-cdn.net'
   });
 }
@@ -96,6 +96,21 @@ check('8 action buttons carrying COMMAND_META ids', () => {
   }
 });
 
+check('each action button has its own distinct color', () => {
+  const h = html({});
+  const colors = ['violet', 'amber', 'emerald', 'blue', 'cyan', 'rose', 'fuchsia', 'lime'];
+  for (const c of COMMAND_META) {
+    const m = h.match(new RegExp('<button class="([^"]*)" data-cmd="[^"]*" id="' + c.id + '"'));
+    assert.ok(m, 'button markup missing for ' + c.id);
+    assert.match(m[1], /btn-color/, 'no shared color styling on ' + c.id);
+    assert.match(m[1], /btn-(violet|amber|emerald|blue|cyan|rose|fuchsia|lime)/, 'no color class on ' + c.id);
+  }
+  for (const col of colors) {
+    const n = (h.match(new RegExp('btn-' + col + '"', 'g')) || []).length;
+    assert.strictEqual(n, 1, 'color ' + col + ' used ' + n + ' times (want exactly 1)');
+  }
+});
+
 check('CSP: nonce script + cspSource in img-src, no inline handlers', () => {
   const h = html({});
   assert.ok(h.includes(`script-src 'nonce-testnonce123'`), 'nonce CSP missing');
@@ -104,11 +119,15 @@ check('CSP: nonce script + cspSource in img-src, no inline handlers', () => {
   assert.ok(!/\son\w+="/.test(h), 'inline event handler found');
 });
 
-check('branding: DIU credit, hero title, logo, version', () => {
+check('branding: no logo / no hero credit, Powered-by footer credit, title + version', () => {
   const h = html({});
-  assert.ok(h.includes('Dhaka International University'), 'DIU credit missing');
+  assert.ok(!h.includes('<img'), 'logo image tag still present');
+  assert.ok(!h.includes('made by'), 'old made-by wording present');
+  assert.ok(!h.includes('made with'), 'old made-with wording present');
+  const hero = h.slice(0, h.indexOf('class="foot"'));
+  assert.ok(!hero.includes('Dhaka International University'), 'university credit leaked into hero');
+  assert.ok(h.includes('Powered by Department of CSE, Dhaka International University, Bangladesh.'), 'footer credit missing');
   assert.ok(h.includes('graphics.h Runner'), 'title missing');
-  assert.ok(h.includes('https://file-globals.example/logo.png'), 'logo uri missing');
   assert.ok(h.includes('v1.4.0'), 'version missing');
 });
 
@@ -119,7 +138,6 @@ check('XSS: hostile title/description are escaped', () => {
     status: { state: 'ready', library: 'SDL_bgi', compilerOk: true, platform: 'linux', busy: false, busyLabel: null },
     version: '1.4.0',
     nonce: 'n1',
-    logoUri: 'https://x/l.png',
     cspSource: 'https://*.vscode-cdn.net'
   });
   assert.ok(!h.includes('<img src=x'), 'raw img tag leaked');

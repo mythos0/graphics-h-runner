@@ -1,13 +1,13 @@
 <p align="center">
   <img src="media/diu-logo.png" alt="Dhaka International University — Knowledge is Power" width="300"/>
 </p>
-<h3 align="center">Made by Department of CSE, <a href="https://www.diu.ac.bd/">Dhaka International University</a>, Bangladesh</h3>
+<h3 align="center">Powered by Department of CSE, <a href="https://www.diu.ac.bd/">Dhaka International University</a>, Bangladesh</h3>
 
 ---
 
 # graphics.h Runner — BGI C++ Graphics Toolkit for VS Code
 
-[![Version](https://img.shields.io/badge/version-1.4.0-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.4.3-blue.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey.svg)](#per-os-setup)
 [![Tests](https://img.shields.io/badge/sample%20tests-18%2F18%20passing-brightgreen.svg)](#tested--verified)
@@ -60,9 +60,9 @@ Extensions view (`Ctrl+Shift+X`), or from the command line:
 code --install-extension mythos0-labs.graphics-h-runner
 ```
 
-**From a GitHub release:** download `graphics-h-runner-1.4.0.vsix` from
+**From a GitHub release:** download `graphics-h-runner-1.4.3.vsix` from
 [Releases](../../releases), then in VS Code: `Extensions view → ⋯ → Install from VSIX…`
-(or `code --install-extension graphics-h-runner-1.4.0.vsix`).
+(or `code --install-extension graphics-h-runner-1.4.3.vsix`).
 
 **From source:**
 

@@ -58,7 +58,7 @@
       "exitCode": 0,
       "shot": "/home/z/my-project/graphics-h-runner/docs/screenshots/04_moving_car.png",
       "analysis": {
-        "nonblack": 0.0881,
+        "nonblack": 0.0874,
         "unique_colors": 8
       },
       "cmd": "g++ -I/home/z/my-project/bgi-env/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include/x86_64-linux-gnu /home/z/my-project/graphics-h-runner/samples/04_moving_car.cpp -o /home/z/my-project/graphics-h-runner/build/04_moving_car -L/home/z/my-project/bgi-env/usr/lib -Wl,-rpath,/home/z/my-project/bgi-env/usr/lib -L/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -Wl,-rpath,/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -lSDL_bgi -lSDL2 -lm",

@@ -1,5 +1,40 @@
 # ChangeLog
 
+## 1.4.3 — 2026-09-26
+
+One more panel tweak, requested right after 1.4.2:
+
+### Changed
+- **Footer credit added back by popular demand**: the bottom of the
+  graphics.h panel now closes with
+  "Powered by Department of CSE, Dhaka International University,
+  Bangladesh." — the hero stays clean (no logo, no credit line up top).
+
+## 1.4.2 — 2026-09-26
+
+Panel polish in the activity bar, requested by users:
+
+### Changed
+- **Cleaner hero**: the logo image and the university credit line were
+  removed from the top of the graphics.h panel (and from the footer).
+  The panel now opens straight with the title, the environment status
+  pill and the platform/version chips.
+- **Every action button has its own color**: Compile & Run (violet),
+  Complete Run Setup (amber), Setup Doctor (emerald), Compile (blue),
+  Run Last Build (cyan), Stop Running Program (rose), Copy Compile
+  Command (fuchsia) and Open Examples Folder (lime). The environment
+  card's "Complete Run Setup" call-to-action uses the same amber so the
+  two entry points to setup read as one.
+- **Attribution wording**: the Marketplace/README credit now reads
+  "Powered by Department of CSE, Dhaka International University,
+  Bangladesh" (previously "Made by …").
+
+### Notes
+- The university attribution stays on the Marketplace page and in the
+  README; it is only removed from the in-editor activity bar panel.
+- All 18 example programs were re-verified end to end (compile → run on
+  a virtual display → screenshot → clean self-exit): 18/18 PASS.
+
 ## 1.4.1 — 2026-09-26
 
 Fixes the empty activity-bar panel reported on v1.4.0
