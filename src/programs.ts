@@ -82,8 +82,7 @@ export const COMMAND_META: CommandMeta[] = [
   { id: 'cmd-compile',       commandId: 'graphics-h-runner.compile',             title: 'Compile',                  hint: 'Ctrl+Alt+B',        icon: '🛠' },
   { id: 'cmd-run',           commandId: 'graphics-h-runner.run',                 title: 'Run Last Build',           hint: 'opens a terminal',   icon: '🎬' },
   { id: 'cmd-stop',          commandId: 'graphics-h-runner.stopProgram',         title: 'Stop Running Program',     hint: 'kills the window',   icon: '⏹' },
-  { id: 'cmd-copycmd',       commandId: 'graphics-h-runner.copyCompileCommand',  title: 'Copy Compile Command',     hint: 'exact g++ line',     icon: '📋' },
-  { id: 'cmd-examples',      commandId: 'graphics-h-runner.openExamplesFolder',  title: 'Open Examples Folder',     hint: 'all 18 programs',    icon: '📂' }
+  { id: 'cmd-copycmd',       commandId: 'graphics-h-runner.copyCompileCommand',  title: 'Copy Compile Command',     hint: 'exact g++ line',     icon: '📋' }
 ];
 
 /** Load the full catalog: sample sources from disk. */

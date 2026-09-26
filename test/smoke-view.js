@@ -6,9 +6,10 @@
  * Validates:
  *  1. all three environment states render the right pill + CTA
  *  2. 23 program cards with Run + Open buttons
- *  3. 8 action buttons wired to COMMAND_META ids, exactly one green accent
- *  4. CSP + nonce + script tag + version are present; the DIU badge renders
- *     in the title row when a logoUri is given, and the footer carries the
+ *  3. 7 action buttons wired to COMMAND_META ids (Open Examples Folder
+ *     removed in v1.4.9), exactly one green accent
+ *  4. CSP + nonce + script tag + version are present; the DIU badge sits on
+ *     the exact right side of the footer text, and the footer carries the
  *     "Powered by Department of CSE …" credit
  *  5. dangerous text is HTML-escaped (including the logo URI)
  *  6. busy label markup would be safe (script-side escaping)
@@ -94,13 +95,15 @@ check('23 program cards, each with Run + Open', () => {
   assert.ok(h.includes('Turbo C++ Graphics Tour') && h.includes('Conio Keyboard Paint') && h.includes('Sprite Animation'), 'new v1.4.7 programs missing');
 });
 
-check('8 action buttons carrying COMMAND_META ids', () => {
+check('7 action buttons carrying COMMAND_META ids (no Open Examples Folder)', () => {
   const h = html({});
   const cmds = (h.match(/data-cmd="/g) || []).length;
-  assert.strictEqual(cmds, 8, 'data-cmd count ' + cmds);
+  assert.strictEqual(cmds, 7, 'data-cmd count ' + cmds);
   for (const c of COMMAND_META) {
     assert.ok(h.includes(`id="${c.id}"`), 'button id missing: ' + c.id);
   }
+  assert.ok(!h.includes('data-cmd="graphics-h-runner.openExamplesFolder"'), 'Open Examples Folder button still present');
+  assert.ok(!h.includes('Open Examples Folder'), 'Open Examples Folder text leaked');
 });
 
 check('action buttons: exactly one green accent (primary), all others uniform neutral', () => {
@@ -112,7 +115,7 @@ check('action buttons: exactly one green accent (primary), all others uniform ne
     if (m[1].includes('btn-accent')) { accent++; firstId = firstId || m[2]; }
     assert.ok(!/btn-(violet|amber|emerald|blue|cyan|rose|fuchsia|lime)/.test(m[1]), 'rainbow color class found on ' + m[2]);
   }
-  assert.strictEqual(total, 8, 'action button count ' + total);
+  assert.strictEqual(total, 7, 'action button count ' + total);
   assert.strictEqual(accent, 1, 'accent button count ' + accent);
   assert.strictEqual(firstId, 'cmd-compileAndRun', 'accent is not the 1st action button');
   assert.ok(!h.includes('mini-run'), 'card Run buttons must stay neutral');
@@ -168,13 +171,27 @@ check('CSP: nonce script + cspSource in img-src, no inline handlers', () => {
   assert.ok(!/\son\w+="/.test(h), 'inline event handler found');
 });
 
-check('branding: DIU badge in the title row, no hero text credit, Powered-by footer', () => {
+check('branding: DIU badge on the exact right side of the footer text, no hero text credit', () => {
   const h = html({});
   const imgs = h.match(/<img class="diu-logo"[^>]*>/g) || [];
   assert.strictEqual(imgs.length, 1, 'expected exactly one diu-logo img, got ' + imgs.length);
   assert.ok(imgs[0].includes('src="' + LOGO + '"'), 'logo src is not the webview uri');
   assert.ok(imgs[0].includes('alt='), 'logo alt missing');
-  assert.ok(h.includes('brand-row'), 'title-row brand container missing');
+  /* the badge lives INSIDE the footer row, right of the credit text */
+  const footAt = h.indexOf('class="foot"');
+  const creditAt = h.indexOf('class="credit"');
+  const brandAt = h.indexOf('class="foot-brand"');
+  assert.ok(footAt !== -1 && creditAt > footAt, 'footer credit missing');
+  assert.ok(brandAt > creditAt, 'DIU badge is not right of the footer text');
+  assert.ok(h.includes('.foot-brand'), 'footer-brand CSS rule missing');
+  const footCss = h.slice(h.indexOf('.foot {'), h.indexOf('.foot b'));
+  assert.ok(footCss.includes('justify-content:space-between'), 'footer is not a space-between row');
+  assert.ok(footCss.includes('align-items:center'), 'badge not vertically centred against the text');
+  assert.ok(h.includes('.foot .credit { flex:1 1 auto'), 'credit does not take the remaining width');
+  /* the title row must NOT carry the badge anymore (check the rendered
+     <img> tag — the .diu-logo class name legitimately lives in <style>) */
+  const head = h.slice(0, h.indexOf('class="header-actions"'));
+  assert.ok(!head.includes('<img class="diu-logo"'), 'badge leaked back into the header');
   /* no TEXT credit in the hero (attribute title on the badge is fine) */
   const hero = h.slice(h.indexOf('class="header"'), h.indexOf('class="header-actions"'));
   const heroText = hero.replace(/<[^>]+>/g, ' ');
@@ -205,16 +222,28 @@ check('XSS: hostile title/description are escaped', () => {
   assert.ok(h.includes('&lt;script&gt;bad()'), 'escaped script not found');
 });
 
-check('platform chip reflects platform', () => {
-  assert.ok(html({ platform: 'windows' }).includes('Windows · WinBGIM'));
-  assert.ok(html({ platform: 'linux' }).includes('Linux · SDL_bgi'));
-  assert.ok(html({ platform: 'macos' }).includes('macOS · SDL_bgi'));
+check('version chip sits beside the Ready pill; platform chip gone', () => {
+  const h = html({});
+  assert.ok(h.includes('class="status-row"'), 'status row missing');
+  const row = h.slice(h.indexOf('class="status-row"'), h.indexOf('class="status-row"') + 500);
+  assert.ok(row.includes('id="env-pill"'), 'pill not in the status row');
+  assert.ok(row.indexOf('class="chip"') > row.indexOf('id="env-pill"'), 'version chip is not beside the pill');
+  assert.ok(!html({ platform: 'windows' }).includes('Windows · WinBGIM'), 'platform chip still rendered');
+  assert.ok(!html({ platform: 'linux' }).includes('Linux · SDL_bgi'), 'platform chip still rendered');
+  assert.ok(!html({ platform: 'macos' }).includes('macOS · SDL_bgi'), 'platform chip still rendered');
+  assert.ok(html({}).includes('<span class="chip">v1.4.0</span>'), 'version chip missing');
+  assert.strictEqual((html({}).match(/class="chip"/g) || []).length, 1, 'unexpected extra chips');
 });
 
-check('keyboard hint + telemetry disclosure in footer', () => {
+check('footer hint/telemetry lines removed; hero button keeps the shortcut hint', () => {
   const h = html({});
-  assert.ok(h.includes('Ctrl+Alt+R'), 'kbd hint missing');
-  assert.ok(h.includes('telemetry setting'), 'telemetry disclosure missing');
+  assert.ok(!h.includes('Inside a .cpp file just press'), 'footer kbd sentence still present');
+  assert.ok(!h.includes('errors are reported automatically'), 'footer telemetry line still present');
+  assert.ok(!h.includes('telemetry setting'), 'telemetry disclosure still in the footer');
+  /* the shortcut stays discoverable via the hero Compile & Run button
+     (the button lives in .header-actions, beside the identity block) */
+  const actions = h.slice(h.indexOf('class="header-actions"'), h.indexOf('class="programs-zone"'));
+  assert.ok(actions.includes('Ctrl+Alt+R'), 'hero button lost the Ctrl+Alt+R hint');
 });
 
 check('hero button: exactly one, it is Compile & Run, full-width alone on its row', () => {
@@ -225,13 +254,14 @@ check('hero button: exactly one, it is Compile & Run, full-width alone on its ro
   assert.ok(m && m[1].includes('btn-hero'), '1st action button is not the hero');
   assert.ok(h.includes('grid-column: 1 / -1'), 'hero must span the full row');
   assert.ok(h.includes('.btn-hero .btn-title'), 'hero typography rules missing');
-  /* the other 7 stay in the 2-per-row grid */
+  /* the other 6 stay in the 2-per-row grid; the freed row belongs to the
+     programs zone (flex:1) which grows for expansion + scrolling */
   const re = /<button class="([^"]*)" data-cmd="[^"]*" id="(cmd-[^"]+)"/g;
   let m2, grid = 0;
   while ((m2 = re.exec(h)) !== null) {
     if (!m2[1].includes('btn-hero')) grid++;
   }
-  assert.strictEqual(grid, 7, 'secondary buttons not in the grid: ' + grid);
+  assert.strictEqual(grid, 6, 'secondary buttons not in the grid: ' + grid);
   assert.ok(h.includes('repeat(2, minmax(0, 1fr))'), '2-per-row grid rule missing');
   assert.ok(h.includes('@media (max-width: 299px)'), 'very-narrow single-column fallback missing');
 });
@@ -253,9 +283,9 @@ check('example programs: collapsed by default, remembered, scroll inside their z
   assert.ok(h.includes('margin-top:auto'), 'footer not pinned to the bottom');
 });
 
-check('dynamic program count in the examples hint', () => {
+check('program count lives in the section header (per-button hint gone)', () => {
   const h = html({});
-  assert.ok(h.includes('all 23 programs'), 'examples hint not driven by the catalog length');
+  assert.ok(!h.includes('all 23 programs'), 'old per-button count hint still rendered');
   assert.ok(h.includes('23 programs · tap to expand'), 'section count header wrong');
 });
 

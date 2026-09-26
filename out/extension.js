@@ -435,7 +435,13 @@ async function compileSource(sourceFile) {
             }
         });
     }));
-    setRunState('idle');
+    /* v1.4.9 robustness fix: only clear the indicator when no program is
+     * still alive. A plain Compile (or a failed rebuild) while a graphics
+     * program runs used to flip the status bar to "idle" even though the
+     * runner terminal — and the window — were still up (Ctrl+Alt+S kept
+     * working, but the visible state lied). */
+    const stillRunning = !!lastRunTerminal && !lastRunTerminal.exitStatus;
+    setRunState(stillRunning ? 'running' : 'idle');
     (0, instrument_1.addExtensionBreadcrumb)('compile', result, { file: path.basename(sourceFile) });
     if (result === 'ok') {
         diagnostics?.delete(vscode.Uri.file(sourceFile));

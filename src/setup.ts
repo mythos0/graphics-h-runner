@@ -848,6 +848,49 @@ $1`
 }
 
 /**
+ * v1.4.9: const-correct the text/file-name API in the INSTALLED SDL_bgi.h
+ * (user-facing header only — the C build keeps its own definitions).
+ *
+ * SDL_bgi declares outtextxy/outtext/textheight/textwidth/initgraph/etc.
+ * with non-const char* params. Turbo C++ textbook code passes string
+ * literals and const char* to these constantly; a direct literal only
+ * draws -Wwrite-strings, but any indirect const string (ternary result,
+ * const variable, function return) is a HARD compile error. The library
+ * never writes through these pointers, so the installed header can safely
+ * take const char* — the .so ABI does not care about header const-ness.
+ */
+export function patchInstalledHeaderConstChar(includeDir: string, log: string[]): void {
+  const header = path.join(includeDir, 'SDL2', 'SDL_bgi.h');
+  try {
+    if (!fs.existsSync(header)) {
+      return;
+    }
+    /* read-only text/filename APIs textbook code calls with literals */
+    const targets = [
+      'initgraph', 'installuserdriver', 'installuserfont', 'outtext', 'outtextxy',
+      'textheight', 'textwidth', 'readimagefile', 'writeimagefile',
+      'setwintitle', 'setwinoptions', 'resetwinoptions'
+    ];
+    const lines = fs.readFileSync(header, 'utf8').split('\n');
+    let patched = 0;
+    const out = lines.map((line) => {
+      if (!line.includes('char *')) return line;
+      const hit = targets.find((n) => new RegExp('\\b' + n + '\\s*\\(').test(line));
+      if (!hit || line.includes('const char *')) return line;
+      patched++;
+      return line.replace(/char \*/g, 'const char *');
+    });
+    if (patched > 0) {
+      fs.writeFileSync(header, out.join('\n'));
+      log.push(`installed header: const-corrected ${patched} text API declarations (textbook code compiles)`);
+    }
+  } catch (e) {
+    /* cosmetic patch — never block the install */
+    log.push('header const-correctness patch skipped: ' + String(e));
+  }
+}
+
+/**
  * Download, patch, build and install SDL_bgi into a user prefix:
  *   <storageRoot>/sdl_bgi-src/            (sources)
  *   <storageRoot>/usr/include/graphics.h
@@ -922,6 +965,8 @@ export async function installSdlBgiUserPrefix(opts: SdlBgiBuildOptions = {}): Pr
   /* 5. install headers */
   fs.copyFileSync(path.join(srcDir, 'SDL_bgi.h'), path.join(includeDir, 'SDL2', 'SDL_bgi.h'));
   fs.copyFileSync(path.join(srcDir, 'graphics.h'), path.join(includeDir, 'graphics.h'));
+  /* 6. const-correct the user-facing header (after the build — see docstring) */
+  patchInstalledHeaderConstChar(includeDir, log);
   log.push('installed headers + library into ' + prefix);
 
   return { includeDir, libDir, log };

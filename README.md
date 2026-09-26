@@ -41,7 +41,7 @@ Press **`Ctrl+Alt+R`** → compiled with the right linker flags → graphics win
 | Feature | What it does |
 |---|---|
 | **⚡ Complete graphics.h Run Setup** | One command bootstraps **everything** — including the C++ compiler itself on Windows (winget auto-install, or a sha256-verified direct download fallback; per-user, **no admin rights**) — then installs WinBGIM/SDL_bgi automatically (download → patch → build → install → paths wired into settings) and re-verifies the whole toolchain live. System packages that need a password are handed to the terminal as copy-paste commands. |
-| **🎨 Modern webpage-style panel (Activity Bar)** | The graphics.h icon opens a styled dashboard, not a plain tree: title row with the **DIU badge** in the top-right corner, a live status pill (Ready / Not ready / Checking) with a one-click **Complete Run Setup** fix while anything is missing, an action grid that **stays put**, and **23 emoji program cards** in a collapsible section that **scrolls inside its own container** — each with **▶ Run** (open + compile + launch in one click) and **Open** buttons. Responsive for narrow sidebars; identical look in light & dark themes. |
+| **🎨 Modern webpage-style panel (Activity Bar)** | The graphics.h icon opens a styled dashboard, not a plain tree: a live **Ready / Not ready / Checking** pill with the **version chip beside it**, a one-click **Complete Run Setup** fix while anything is missing, an action grid that **stays put**, and **23 emoji program cards** in a collapsible section that **scrolls inside its own container** — each with **▶ Run** (open + compile + launch in one click) and **Open** buttons, and the **DIU badge on the footer's right side**. Responsive for narrow sidebars; identical look in light & dark themes. |
 | **🩺 Setup Doctor** | Probes your compiler and *every* candidate graphics library by actually compiling a `graphics.h` probe. Reports exactly what is missing with per-OS fixes, and offers **Fix automatically**. |
 | **🔍 graphics.h auto-detect** | When `#include <graphics.h>` is present, BGI linker flags are applied automatically. Files without it still compile as plain C++. |
 | **▶️ Compile & Run — 4 ways** | `Ctrl+Alt+R` (compile & run), `Ctrl+Alt+B` (compile), the editor **▶ run-button dropdown** (right beside the C/C++ "Run C++ File" entry), and **F5 → "Run graphics.h program"** via a built-in run-only debug adapter. |
@@ -112,17 +112,19 @@ code --install-extension graphics-h-runner-*.vsix
 The **graphics.h Runner** icon in the Activity Bar opens the modern panel:
 
 1. **Hero + live status** — a Ready / Not ready / Checking pill with the
-   **DIU badge in the title row's top-right corner**; while anything is missing,
-   a one-click **🚀 Complete Run Setup** button appears.
+   **version chip beside it**; while anything is missing, a one-click
+   **🚀 Complete Run Setup** button appears.
 2. **Actions grid** — Compile & Run, Complete Run Setup, Setup Doctor, Compile,
-   Run Last Build, Stop Running Program, Copy Compile Command, Open Examples
-   Folder. The actions **stay put** while you browse programs.
+   Run Last Build, Stop Running Program, Copy Compile Command. The actions
+   **stay put** while you browse programs.
 3. **Example Programs** — 23 emoji cards (tagged `classic`/`fun`/`math`/`interactive`)
    in a **collapsed-by-default section**: tap the header to expand, and the list
    **scrolls inside its own container** like a second tab below the actions
    (the choice is remembered). **▶ Run** opens the file, compiles and launches
    the graphics window in one click; **Open** just opens the source as
    `graphics-h-programs/<name>.cpp`.
+4. **Footer** — the **DIU badge sits on the exact right side** of the
+   Powered-by credit line.
 
 ## Extension settings
 

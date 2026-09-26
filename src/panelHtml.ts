@@ -6,7 +6,7 @@
  * action, every other button in the same neutral style. The 1st action
  * button (Compile & Run) is the hero: big, full-width and alone on its row;
  * the remaining actions sit below it in a 2-per-row grid. The actions block
- * shares the header row with the title / status pill / version chips and
+ * shares the header row with the title / status-pill+version-chip row and
  * uses the empty space beside them (the environment status card sits in the
  * same header, under the identity block); example programs run full width
  * below, and narrow activity bars stack naturally. Pure function,
@@ -40,7 +40,7 @@ export interface PanelHtmlOptions {
   version: string;
   nonce: string;
   cspSource: string;
-  /** Webview URI of media/diu-logo.png — shown in the title row's top-right. */
+  /** Webview URI of media/diu-logo.png — right side of the footer text. */
   logoUri?: string;
 }
 
@@ -85,22 +85,14 @@ function envCard(status: PanelStatus): string {
       </div>
     </div>`;
   }
-  /* Ready state renders NOTHING: the green pill + platform/version chips
-   * already carry the "you are good to go" message, and the extra card only
+  /* Ready state renders NOTHING: the green pill + version chip already
+   * carry the "you are good to go" message, and the extra card only
    * pushed the actions down (removed on user request, v1.4.7). */
   return '';
 }
 
-function actionButtons(commands: CommandMeta[], programCount: number): string {
+function actionButtons(commands: CommandMeta[]): string {
   return commands
-    .map(
-      (raw): CommandMeta => {
-        /* keep the hint honest — the example catalog grows every release */
-        const c: CommandMeta =
-          raw.id === 'cmd-examples' ? { ...raw, hint: `all ${programCount} programs` } : raw;
-        return c;
-      }
-    )
     .map(
       (c) =>
         `<button class="btn${c.primary ? ' btn-accent btn-hero' : ''}" data-cmd="${esc(c.commandId)}" id="${esc(c.id)}" title="${esc(c.title)}">
@@ -133,8 +125,6 @@ function programCards(programs: PanelProgramInfo[]): string {
 
 export function buildPanelHtml(opts: PanelHtmlOptions): string {
   const { programs, commands, status, version, nonce, cspSource, logoUri } = opts;
-  const platformName =
-    status.platform === 'windows' ? 'Windows · WinBGIM' : status.platform === 'macos' ? 'macOS · SDL_bgi' : 'Linux · SDL_bgi';
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -161,22 +151,25 @@ export function buildPanelHtml(opts: PanelHtmlOptions): string {
   }
   .hero { padding:2px 2px 6px; }
   .hero h1 { font-size:19px; letter-spacing:.3px; color:#f3f5f8; }
-  /* title row: title left, university badge fills only the empty top-right */
-  .brand-row { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; min-width:0; }
-  .diu-logo { height:34px; width:auto; max-width:104px; object-fit:contain;
-    flex:0 0 auto; border-radius:5px; box-shadow:0 1px 5px rgba(0,0,0,.45); }
+  /* university badge: on the exact right side of the footer — the footer
+     is a flex row (credit text left, badge right, vertically centred
+     against the whole text block) */
+  .foot-brand { display:flex; align-items:center; flex:0 0 auto; }
+  .diu-logo { height:32px; width:auto; max-width:150px; object-fit:contain;
+    border-radius:5px; box-shadow:0 1px 5px rgba(0,0,0,.45); }
   @media (max-width: 360px) {
-    .diu-logo { height:28px; max-width:84px; }
+    .diu-logo { height:26px; max-width:120px; }
   }
   .pill { display:inline-flex; align-items:center; gap:7px; font-size:11.5px; font-weight:600;
-    padding:5px 13px; border-radius:999px; margin-top:10px; border:1px solid; }
+    padding:5px 13px; border-radius:999px; border:1px solid; }
   .pill-ok   { color:var(--ok);   border-color:rgba(52,211,153,.4);  background:rgba(52,211,153,.09); }
   .pill-bad  { color:var(--bad);  border-color:rgba(248,113,113,.4); background:rgba(248,113,113,.09); }
   .pill-wait { color:var(--wait); border-color:rgba(251,191,36,.4);  background:rgba(251,191,36,.09); }
   .dot { width:7px; height:7px; border-radius:50%; background:currentColor; }
   .dot-spin { animation:pulse 1s infinite alternate; }
   @keyframes pulse { from {opacity:.35} to {opacity:1} }
-  .chips { margin-top:10px; }
+  /* status row: the Ready/Not-ready pill with the version chip beside it */
+  .status-row { display:flex; align-items:center; gap:8px; margin-top:10px; flex-wrap:wrap; }
 
   .card { background:var(--card); border:1px solid var(--card-line); border-radius:12px; padding:13px; margin-top:12px; }
   .env-card { display:flex; gap:12px; align-items:center; flex-wrap:wrap; border-color:rgba(248,113,113,.35); }
@@ -212,7 +205,7 @@ export function buildPanelHtml(opts: PanelHtmlOptions): string {
   .btn-hero .btn-hint { font-size:11px; }
 
   /* header layout: the action buttons live in the same header row as the
-     title / status pill / version chips and fill the empty space beside
+     title / status-pill row and fill the empty space beside
      them; on a narrow sidebar they wrap below the title block */
   .header { display:flex; flex-direction:column; flex:0 0 auto; }
   .header-actions { margin-top:6px; }
@@ -266,9 +259,11 @@ export function buildPanelHtml(opts: PanelHtmlOptions): string {
     border:1px solid var(--card-line); border-radius:8px; padding:4px 10px; cursor:pointer; transition:.15s; white-space:nowrap; }
   .mini-btn:hover { background:rgba(255,255,255,.15); }
 
-  .foot { font-size:10.5px; color:var(--txt-dim); margin-top:auto; line-height:1.7;
+  .foot { display:flex; align-items:center; justify-content:space-between; gap:12px;
+    font-size:10.5px; color:var(--txt-dim); margin-top:auto; line-height:1.7;
     border-top:1px solid var(--card-line); padding-top:10px; flex:0 0 auto; }
   .foot b { color:var(--txt); }
+  .foot .credit { flex:1 1 auto; min-width:0; }
   .kbd { background:rgba(255,255,255,.09); border:1px solid var(--card-line); border-radius:5px; padding:1px 6px; font-size:10px; }
   .chip { display:inline-block; font-size:10px; color:var(--txt-dim); border:1px solid var(--card-line); border-radius:999px; padding:2px 10px; margin:0 3px; }
 
@@ -284,19 +279,15 @@ export function buildPanelHtml(opts: PanelHtmlOptions): string {
 <body>
   <div class="header">
     <div class="hero">
-      <div class="brand-row">
-        <h1>graphics.h Runner</h1>
-        ${logoUri ? `<img class="diu-logo" src="${esc(logoUri)}" alt="Daffodil International University — Department of CSE" title="Powered by the Department of CSE, Dhaka International University">` : ''}
-      </div>
-      ${statusPill(status)}
-      <div class="chips"><span class="chip">${platformName}</span><span class="chip">v${esc(version)}</span></div>
+      <h1>graphics.h Runner</h1>
+      <div class="status-row">${statusPill(status)}<span class="chip">v${esc(version)}</span></div>
       ${envCard(status)}
     </div>
 
     <div class="header-actions">
       <div class="sec sec-tight"><h2>Actions</h2></div>
       <div class="stack">
-        ${actionButtons(commands, programs.length)}
+        ${actionButtons(commands)}
       </div>
     </div>
   </div>
@@ -313,9 +304,8 @@ export function buildPanelHtml(opts: PanelHtmlOptions): string {
   </div>
 
   <div class="foot">
-    Inside a .cpp file just press <span class="kbd">Ctrl+Alt+R</span> (or F5 → “Run graphics.h program”).<br>
-    errors are reported automatically (VS Code telemetry setting respected)
     <div class="credit"><b>Powered by Department of CSE, Dhaka International University, Bangladesh.</b></div>
+    ${logoUri ? `<div class="foot-brand"><img class="diu-logo" src="${esc(logoUri)}" alt="Daffodil International University — Department of CSE" title="Powered by the Department of CSE, Dhaka International University"></div>` : ''}
   </div>
 
 <script nonce="${nonce}">

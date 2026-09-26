@@ -1,5 +1,46 @@
 # ChangeLog
 
+## 1.4.9 — 2026-09-27
+
+Panel polish per user feedback, two production fixes from a new deep
+robustness battery, and cleaner header space.
+
+### Changed
+- **Version chip moved beside the Ready pill** — the pill row now reads
+  `Ready — winbgim  v1.4.9` instead of stacking the chip below it.
+- **"Open Examples Folder" action button removed from the panel** — the grid
+  is a clean 2×3 and the freed row goes to the Example Programs section
+  (more room for expansion + scrolling). The command itself remains available
+  from the Command Palette.
+- **Footer cleaned up**: the "Inside a .cpp file just press Ctrl+Alt+R…" and
+  "errors are reported automatically…" lines are gone (the shortcut stays on
+  the Compile & Run button), and the **DIU badge now sits on the exact right
+  side of the footer text**, vertically centred.
+- **Platform chip ("Windows · WinBGIM") removed from the top** — the library
+  is already visible in the Ready pill.
+
+### Fixed
+- **Status bar no longer lies while compiling**: a plain Compile (or a failed
+  rebuild) while a graphics program is running used to flip the indicator
+  back to "idle" even though the program's terminal was still alive; the
+  RUNNING indicator is now preserved (and Stop / Ctrl+Alt+S keep working).
+- **Turbo C++ textbook code with `const char*` strings now compiles on
+  Linux/macOS**: SDL_bgi declares `outtextxy`/`outtext`/`textheight`/
+  `textwidth`/`initgraph`/… with non-const `char*` parameters, so any
+  indirect const string (ternary, const variable) was a hard compile error.
+  Auto-setup now const-corrects the installed header (12 read-only text
+  APIs) after the build — the library binary is unchanged.
+
+### Added
+- **Robustness battery** (`test/robust-tests.js`, 24 checks): complex
+  fixtures (Julia-set math, gravity animation, conio-style poll menu,
+  getimage/putimage verbs, viewport clipping, text-metrics layout, fill
+  patterns, an 18,800-primitive stress test), terminal-I/O correctness with
+  piped stdin + EOF fallback, crash surfacing (SIGSEGV exits non-zero, never
+  hangs, display stays healthy), stop-mid-flight + immediate replace, the
+  production diagnostics parser fed with real g++ output, and rapid re-run
+  cycling.
+
 ## 1.4.8 — 2026-09-26
 
 ### Fixed
