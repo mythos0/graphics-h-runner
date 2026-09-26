@@ -1,8 +1,8 @@
 {
   "name": "graphics-h-runner",
   "displayName": "graphics.h Runner — BGI C++ Graphics Toolkit",
-  "description": "Compile & run C++ graphics.h programs (WinBGIM / SDL_bgi) with one keypress. Auto-detects graphics.h, applies the right linker flags per OS, auto-installs everything from zero, and ships a sidebar with 9 runnable examples, a Setup Doctor, snippets and templates.",
-  "version": "1.3.0",
+  "description": "Compile & run C++ graphics.h programs (WinBGIM / SDL_bgi) with one keypress or F5. Auto-detects graphics.h, applies the right linker flags per OS, auto-installs everything from zero, and ships a modern sidebar with 18 runnable examples, a Setup Doctor and snippets.",
+  "version": "1.4.0",
   "publisher": "mythos0-labs",
   "author": {
     "name": "Department of CSE, Dhaka International University",
@@ -61,7 +61,8 @@
   "activationEvents": [
     "onLanguage:cpp",
     "onLanguage:c",
-    "onView:graphics-h-runner.programs"
+    "onView:graphics-h-runner.programs",
+    "onDebug:type:graphics-h"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -109,26 +110,62 @@
       },
       {
         "command": "graphics-h-runner.setupEverything",
-        "title": "Full Setup — Install Everything (0 to running)",
+        "title": "Complete graphics.h Run Setup",
         "category": "graphics.h",
         "icon": "$(rocket)"
       },
       {
-        "command": "graphics-h-runner.insertTemplate",
-        "title": "Insert Code Template",
-        "category": "graphics.h"
+        "command": "graphics-h-runner.stopProgram",
+        "title": "Stop Running Program",
+        "category": "graphics.h",
+        "icon": "$(debug-stop)"
       },
       {
-        "command": "graphics-h-runner.showGuide",
-        "title": "Show Setup Guide",
+        "command": "graphics-h-runner.copyCompileCommand",
+        "title": "Copy Compile Command",
         "category": "graphics.h",
-        "icon": "$(book)"
+        "icon": "$(copy)"
+      },
+      {
+        "command": "graphics-h-runner.openExamplesFolder",
+        "title": "Open Examples Folder",
+        "category": "graphics.h",
+        "icon": "$(folder-opened)"
       },
       {
         "command": "graphics-h-runner.openProgram",
         "title": "Open Example Program",
         "category": "graphics.h",
         "icon": "$(go-to-file)"
+      }
+    ],
+    "debuggers": [
+      {
+        "type": "graphics-h",
+        "label": "graphics.h Runner",
+        "languages": ["cpp", "c"],
+        "configurationAttributes": {
+          "launch": {
+            "properties": {
+              "program": {
+                "type": "string",
+                "description": "Path to the .cpp file to compile and run. Defaults to the active editor (${file})."
+              }
+            }
+          }
+        },
+        "configurationSnippets": [
+          {
+            "label": "graphics.h Runner: compile & run current file",
+            "description": "Compile with the right graphics.h flags and launch the graphics window",
+            "body": {
+              "type": "graphics-h",
+              "request": "launch",
+              "name": "Run graphics.h program",
+              "program": "${file}"
+            }
+          }
+        ]
       }
     ],
     "configuration": {
@@ -218,6 +255,18 @@
       }
     ],
     "menus": {
+      "editor/title/run": [
+        {
+          "command": "graphics-h-runner.compileAndRun",
+          "when": "resourceLangId == cpp || resourceLangId == c",
+          "group": "navigation@1"
+        },
+        {
+          "command": "graphics-h-runner.compile",
+          "when": "resourceLangId == cpp || resourceLangId == c",
+          "group": "navigation@2"
+        }
+      ],
       "editor/context": [
         {
           "command": "graphics-h-runner.compileAndRun",
@@ -237,31 +286,9 @@
           "group": "navigation@0"
         },
         {
-          "command": "graphics-h-runner.compileAndRun",
-          "when": "view == graphics-h-runner.programs",
-          "group": "navigation@1"
-        },
-        {
-          "command": "graphics-h-runner.compile",
-          "when": "view == graphics-h-runner.programs",
-          "group": "navigation@2"
-        },
-        {
           "command": "graphics-h-runner.doctor",
           "when": "view == graphics-h-runner.programs",
-          "group": "navigation@3"
-        },
-        {
-          "command": "graphics-h-runner.showGuide",
-          "when": "view == graphics-h-runner.programs",
-          "group": "navigation@4"
-        }
-      ],
-      "view/item/context": [
-        {
-          "command": "graphics-h-runner.openProgram",
-          "when": "view == graphics-h-runner.programs && viewItem == program",
-          "group": "inline"
+          "group": "navigation@1"
         }
       ]
     },

@@ -1,5 +1,64 @@
 # ChangeLog
 
+## 1.4.0 — 2026-09-26
+
+The activity-bar panel becomes a real webpage, F5 runs graphics programs, the
+command list gets leaner, and 9 new fun examples join the catalog — 18 in total.
+
+### Added
+- **Modern webpage-style panel (Activity Bar)** — the plain black-and-white
+  tree view is replaced by a styled webview: gradient hero with the DIU logo
+  and "made by Department of CSE, Dhaka International University, Bangladesh"
+  credit, a live environment card (Ready / Not ready / Checking with a
+  one-click **Complete Run Setup** call-to-action while anything is missing),
+  a 2-column action grid, and an emoji card for every example program with
+  **▶ Run** (open + compile + launch in one click) and **Open** buttons.
+  Responsive layout adapts to narrow sidebars; looks identical in light &
+  dark themes.
+- **Run and Debug integration (F5)** — a `graphics-h` debug type with a
+  minimal run-only adapter: pressing **F5** offers **"Run graphics.h program"**
+  next to the other debuggers, and launching it compiles the active file and
+  opens the graphics window through the normal pipeline (progress, output and
+  setup offers included).
+- **Run button dropdown** — Compile & Run and Compile now appear in the
+  editor's **▶ run button menu** right beside the C/C++ extension's
+  "Run C++ File" entry (for `.cpp`/`.c` files).
+- **9 new fun example programs** (18 total): Winking Smiley 😊, Bouncing
+  Balls 🎱, Fireworks Show 🎆, Solar System 🪐, Aquarium 🐠, Rainbow Spiral
+  🌈, Helicopter 🚁, Sunset Scene 🌅, Warp Starfield ✨ — all auto-exiting,
+  keyboard-dismissible, and portable across WinBGIM and SDL_bgi.
+- **Stop Running Program** (`graphics-h-runner.stopProgram`) — kills the
+  graphics window of the last launched program (process-tree `taskkill` on
+  Windows, runner-terminal dispose fallback elsewhere).
+- **Copy Compile Command** (`graphics-h-runner.copyCompileCommand`) — copies
+  the exact compiler command line for the active file to the clipboard —
+  handy for labs, terminals and reports.
+- **Open Examples Folder** (`graphics-h-runner.openExamplesFolder`) — copies
+  all 18 examples into `graphics-h-programs/` in the workspace and reveals
+  the folder (or offers to open an examples workspace when no folder is open).
+- Panel buttons show a live "Compiling…" pill while a build is running.
+
+### Changed
+- **"Full Setup (0 to running)" is renamed to
+  "Complete graphics.h Run Setup"** (command id unchanged:
+  `graphics-h-runner.setupEverything`); all user-facing copy updated.
+- The sidebar catalog now ships **18 example programs**; program cards carry
+  `classic` / `fun` / `math` / `interactive` tags.
+
+### Removed
+- **Insert Code Template** command and the 5 quick templates (the 18 samples
+  cover the same ground; snippets remain).
+- **Show Setup Guide** command and the in-editor guide webview (the Setup
+  Doctor + Complete Setup remain the guided paths).
+
+### Fixed
+- **Fireworks sample crash (SDL_bgi)** — calling `putpixel()` right after a
+  per-frame `cleardevice()` races with SDL_bgi's surface flip and can kill
+  the graphics window (intermittent SIGSEGV in `putpixel` inside
+  libSDL_bgi.so, reproduced ~1 in 3 runs and backtrace-verified). The sample
+  now draws stars/particles with `bar()` filled rects — 8/8 clean runs and
+  18/18 screenshot-verified samples after the fix.
+
 ## 1.3.0 — 2026-09-25
 
 Automatic error collection via Sentry, so setup/compile failures on any PC are

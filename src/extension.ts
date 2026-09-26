@@ -33,10 +33,9 @@ import {
   discoverGppWindows,
   verifyCompilerRun
 } from './setup';
-import { TEMPLATES } from './templates';
-import { guideHtml } from './guide';
 import { loadProgramCatalog, LoadedProgram, resolveProgramTarget } from './programs';
-import { ProgramsViewProvider } from './programsView';
+import { GhPanelProvider, PanelClick } from './panelView';
+import { registerGraphicsHDebugger, LaunchOutcome } from './debugAdapter';
 import {
   normalizeCompilerPath,
   normalizeDirList,
@@ -61,7 +60,10 @@ let output: vscode.OutputChannel;
 let statusItem: vscode.StatusBarItem | undefined;
 let doctorCache: DoctorResult | undefined;
 let doctorRunning: Promise<DoctorResult> | undefined;
-let programsView: ProgramsViewProvider | undefined;
+let panel: GhPanelProvider | undefined;
+let catalog: LoadedProgram[] = [];
+let lastRunChild: import('child_process').ChildProcess | null = null;
+let lastRunTerminal: vscode.Terminal | undefined;
 
 interface ExtensionConfig {
   compilerPath: string;
@@ -185,7 +187,7 @@ async function runFullSetup(context: vscode.ExtensionContext): Promise<void> {
   const summary: string[] = [];
 
   await vscode.window.withProgress(
-    { location: vscode.ProgressLocation.Notification, title: 'graphics.h: Full Setup', cancellable: false },
+    { location: vscode.ProgressLocation.Notification, title: 'graphics.h: Complete Setup', cancellable: false },
     async (progress) => {
       progress.report({ message: 'Checking the current environment…' });
       const doctor = await probeEnvironment({
@@ -213,6 +215,7 @@ async function runFullSetup(context: vscode.ExtensionContext): Promise<void> {
 
       for (const step of plan) {
         progress.report({ message: step.title });
+        panel?.setBusy(true, step.title);
 
         if (step.kind === 'auto' && step.id === 'install-sdl_bgi') {
           /* never attempt the build while the compiler is still missing —
@@ -306,7 +309,7 @@ async function runFullSetup(context: vscode.ExtensionContext): Promise<void> {
           });
           doctorCache = res;
           updateStatusBar();
-          programsView?.setDoctorResult(res);
+          panel?.setDoctorResult(res);
           summary.push(
             res.graphicsReady
               ? `VERIFIED: graphics.h is ready (library: ${res.bestLibrary}). Press Ctrl+Alt+R inside a graphics.h program to run it.`
@@ -321,15 +324,16 @@ async function runFullSetup(context: vscode.ExtensionContext): Promise<void> {
     }
   );
 
+  panel?.setBusy(false);
   output.show(true);
-  output.appendLine('=== Full Setup summary ===');
+  output.appendLine('=== Complete Setup summary ===');
   summary.forEach((s) => output.appendLine('- ' + s));
   addExtensionBreadcrumb('setup', 'full setup finished', { steps: String(summary.length) });
 
   const needsAction = summary.some((s) => s.startsWith('ACTION NEEDED'));
   if (needsAction) {
     const pick = await vscode.window.showInformationMessage(
-      'A few system packages must be installed with your password. Run the printed commands in the terminal, then re-run "Full Setup" to verify.',
+      'A few system packages must be installed with your password. Run the printed commands in the terminal, then re-run "Complete Setup" to verify.',
       'Open Terminal',
       'Show Output'
     );
@@ -343,7 +347,7 @@ async function runFullSetup(context: vscode.ExtensionContext): Promise<void> {
       'Everything is set up! Open a .cpp file that includes <graphics.h> and press Ctrl+Alt+R.'
     );
   } else {
-    vscode.window.showWarningMessage('Full Setup finished with problems — see the graphics.h Runner output.');
+    vscode.window.showWarningMessage('Complete Setup finished with problems — see the graphics.h Runner output.');
   }
 }
 
@@ -490,6 +494,8 @@ function runBinary(sourceFile: string): void {
         runInTerminal(bin, platform);
       });
       child.unref();
+      lastRunChild = child;
+      lastRunTerminal = undefined;
       log('[run] ' + bin + ' (detached)');
       addExtensionBreadcrumb('run', 'detached', { file: path.basename(bin) });
       return;
@@ -512,6 +518,44 @@ function runInTerminal(bin: string, platform: string): void {
   const cmd = platform === 'windows' ? `& "${abs}"` : `"${abs}"`;
   log('[run] ' + cmd);
   term.sendText(cmd, true);
+  lastRunTerminal = term;
+}
+
+/** Kill the most recently launched graphics program (Stop command). */
+async function stopRunningProgram(): Promise<void> {
+  const child = lastRunChild;
+  const term = lastRunTerminal;
+  lastRunChild = null;
+  lastRunTerminal = undefined;
+
+  if (child && child.pid && child.exitCode === null) {
+    try {
+      if (currentPlatform() === 'windows') {
+        /* /T = whole tree, /F = force — works for detached GUI exes */
+        await new Promise<void>((resolve) => {
+          const killer = spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true });
+          killer.on('close', () => resolve());
+          killer.on('error', () => resolve());
+        });
+      } else {
+        child.kill('SIGKILL');
+      }
+      log('[stop] killed running program (pid ' + child.pid + ')');
+      vscode.window.showInformationMessage('Stopped the running graphics program.');
+      return;
+    } catch (e) {
+      log('[stop] kill failed: ' + String(e));
+    }
+  }
+
+  if (term && !term.exitStatus) {
+    term.dispose(); /* closes the shell and with it the running binary */
+    log('[stop] disposed runner terminal');
+    vscode.window.showInformationMessage('Stopped the running graphics program.');
+    return;
+  }
+
+  vscode.window.showInformationMessage('No graphics.h program is currently running.');
 }
 
 async function getTargetSourceFile(): Promise<string | undefined> {
@@ -591,12 +635,12 @@ function showNoCompilerHelp(): void {
   vscode.window
     .showErrorMessage(
       'No C++ compiler found on this PC. graphics.h Runner can set up everything from zero — compiler + graphics library, no admin rights.',
-      'Set up everything (recommended)',
+      'Complete Run Setup (recommended)',
       'Run Setup Doctor',
       'Show Output'
     )
     .then((pick) => {
-      if (pick === 'Set up everything (recommended)') {
+      if (pick === 'Complete Run Setup (recommended)') {
         vscode.commands.executeCommand('graphics-h-runner.setupEverything');
       } else if (pick === 'Run Setup Doctor') {
         vscode.commands.executeCommand('graphics-h-runner.doctor');
@@ -654,7 +698,7 @@ async function runDoctor(verbose: boolean): Promise<DoctorResult> {
   const res = await doctorRunning;
   doctorCache = res;
   updateStatusBar();
-  programsView?.setDoctorResult(res);
+  panel?.setDoctorResult(res);
   addExtensionBreadcrumb('doctor', res.graphicsReady ? 'ready' : 'not ready', {
     compilerOk: String(res.compilerCheck.ok),
     bestLibrary: String(res.bestLibrary || '')
@@ -685,46 +729,19 @@ async function runDoctor(verbose: boolean): Promise<DoctorResult> {
           }
         });
     } else {
-      const picks = ['Fix automatically', 'Show Output', 'Show Setup Guide'];
+      const picks = ['Fix automatically', 'Show Output'];
       const pick = await vscode.window.showWarningMessage(
         'graphics.h environment is not ready yet. The Setup Doctor found problems.',
         ...picks
       );
       if (pick === 'Show Output') {
         output.show(true);
-      } else if (pick === 'Show Setup Guide') {
-        vscode.commands.executeCommand('graphics-h-runner.showGuide');
       } else if (pick === 'Fix automatically') {
         vscode.commands.executeCommand('graphics-h-runner.setupEverything');
       }
     }
   }
   return res;
-}
-
-/* ---------------- templates ---------------- */
-
-async function insertTemplate(): Promise<void> {
-  const pick = await vscode.window.showQuickPick(
-    TEMPLATES.map((t) => ({ label: t.label, description: t.description, template: t })),
-    { placeHolder: 'Insert a graphics.h code template' }
-  );
-  if (!pick) {
-    return;
-  }
-
-  const editor = vscode.window.activeTextEditor;
-  if (editor) {
-    await editor.edit((eb) => {
-      eb.insert(editor.selection.start, pick.template.code);
-    });
-  } else {
-    const doc = await vscode.workspace.openTextDocument({
-      language: 'cpp',
-      content: pick.template.code
-    });
-    await vscode.window.showTextDocument(doc);
-  }
 }
 
 /* ---------------- sidebar: open a program as filename.cpp ---------------- */
@@ -761,20 +778,100 @@ async function openProgram(program: LoadedProgram): Promise<void> {
   }
 }
 
-/* ---------------- setup guide ---------------- */
+/** Copy every bundled example into a workspace folder and reveal it. */
+async function openExamplesFolder(context: vscode.ExtensionContext): Promise<void> {
+  try {
+    const catalog = loadProgramCatalog(context.extensionPath);
+    if (catalog.length === 0) {
+      vscode.window.showErrorMessage('No example programs were found in the installation.');
+      return;
+    }
+    const folder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    if (folder) {
+      const dir = path.join(folder, 'graphics-h-programs');
+      fs.mkdirSync(dir, { recursive: true });
+      for (const prog of catalog) {
+        const target = path.join(dir, prog.filename);
+        if (!fs.existsSync(target)) {
+          fs.writeFileSync(target, prog.source, 'utf8');
+        }
+      }
+      log('[examples] copied ' + catalog.length + ' programs to ' + dir);
+      await vscode.commands.executeCommand('revealInExplorer', vscode.Uri.file(dir));
+      void vscode.window.showInformationMessage(
+        `${catalog.length} example programs are in graphics-h-programs/ — open any and press Ctrl+Alt+R.`
+      );
+    } else {
+      /* no workspace: offer to open the examples as a workspace folder */
+      const pick = await vscode.window.showInformationMessage(
+        'Open a folder first so the examples have somewhere to live. Open the examples folder as a workspace?',
+        'Open Examples Folder',
+        'Cancel'
+      );
+      if (pick === 'Open Examples Folder') {
+        const dir = path.join(context.globalStorageUri.fsPath, 'examples');
+        fs.mkdirSync(dir, { recursive: true });
+        for (const prog of catalog) {
+          const target = path.join(dir, prog.filename);
+          if (!fs.existsSync(target)) {
+            fs.writeFileSync(target, prog.source, 'utf8');
+          }
+        }
+        await vscode.commands.executeCommand('vscode.openFolder', vscode.Uri.file(dir), false);
+      }
+    }
+  } catch (e) {
+    vscode.window.showErrorMessage('Could not open the examples folder: ' + String(e));
+    captureExtensionError(e, { command: 'openExamplesFolder' });
+  }
+}
 
-function showGuide(context: vscode.ExtensionContext): void {
-  const panel = vscode.window.createWebviewPanel(
-    'graphicsHSetupGuide',
-    'graphics.h Setup Guide',
-    vscode.ViewColumn.One,
-    {}
-  );
-  panel.webview.html = guideHtml(currentPlatform());
-  context.subscriptions.push(panel);
+/** Copy the exact compiler command line for the active file to the clipboard. */
+async function copyCompileCommand(): Promise<void> {
+  const file = await getTargetSourceFile();
+  if (!file) {
+    return;
+  }
+  try {
+    const plan = resolvePlan(file, getConfig());
+    await vscode.env.clipboard.writeText(plan.commandLine);
+    void vscode.window.showInformationMessage('Compile command copied to the clipboard.', 'Show Output').then((pick) => {
+      if (pick === 'Show Output') {
+        output.show(true);
+      }
+    });
+    log('[copy] ' + plan.commandLine);
+  } catch (e) {
+    vscode.window.showErrorMessage('Could not build the compile command: ' + String(e));
+  }
 }
 
 /* ---------------- activation ---------------- */
+
+/** Panel click router: buttons in the webview land here. */
+async function handlePanelClick(msg: PanelClick): Promise<void> {
+  if (msg.type === 'command') {
+    const known = await vscode.commands.getCommands().then((all) => all.includes(msg.command));
+    if (known) {
+      await vscode.commands.executeCommand(msg.command);
+    } else {
+      vscode.window.showErrorMessage('Unknown action: ' + msg.command);
+    }
+    return;
+  }
+  const prog = catalog.find((p) => p.id === msg.id);
+  if (!prog) {
+    vscode.window.showErrorMessage('Example program not found: ' + msg.id);
+    return;
+  }
+  if (msg.type === 'openProgram') {
+    await openProgram(prog);
+    return;
+  }
+  /* runProgram: open + compile + run in one click */
+  await openProgram(prog);
+  await vscode.commands.executeCommand('graphics-h-runner.compileAndRun');
+}
 
 export function activate(context: vscode.ExtensionContext): void {
   output = vscode.window.createOutputChannel(OUTPUT_CHANNEL_NAME);
@@ -804,16 +901,21 @@ export function activate(context: vscode.ExtensionContext): void {
     /* errors already logged */
   });
 
-  // ---- sidebar: graphics.h Programs (activity bar) ----
-  const catalog = loadProgramCatalog(context.extensionPath);
-  log(`[programs] sidebar catalog: ${catalog.length} programs loaded`);
-  const viewProvider = new ProgramsViewProvider(catalog);
-  programsView = viewProvider;
+  // ---- activity bar: modern webpage-style panel ----
+  catalog = loadProgramCatalog(context.extensionPath);
+  log(`[programs] panel catalog: ${catalog.length} programs loaded`);
+  const version: string = String(context.extension.packageJSON?.version || '0.0.0');
+  const panelProvider = new GhPanelProvider(context.extensionPath, version, catalog, (msg) => {
+    void handlePanelClick(msg);
+  });
+  panel = panelProvider;
   if (doctorCache) {
-    viewProvider.setDoctorResult(doctorCache);
+    panelProvider.setDoctorResult(doctorCache);
   }
   context.subscriptions.push(
-    vscode.window.registerTreeDataProvider('graphics-h-runner.programs', viewProvider),
+    vscode.window.registerWebviewViewProvider(GhPanelProvider.VIEW_ID, panelProvider, {
+      webviewOptions: { retainContextWhenHidden: true }
+    }),
 
     vscode.commands.registerCommand(
       'graphics-h-runner.openProgram',
@@ -823,21 +925,47 @@ export function activate(context: vscode.ExtensionContext): void {
     )
   );
 
+  // ---- F5 / Run-and-Debug integration ("Run graphics.h program") ----
+  registerGraphicsHDebugger(context, async (file, outputLine): Promise<LaunchOutcome> => {
+    panel?.setBusy(true, 'Compiling ' + path.basename(file) + '…');
+    try {
+      const result = await compileSource(file);
+      if (result === 'ok') {
+        outputLine('Compiled OK — launching the graphics window.');
+        runBinary(file);
+        return { ok: true, message: '' };
+      }
+      if (result === 'no-compiler') {
+        showNoCompilerHelp();
+        return { ok: false, message: 'No working C++ compiler was found on this PC.' };
+      }
+      showCompileFailure(file);
+      return { ok: false, message: 'Compilation failed — see the graphics.h Runner output.' };
+    } finally {
+      panel?.setBusy(false);
+    }
+  });
+
   context.subscriptions.push(
     vscode.commands.registerCommand(
       'graphics-h-runner.compileAndRun',
       trackedCommand('compileAndRun', async () => {
-      const file = await getTargetSourceFile();
-      if (!file) {
-        return;
-      }
-        const result = await compileSource(file);
-        if (result === 'ok') {
-          runBinary(file);
-        } else if (result === 'no-compiler') {
-          showNoCompilerHelp();
-        } else {
-          showCompileFailure(file);
+        panel?.setBusy(true, 'Compiling…');
+        try {
+          const file = await getTargetSourceFile();
+          if (!file) {
+            return;
+          }
+          const result = await compileSource(file);
+          if (result === 'ok') {
+            runBinary(file);
+          } else if (result === 'no-compiler') {
+            showNoCompilerHelp();
+          } else {
+            showCompileFailure(file);
+          }
+        } finally {
+          panel?.setBusy(false);
         }
       })
     ),
@@ -845,19 +973,24 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand(
       'graphics-h-runner.compile',
       trackedCommand('compile', async () => {
-      const file = await getTargetSourceFile();
-      if (!file) {
-        return;
-      }
-        const result = await compileSource(file);
-        if (result === 'ok') {
-          vscode.window.showInformationMessage(
-            `Compiled OK: ${path.basename(binaryPathFor(file, currentPlatform()))}`
-          );
-        } else if (result === 'no-compiler') {
-          showNoCompilerHelp();
-        } else {
-          showCompileFailure(file);
+        panel?.setBusy(true, 'Compiling…');
+        try {
+          const file = await getTargetSourceFile();
+          if (!file) {
+            return;
+          }
+          const result = await compileSource(file);
+          if (result === 'ok') {
+            vscode.window.showInformationMessage(
+              `Compiled OK: ${path.basename(binaryPathFor(file, currentPlatform()))}`
+            );
+          } else if (result === 'no-compiler') {
+            showNoCompilerHelp();
+          } else {
+            showCompileFailure(file);
+          }
+        } finally {
+          panel?.setBusy(false);
         }
       })
     ),
@@ -874,6 +1007,13 @@ export function activate(context: vscode.ExtensionContext): void {
     ),
 
     vscode.commands.registerCommand(
+      'graphics-h-runner.stopProgram',
+      trackedCommand('stopProgram', () => {
+        void stopRunningProgram();
+      })
+    ),
+
+    vscode.commands.registerCommand(
       'graphics-h-runner.doctor',
       trackedCommand('doctor', async () => {
         await runDoctor(true).catch(() => undefined);
@@ -886,22 +1026,23 @@ export function activate(context: vscode.ExtensionContext): void {
         void runFullSetup(context).catch((e) => {
           log('[setup] crashed: ' + String(e));
           captureExtensionError(e, { command: 'setupEverything' });
-          vscode.window.showErrorMessage('Full Setup failed: ' + String(e));
+          panel?.setBusy(false);
+          vscode.window.showErrorMessage('Complete Setup failed: ' + String(e));
         });
       })
     ),
 
     vscode.commands.registerCommand(
-      'graphics-h-runner.insertTemplate',
-      trackedCommand('insertTemplate', () => {
-        void insertTemplate();
+      'graphics-h-runner.copyCompileCommand',
+      trackedCommand('copyCompileCommand', () => {
+        void copyCompileCommand();
       })
     ),
 
     vscode.commands.registerCommand(
-      'graphics-h-runner.showGuide',
-      trackedCommand('showGuide', () => {
-        showGuide(context);
+      'graphics-h-runner.openExamplesFolder',
+      trackedCommand('openExamplesFolder', () => {
+        void openExamplesFolder(context);
       })
     ),
 
@@ -909,8 +1050,14 @@ export function activate(context: vscode.ExtensionContext): void {
       if (e.affectsConfiguration(CONFIG_PREFIX)) {
         doctorCache = undefined;
         updateStatusBar();
-        programsView?.setDoctorResult(undefined);
+        panel?.setDoctorResult(undefined);
         void runDoctor(false).catch(() => undefined);
+      }
+    }),
+
+    vscode.window.onDidCloseTerminal((t) => {
+      if (t === lastRunTerminal) {
+        lastRunTerminal = undefined;
       }
     })
   );
