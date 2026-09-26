@@ -96,19 +96,49 @@ check('8 action buttons carrying COMMAND_META ids', () => {
   }
 });
 
-check('each action button has its own distinct color', () => {
+check('action buttons: exactly one green accent (primary), all others uniform neutral', () => {
   const h = html({});
-  const colors = ['violet', 'amber', 'emerald', 'blue', 'cyan', 'rose', 'fuchsia', 'lime'];
-  for (const c of COMMAND_META) {
-    const m = h.match(new RegExp('<button class="([^"]*)" data-cmd="[^"]*" id="' + c.id + '"'));
-    assert.ok(m, 'button markup missing for ' + c.id);
-    assert.match(m[1], /btn-color/, 'no shared color styling on ' + c.id);
-    assert.match(m[1], /btn-(violet|amber|emerald|blue|cyan|rose|fuchsia|lime)/, 'no color class on ' + c.id);
+  const re = /<button class="([^"]*)" data-cmd="[^"]*" id="(cmd-[^"]+)"/g;
+  let m, accent = 0, total = 0, firstId = null;
+  while ((m = re.exec(h)) !== null) {
+    total++;
+    if (m[1].includes('btn-accent')) { accent++; firstId = firstId || m[2]; }
+    assert.ok(!/btn-(violet|amber|emerald|blue|cyan|rose|fuchsia|lime)/.test(m[1]), 'rainbow color class found on ' + m[2]);
   }
-  for (const col of colors) {
-    const n = (h.match(new RegExp('btn-' + col + '"', 'g')) || []).length;
-    assert.strictEqual(n, 1, 'color ' + col + ' used ' + n + ' times (want exactly 1)');
-  }
+  assert.strictEqual(total, 8, 'action button count ' + total);
+  assert.strictEqual(accent, 1, 'accent button count ' + accent);
+  assert.strictEqual(firstId, 'cmd-compileAndRun', 'accent is not the 1st action button');
+  assert.ok(!h.includes('mini-run'), 'card Run buttons must stay neutral');
+});
+
+check('not-ready state: env CTA carries the green accent', () => {
+  const h = html({ state: 'not-ready', compilerOk: false, library: null });
+  const m = h.match(/<button class="([^"]*)"[^>]*id="env-cta"/);
+  assert.ok(m && m[1].includes('btn-accent'), 'env CTA is not accent-styled');
+});
+
+check('dark neutral theme: flat background, no blueish gradients', () => {
+  const h = html({});
+  assert.ok(h.includes('--bg:#0f1115'), 'dark neutral background var missing');
+  assert.ok(!h.includes('radial-gradient'), 'radial gradient found');
+  assert.ok(!h.includes('linear-gradient(160deg'), 'page-wide gradient found');
+  assert.ok(!h.includes('#171538') && !h.includes('#7c5cff') && !h.includes('#22d3ee'), 'old indigo/violet palette leaked');
+});
+
+check('header layout: identity + env card left, action buttons beside them; programs full-width below', () => {
+  const h = html({});
+  const header = h.slice(h.indexOf('class="header"'), h.indexOf('class="sec"'));
+  assert.ok(header.includes('graphics.h Runner'), 'title not in the header');
+  assert.ok(header.includes('id="env-pill"'), 'status pill not in the header');
+  assert.ok(header.includes('class="chip"'), 'version/platform chips not in the header');
+  assert.ok(header.includes('id="env-card"'), 'env status card not in the header');
+  assert.ok(header.indexOf('id="env-card"') < header.indexOf('id="cmd-compileAndRun"'),
+    'action buttons are not beside the identity/status block');
+  const below = h.slice(h.indexOf('class="sec"'));
+  assert.ok(below.includes('id="programs"'), 'program cards missing below the header');
+  assert.ok(below.includes('class="foot"'), 'footer missing below the header');
+  assert.ok(h.includes('@media (min-width: 620px)'), 'wide-header media query missing');
+  assert.ok(!h.includes('col-side') && !h.includes('col-main'), 'old two-pane classes leaked');
 });
 
 check('CSP: nonce script + cspSource in img-src, no inline handlers', () => {
@@ -155,6 +185,47 @@ check('keyboard hint + telemetry disclosure in footer', () => {
   const h = html({});
   assert.ok(h.includes('Ctrl+Alt+R'), 'kbd hint missing');
   assert.ok(h.includes('telemetry setting'), 'telemetry disclosure missing');
+});
+
+check('hero button: exactly one, it is Compile & Run, full-width alone on its row', () => {
+  const h = html({});
+  const heroes = (h.match(/btn-accent btn-hero/g) || []).length;
+  assert.strictEqual(heroes, 1, 'hero button count ' + heroes);
+  const m = h.match(/<button class="([^"]*)"[^>]*id="cmd-compileAndRun"/);
+  assert.ok(m && m[1].includes('btn-hero'), '1st action button is not the hero');
+  assert.ok(h.includes('grid-column: 1 / -1'), 'hero must span the full row');
+  assert.ok(h.includes('.btn-hero .btn-title'), 'hero typography rules missing');
+  /* the other 7 stay in the 2-per-row grid */
+  const re = /<button class="([^"]*)" data-cmd="[^"]*" id="(cmd-[^"]+)"/g;
+  let m2, grid = 0;
+  while ((m2 = re.exec(h)) !== null) {
+    if (!m2[1].includes('btn-hero')) grid++;
+  }
+  assert.strictEqual(grid, 7, 'secondary buttons not in the grid: ' + grid);
+  assert.ok(h.includes('repeat(2, minmax(0, 1fr))'), '2-per-row grid rule missing');
+  assert.ok(h.includes('@media (max-width: 299px)'), 'very-narrow single-column fallback missing');
+});
+
+check('liveness: page pongs on load and answers pings (service-worker watchdog)', () => {
+  const h = html({});
+  assert.ok(h.includes("postMessage({ type: 'pong' })"), 'load pong missing');
+  assert.ok(h.includes("m.type === 'ping'"), 'ping handler missing');
+  assert.ok(h.includes("postMessage({ type: 'pong' })"), 'pong reply missing');
+});
+
+check('fallback page: dark recovery notice + retry button + pong, no external assets', () => {
+  const { buildFallbackPanelHtml } = require(path.join(ROOT, 'out', 'panelHtml'));
+  const h = buildFallbackPanelHtml({
+    version: '1.4.4', nonce: 'fbnonce', cspSource: 'https://*.vscode-cdn.net',
+    reason: 'Test reason <script>alert(1)</script>'
+  });
+  assert.ok(h.includes('The panel could not load'), 'failure notice missing');
+  assert.ok(h.includes('data-cmd="graphics-h-runner.reloadPanel"'), 'retry button not wired to reloadPanel');
+  assert.ok(h.includes("postMessage({ type: 'pong' })"), 'fallback pong missing');
+  assert.ok(h.includes('graphics.h Programs (List)'), 'fallback must point at the list view');
+  assert.ok(h.includes('background:#0f1115'), 'fallback page not dark-themed');
+  assert.ok(h.includes('&lt;script&gt;alert(1)&lt;/script&gt;'), 'fallback reason not escaped');
+  assert.ok(!/\son\w+="/.test(h), 'inline handler in fallback page');
 });
 
 console.log(failures === 0 ? '\nSMOKE VIEW ALL PASS' : `\n${failures} FAILURES`);

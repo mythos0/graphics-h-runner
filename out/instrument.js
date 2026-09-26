@@ -55,6 +55,7 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.initTelemetry = initTelemetry;
 exports.isTelemetryActive = isTelemetryActive;
+exports.setTelemetryContext = setTelemetryContext;
 exports.onTelemetryConsentChanged = onTelemetryConsentChanged;
 exports.captureExtensionError = captureExtensionError;
 exports.addExtensionBreadcrumb = addExtensionBreadcrumb;
@@ -68,6 +69,11 @@ const Sentry = __importStar(require("@sentry/node"));
 const SENTRY_DSN = 'https://5e2f72e37ba24ec0179a56fccc3bc973@o4512147759235072.ingest.us.sentry.io/4512147800195072';
 /** true once Sentry.init() succeeded and the client is accepting events. */
 let telemetryActive = false;
+/** Install root of this extension (set in activate) — used for attribution. */
+let extensionRoot = '';
+/** False in Development/Test extension hosts — those are our own sandboxes
+ *  (E2E test runs) and must never feed the production error inbox. */
+let productionMode = true;
 /** Read the extension version from package.json (runtime read — bundler-safe). */
 function readExtensionVersion() {
     try {
@@ -206,13 +212,67 @@ function installNavigatorGuard() {
     }
 }
 /**
+ * VS Code's extension host is a SHARED process: every installed extension and
+ * the workbench itself run inside it. Our OnUncaughtException integration is a
+ * process-wide last-resort handler, so without filtering it captures crashes
+ * from prettier, Roo Cline, VS Code search, E2E test hosts, etc. — noise that
+ * drowns real signals (seen live: 5/5 inbox issues were other components).
+ *
+ * An event is attributable to this extension when any exception frame lives in
+ * an extension folder whose name contains the extension id ("graphics-h-runner",
+ * true for installed `~/.vscode/extensions/mythos0-labs.graphics-h-runner-x/`
+ * on all platforms and for dev/E2E checkouts) or in our bundled dist output.
+ * Events captured deliberately through captureExtensionError() carry the
+ * `ghr.source: handled` tag and always pass.
+ */
+function isAttributableToUs(event) {
+    const values = event.exception?.values || [];
+    for (const ex of values) {
+        const tags = (event.tags || {});
+        if (tags['ghr.source'] === 'handled') {
+            return true;
+        }
+    }
+    const frames = [];
+    for (const ex of values) {
+        for (const f of ex.stacktrace?.frames || []) {
+            frames.push({ filename: f.filename || undefined, abs_path: f.abs_path || undefined });
+        }
+    }
+    if (frames.length === 0) {
+        return false; /* nothing to attribute — treat as host noise */
+    }
+    const needle = 'graphics-h-runner';
+    for (const f of frames) {
+        for (const p of [f.abs_path, f.filename]) {
+            if (typeof p === 'string') {
+                const norm = p.replace(/\\/g, '/').toLowerCase();
+                if (norm.includes(needle) || norm.endsWith('/dist/extension.js')) {
+                    return true;
+                }
+            }
+        }
+    }
+    if (extensionRoot) {
+        const root = extensionRoot.replace(/\\/g, '/').toLowerCase();
+        for (const f of frames) {
+            for (const p of [f.abs_path, f.filename]) {
+                if (typeof p === 'string' && p.replace(/\\/g, '/').toLowerCase().startsWith(root)) {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+/**
  * Initialize Sentry (no-op when already active or when VS Code telemetry is off).
  * Safe to call repeatedly — called inside activate(), never at module load:
  * the extension's module evaluation must be able to fail without taking the
  * whole panel down.
  */
 function initTelemetry() {
-    if (telemetryActive || !telemetryAllowed()) {
+    if (telemetryActive || !productionMode || !telemetryAllowed()) {
         return;
     }
     installNavigatorGuard();
@@ -237,6 +297,12 @@ function initTelemetry() {
                 if (!telemetryAllowed()) {
                     return null;
                 }
+                /* Auto-captured process-wide crashes must belong to this extension.
+                 * Handled captures (tag ghr.source=handled) always pass. */
+                const isAuto = (event.exception?.values || []).some((ex) => String(ex.mechanism?.type || '').startsWith('auto.node'));
+                if (isAuto && !isAttributableToUs(event)) {
+                    return null; /* another extension's / the host's own crash — not ours */
+                }
                 return scrubEvent(event);
             },
             initialScope: {
@@ -257,6 +323,21 @@ function initTelemetry() {
 function isTelemetryActive() {
     return telemetryActive;
 }
+/**
+ * Record the extension's install root (attribution scope) and whether this is
+ * a production run. Development (F5) and Test (@vscode/test-electron) hosts
+ * are our own sandboxes — they must never send telemetry.
+ */
+function setTelemetryContext(options) {
+    extensionRoot = options.extensionRoot || '';
+    /* vscode.ExtensionMode.Production === 1; accept undefined (older hosts) as
+     * production so consent-gated collection keeps working there. */
+    productionMode = options.extensionMode === undefined || options.extensionMode === 1;
+    if (!productionMode && telemetryActive) {
+        telemetryActive = false;
+        void Sentry.close(500).catch(() => undefined);
+    }
+}
 /** React to `vscode.env.onDidChangeTelemetryEnabled` (live enable/disable). */
 function onTelemetryConsentChanged(enabled) {
     if (enabled) {
@@ -274,6 +355,7 @@ function captureExtensionError(error, tags) {
     }
     try {
         Sentry.captureException(error, (scope) => {
+            scope.setTag('ghr.source', 'handled'); /* attribution: ours by definition */
             if (tags) {
                 for (const [key, value] of Object.entries(tags)) {
                     scope.setTag(key, scrubText(value));

@@ -1,5 +1,37 @@
 # ChangeLog
 
+## 1.4.4 — 2026-09-26
+
+Production-hardening release: a broken example, a panel layout refresh and
+automatic recovery from a VS Code webview loading failure.
+
+### Fixed
+- **Fireworks sample failed to compile on Windows** ("'cos' was not declared
+  in this scope" on MinGW 6.3): `12_fireworks.cpp` now includes `<cmath>`
+  so `cos()`/`sin()` are always declared. All 18 examples re-verified
+  end to end (compile → run on a virtual display → screenshot → clean
+  self-exit): 18/18 PASS.
+- **"Could not register service worker: InvalidStateError"** — the webview
+  panel now watches its own liveness: the page answers a ping as soon as it
+  loads, a dead page is re-rendered once automatically (which clears the
+  service-worker race), and if it still cannot load the extension
+  **instantly reveals a native "graphics.h Programs (List)" tree view**
+  with the same 8 actions and all 18 example programs, plus a small
+  recovery page with a "Retry panel" button. Nothing is lost when the
+  webview breaks — and `Ctrl+Alt+R` keeps working regardless.
+
+### Changed
+- **Action buttons layout**: the 1st button (Compile & Run) is now the
+  hero — big, full-width and alone on its row with a soft green glow;
+  the other 7 actions sit below it in a tidy 2-per-row grid. The panel
+  keeps its flat dark theme with the single green accent.
+
+### Notes
+- Sentry noise fixed at the source: telemetry is suppressed outside
+  production, and auto-captured errors not attributable to this extension
+  are dropped, so shared-extension-host crashes (e.g. other extensions or
+  host shutdown) no longer land in our inbox.
+
 ## 1.4.3 — 2026-09-26
 
 One more panel tweak, requested right after 1.4.2:

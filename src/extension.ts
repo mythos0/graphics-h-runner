@@ -35,6 +35,7 @@ import {
 } from './setup';
 import { loadProgramCatalog, LoadedProgram, resolveProgramTarget } from './programs';
 import { GhPanelProvider, PanelClick } from './panelView';
+import { GhFallbackTreeProvider } from './programsTree';
 import { registerGraphicsHDebugger, LaunchOutcome } from './debugAdapter';
 import {
   normalizeCompilerPath,
@@ -49,6 +50,7 @@ import {
   addExtensionBreadcrumb,
   captureExtensionError,
   setRuntimeTags,
+  setTelemetryContext,
   flushTelemetry
 } from './instrument';
 
@@ -64,6 +66,7 @@ let panel: GhPanelProvider | undefined;
 let catalog: LoadedProgram[] = [];
 let lastRunChild: import('child_process').ChildProcess | null = null;
 let lastRunTerminal: vscode.Terminal | undefined;
+let storageDir: string | undefined; /* globalStorage — real files for folder-less windows */
 
 interface ExtensionConfig {
   compilerPath: string;
@@ -460,6 +463,15 @@ async function compileSource(sourceFile: string): Promise<CompileResult> {
   );
 
   addExtensionBreadcrumb('compile', result, { file: path.basename(sourceFile) });
+  if (result === 'failed') {
+    /* compile failures are the #1 "examples won't run" report — capture with
+     * context so the next one arrives in Sentry with platform + file info */
+    captureExtensionError(new Error(`g++ exited non-zero for ${path.basename(sourceFile)}`), {
+      stage: 'compile',
+      platform: currentPlatform(),
+      file: path.basename(sourceFile)
+    });
+  }
   return result;
 }
 
@@ -467,6 +479,12 @@ function runBinary(sourceFile: string): void {
   const platform = currentPlatform();
   const bin = binaryPathFor(sourceFile, platform);
   if (!fs.existsSync(bin)) {
+    captureExtensionError(new Error('run: binary not found'), {
+      stage: 'run',
+      platform,
+      file: path.basename(sourceFile),
+      bin: path.basename(bin)
+    });
     vscode.window.showErrorMessage(`Binary not found: ${bin}. Compile first.`, 'Compile now').then(
       (pick) => {
         if (pick === 'Compile now') {
@@ -491,6 +509,7 @@ function runBinary(sourceFile: string): void {
       });
       child.on('error', (e) => {
         log('[run] detached launch failed: ' + e.message + ' — falling back to terminal');
+        captureExtensionError(e, { stage: 'run-launch', platform, file: path.basename(bin) });
         runInTerminal(bin, platform);
       });
       child.unref();
@@ -762,6 +781,22 @@ async function openProgram(program: LoadedProgram): Promise<void> {
       }
       const doc = await vscode.workspace.openTextDocument(target);
       await vscode.window.showTextDocument(doc, { preview: false });
+    } else if (storageDir) {
+      /* No folder open: still give the example a REAL file on disk (private
+       * extension storage) so one-click Run works immediately — no untitled
+       * document, no Save-As dialog in the way. */
+      const dir = path.join(storageDir, 'examples');
+      fs.mkdirSync(dir, { recursive: true });
+      const realFile = path.join(dir, program.filename);
+      if (!fs.existsSync(realFile)) {
+        fs.writeFileSync(realFile, program.source, 'utf8');
+        log('[programs] created ' + realFile + ' (no workspace folder open)');
+      }
+      const doc = await vscode.workspace.openTextDocument(realFile);
+      await vscode.window.showTextDocument(doc, { preview: false });
+      void vscode.window.showInformationMessage(
+        `Opened ${program.filename} from graphics.h Runner storage — press Run to compile & launch.`
+      );
     } else {
       const doc = await vscode.workspace.openTextDocument({
         language: 'cpp',
@@ -848,8 +883,14 @@ async function copyCompileCommand(): Promise<void> {
 
 /* ---------------- activation ---------------- */
 
+/** Native TreeView shown (and focused) when the webview fails to load. */
+const FALLBACK_VIEW_ID = 'graphics-h-runner.fallback';
+
 /** Panel click router: buttons in the webview land here. */
 async function handlePanelClick(msg: PanelClick): Promise<void> {
+  if (msg.type === 'pong') {
+    return; /* liveness heartbeat — handled by the panel's watchdog */
+  }
   if (msg.type === 'command') {
     const known = await vscode.commands.getCommands().then((all) => all.includes(msg.command));
     if (known) {
@@ -878,6 +919,7 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(output);
 
   /* ---- automatic error collection (Sentry — see instrument.ts) ---- */
+  setTelemetryContext({ extensionRoot: context.extensionPath, extensionMode: context.extensionMode });
   initTelemetry(); /* consent may have flipped since module load */
   setRuntimeTags({
     'vscode.version': String(vscode.version || 'unknown'),
@@ -904,26 +946,78 @@ export function activate(context: vscode.ExtensionContext): void {
   // ---- activity bar: modern webpage-style panel ----
   catalog = loadProgramCatalog(context.extensionPath);
   log(`[programs] panel catalog: ${catalog.length} programs loaded`);
+  storageDir = context.globalStorageUri.fsPath;
   const version: string = String(context.extension.packageJSON?.version || '0.0.0');
   const panelProvider = new GhPanelProvider(context.extensionPath, version, catalog, (msg) => {
     void handlePanelClick(msg);
+  }, {
+    onWebviewEvent: (ev) => {
+      if (ev === 'retry') {
+        log('[panel] webview did not answer — re-rendering once to clear the service-worker race');
+        return;
+      }
+      if (ev === 'fallback') {
+        log('[panel] webview failed to load — switching to the list view automatically');
+        addExtensionBreadcrumb('panel', 'webview fallback engaged');
+        captureExtensionError(new Error('webview failed to load (no pong after retry render)'), {
+          stage: 'webview-fallback'
+        });
+        void (async () => {
+          await vscode.commands.executeCommand('setContext', 'graphics-h-runner.showFallback', true);
+          await vscode.commands.executeCommand(FALLBACK_VIEW_ID + '.focus');
+        })().catch(() => undefined);
+        return;
+      }
+      if (ev === 'alive') {
+        /* the webview answers again — the fallback list no longer needed */
+        void vscode.commands
+          .executeCommand('setContext', 'graphics-h-runner.showFallback', false)
+          .then(() => undefined, () => undefined);
+      }
+    }
   });
   panel = panelProvider;
   if (doctorCache) {
     panelProvider.setDoctorResult(doctorCache);
   }
+
+  /* ---- native list view: instant fallback when the webview cannot load,
+   * hidden by default (context key) and revealed only on failure ---- */
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(GhPanelProvider.VIEW_ID, panelProvider, {
       webviewOptions: { retainContextWhenHidden: true }
     }),
 
+    vscode.window.createTreeView(FALLBACK_VIEW_ID, {
+      treeDataProvider: new GhFallbackTreeProvider(catalog),
+      showCollapseAll: false
+    }),
+
+    vscode.commands.registerCommand(
+      'graphics-h-runner.runSample',
+      trackedCommand('runSample', async (programId: string) => {
+        /* used by the fallback tree: open + compile + run in one click */
+        await handlePanelClick({ type: 'runProgram', id: String(programId || '') });
+      })
+    ),
+
+    vscode.commands.registerCommand(
+      'graphics-h-runner.reloadPanel',
+      trackedCommand('reloadPanel', () => {
+        panel?.reloadPanel();
+      })
+    ),
+
     vscode.commands.registerCommand(
       'graphics-h-runner.openProgram',
-      trackedCommand('openProgram', (program: LoadedProgram) => {
-        void openProgram(program);
+      trackedCommand('openProgram', async (program: LoadedProgram) => {
+        await openProgram(program); /* awaitable: executeCommand resolves when the file is open */
       })
     )
   );
+  void vscode.commands
+    .executeCommand('setContext', 'graphics-h-runner.showFallback', false)
+    .then(() => undefined, () => undefined);
 
   // ---- F5 / Run-and-Debug integration ("Run graphics.h program") ----
   registerGraphicsHDebugger(context, async (file, outputLine): Promise<LaunchOutcome> => {
