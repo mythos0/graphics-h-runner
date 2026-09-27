@@ -200,6 +200,9 @@ async function main() {
     DISPLAY,
     SDL_VIDEODRIVER: 'x11',
     SDL_AUDIODRIVER: 'dummy',
+    /* v1.5.3: samples no longer self-exit on their own (users quit them);
+     * the battery still needs deterministic endings, so it sets the hook */
+    BGI_AUTOEXIT_MS: '12000',
     LD_LIBRARY_PATH:
       EXTRA_LIBS.join(':') + (process.env.LD_LIBRARY_PATH ? ':' + process.env.LD_LIBRARY_PATH : '')
   };

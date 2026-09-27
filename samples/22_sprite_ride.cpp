@@ -3,7 +3,7 @@
  * starfield that is repainted every frame. Erasing uses cleardevice() +
  * opaque primitive redraws, which is the portable pattern on WinBGIM and
  * SDL_bgi alike (background "restore" bitmaps copied from the initial
- * transparent surface do not erase on SDL_bgi). Runs at most 12 seconds;
+ * transparent surface do not erase on SDL_bgi). Runs until you quit;
  * any key quits.
  */
 #include <graphics.h>
@@ -59,8 +59,13 @@ int main ( )
 
     int x = 40, y = my / 2 - SH / 2;
     int dx = 5, dy = 3;
+    /* v1.5.3: runs until YOU quit (press a key). The automated test
+     * battery sets BGI_AUTOEXIT_MS so runs still finish by themselves
+     * there; real users never set it. */
+    long autoexitMs = 0;
+    { const char* ae = getenv("BGI_AUTOEXIT_MS"); if (ae) autoexitMs = atol(ae); }
     time_t start = time(NULL);
-    while (!kbhit() && time(NULL) - start < 12) {
+    while (!kbhit() && (autoexitMs <= 0 || time(NULL) - start < autoexitMs / 1000)) {
         /* erase: cleardevice() fills with OPAQUE background black, which
          * erases properly on every BGI implementation */
         cleardevice();

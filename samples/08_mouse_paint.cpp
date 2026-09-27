@@ -1,8 +1,9 @@
 /* 08_mouse_paint.cpp — left-click paints, right-click changes color,
  * any key exits. A welcome pattern is pre-drawn so the canvas is never
- * empty; runs at most 12 seconds.
+ * empty; runs until you quit.
  */
 #include <graphics.h>
+#include <cstdlib>
 #include <ctime>
 
 int main ( )
@@ -34,8 +35,13 @@ int main ( )
     outtextxy(200, 440, (char*)"mouse paint demo");
 
     int color = RED;
+    /* v1.5.3: runs until YOU quit (press a key). The automated test
+     * battery sets BGI_AUTOEXIT_MS so runs still finish by themselves
+     * there; real users never set it. */
+    long autoexitMs = 0;
+    { const char* ae = getenv("BGI_AUTOEXIT_MS"); if (ae) autoexitMs = atol(ae); }
     time_t start = time(NULL);
-    while (!kbhit() && time(NULL) - start < 12) {
+    while (!kbhit() && (autoexitMs <= 0 || time(NULL) - start < autoexitMs / 1000)) {
         /* mousex()/mousey() work on both WinBGIM and SDL_bgi, unlike
          * getmouseclick() whose signature differs between them */
         if (ismouseclick(WM_LBUTTONDOWN)) {

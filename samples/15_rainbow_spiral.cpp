@@ -1,8 +1,9 @@
 /* 15_rainbow_spiral.cpp — a rainbow spiral that keeps growing while
- * rotating, drawn purely with putpixel(). Runs 10 seconds or until a
- * key is pressed.
+ * rotating, drawn purely with putpixel(). Runs until you press
+ * a key.
  */
 #include <graphics.h>
+#include <cstdlib>
 #include <cmath>
 #include <ctime>
 
@@ -13,6 +14,11 @@ int main ( )
     cleardevice();
 
     int cx = 320, cy = 240;
+    /* v1.5.3: runs until YOU quit (press a key). The automated test
+     * battery sets BGI_AUTOEXIT_MS so runs still finish by themselves
+     * there; real users never set it. */
+    long autoexitMs = 0;
+    { const char* ae = getenv("BGI_AUTOEXIT_MS"); if (ae) autoexitMs = atol(ae); }
     time_t start = time(NULL);
     long tick = 0;
 
@@ -20,7 +26,7 @@ int main ( )
      * and SDL_bgi) */
     int cols[6] = {RED, LIGHTRED, YELLOW, GREEN, CYAN, MAGENTA};
 
-    while (!kbhit() && time(NULL) - start < 10) {
+    while (!kbhit() && (autoexitMs <= 0 || time(NULL) - start < autoexitMs / 1000)) {
         /* draw one ring of the spiral per frame (persistent canvas) */
         for (int k = 0; k < 40; k++) {
             double t = (tick * 40 + k) * 0.045;

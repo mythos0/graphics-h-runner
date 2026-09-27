@@ -3,6 +3,7 @@
  * then holds the final picture and self-closes.
  */
 #include <graphics.h>
+#include <cstdlib>
 #include <cmath>
 #include <ctime>
 
@@ -66,8 +67,13 @@ int main ( )
     }
 
     /* hold the final tree */
+    /* v1.5.3: runs until YOU quit (press a key). The automated test
+     * battery sets BGI_AUTOEXIT_MS so runs still finish by themselves
+     * there; real users never set it. */
+    long autoexitMs = 0;
+    { const char* ae = getenv("BGI_AUTOEXIT_MS"); if (ae) autoexitMs = atol(ae); }
     time_t start = time(NULL);
-    while (!kbhit() && time(NULL) - start < 8) {
+    while (!kbhit() && (autoexitMs <= 0 || time(NULL) - start < autoexitMs / 1000)) {
         delay(40);
     }
 

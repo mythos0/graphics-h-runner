@@ -1,5 +1,5 @@
 /* 12_fireworks.cpp — rockets launch from the ground, explode into
- * colorful particle showers above a city skyline. Runs 12 seconds or
+ * colorful particle showers above a city skyline. Runs
  * until a key is pressed.
  */
 #include <graphics.h>
@@ -24,6 +24,11 @@ int main ( )
     long tick = 0;
     int colors[6] = {RED, YELLOW, GREEN, CYAN, MAGENTA, WHITE};
 
+    /* v1.5.3: runs until YOU quit (press a key). The automated test
+     * battery sets BGI_AUTOEXIT_MS so runs still finish by themselves
+     * there; real users never set it. */
+    long autoexitMs = 0;
+    { const char* ae = getenv("BGI_AUTOEXIT_MS"); if (ae) autoexitMs = atol(ae); }
     time_t start = time(NULL);
     int ground = getmaxy() - 60;
     int maxx = getmaxx();
@@ -33,7 +38,7 @@ int main ( )
      * right after cleardevice() races with SDL_bgi's surface flip and can
      * crash the window. Filled-shape calls like bar() are safe every frame. */
 
-    while (!kbhit() && time(NULL) - start < 12) {
+    while (!kbhit() && (autoexitMs <= 0 || time(NULL) - start < autoexitMs / 1000)) {
         cleardevice();
         /* static stars (same pattern every frame, drawn crash-safely) */
         for (int i = 0; i < 40; i++) {

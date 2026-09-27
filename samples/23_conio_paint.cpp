@@ -1,13 +1,14 @@
 /* 23_conio_paint.cpp — a conio.h drawing pad: kbhit() + getch() (the Turbo
  * C++ console functions) drive the cursor. Keys 1..8 pick the color,
  * SPACE toggles drawing, C clears the pad, ESC quits. Without any input
- * the pad draws a demo squiggle (headless-friendly); auto-exits after
- * 12 seconds.
+ * the pad draws a demo squiggle (headless-friendly); runs until you quit
+ * (press a key).
  *
  * getch()/kbhit() come from <conio.h> on Windows (MinGW); on Linux/macOS
  * the graphics.h implementation (SDL_bgi) declares the same two functions.
  */
 #include <graphics.h>
+#include <cstdlib>
 #include <cstdio>
 #include <cmath>
 #include <ctime>
@@ -42,8 +43,13 @@ int main ( )
     setcolor(LIGHTGRAY);
     rectangle(6, padTop - 2, mx - 6, padBottom + 2);
 
+    /* v1.5.3: runs until YOU quit (press a key). The automated test
+     * battery sets BGI_AUTOEXIT_MS so runs still finish by themselves
+     * there; real users never set it. */
+    long autoexitMs = 0;
+    { const char* ae = getenv("BGI_AUTOEXIT_MS"); if (ae) autoexitMs = atol(ae); }
     time_t start = time(NULL);
-    while (!quit && time(NULL) - start < 12) {
+    while (!quit && (autoexitMs <= 0 || time(NULL) - start < autoexitMs / 1000)) {
         int px = x, py = y;
 
         /* highlight the selected swatch (redrawn each frame, cheap) */

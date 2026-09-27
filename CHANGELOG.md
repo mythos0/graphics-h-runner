@@ -1,5 +1,31 @@
 # ChangeLog
 
+## 1.5.3 — 2026-09-27
+
+UX release driven by real student sessions: programs used to vanish on their
+own, and the terminal died together with its output.
+
+### Changed
+- **Programs run until YOU quit them**: every sample carried a ~10-14 s
+  self-exit timer (a leftover from the automated test battery), so windows
+  closed themselves mid-demo. All 31 samples now run until the user quits
+  (ESC / any key, as printed on each window). The automated battery ends
+  runs through a `BGI_AUTOEXIT_MS` hook instead — real users never set it.
+- **The terminal stays open with all output**: graphics programs were
+  spawned as the terminal's root process, so when the program ended the
+  terminal closed with it and every printf/cout line was lost. ALL programs
+  now run through the pause wrapper — "[program finished with exit code N]"
+  + press-a-key — exactly like plain console programs since 1.5.1.
+
+### Added
+- **Stale-binary protection**: the Run command now recompiles automatically
+  when the source file is newer than the .exe — editing a program and
+  pressing Run no longer silently shows the PREVIOUS version.
+- The runner terminal is named after the program (e.g. "graphics.h Runner
+  — 24_coordinate_viewer"), so several terminals are easy to tell apart.
+- The cheat sheet documents the quit behavior (ESC / any key;
+  Ctrl+Alt+S force-stops).
+
 ## 1.5.2 — 2026-09-27
 
 Correctness release driven by real student-machine reports: the two mouse

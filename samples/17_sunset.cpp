@@ -1,8 +1,9 @@
 /* 17_sunset.cpp — the sun slowly sinks into the sea, the sky changes
  * from day to dusk, stars come out and the moon rises with a
- * lighthouse blinking on the shore. Runs 14 seconds or until a key.
+ * lighthouse blinking on the shore. Runs until you press a key.
  */
 #include <graphics.h>
+#include <cstdlib>
 #include <cmath>
 #include <ctime>
 
@@ -14,10 +15,15 @@ int main ( )
     int maxx = getmaxx();
     int horizon = 300;
 
+    /* v1.5.3: runs until YOU quit (press a key). The automated test
+     * battery sets BGI_AUTOEXIT_MS so runs still finish by themselves
+     * there; real users never set it. */
+    long autoexitMs = 0;
+    { const char* ae = getenv("BGI_AUTOEXIT_MS"); if (ae) autoexitMs = atol(ae); }
     time_t start = time(NULL);
     long tick = 0;
 
-    while (!kbhit() && time(NULL) - start < 14) {
+    while (!kbhit() && (autoexitMs <= 0 || time(NULL) - start < autoexitMs / 1000)) {
         cleardevice();
 
         settextstyle(DEFAULT_FONT, HORIZ_DIR, 1);

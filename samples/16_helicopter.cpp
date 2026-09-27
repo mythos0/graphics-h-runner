@@ -1,8 +1,9 @@
 /* 16_helicopter.cpp — a helicopter flies across a night skyline with a
  * spinning rotor, blinking searchlight and parallax clouds.
- * Runs 12 seconds or until a key is pressed.
+ * Runs until a key is pressed.
  */
 #include <graphics.h>
+#include <cstdlib>
 #include <cmath>
 #include <ctime>
 
@@ -14,10 +15,15 @@ int main ( )
     int maxx = getmaxx(), maxy = getmaxy();
     int ground = maxy - 50;
 
+    /* v1.5.3: runs until YOU quit (press a key). The automated test
+     * battery sets BGI_AUTOEXIT_MS so runs still finish by themselves
+     * there; real users never set it. */
+    long autoexitMs = 0;
+    { const char* ae = getenv("BGI_AUTOEXIT_MS"); if (ae) autoexitMs = atol(ae); }
     time_t start = time(NULL);
     long tick = 0;
 
-    while (!kbhit() && time(NULL) - start < 12) {
+    while (!kbhit() && (autoexitMs <= 0 || time(NULL) - start < autoexitMs / 1000)) {
         cleardevice();
 
         settextstyle(DEFAULT_FONT, HORIZ_DIR, 1);

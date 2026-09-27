@@ -2,11 +2,12 @@
  * grid: region 1 (dx < dy) then region 2, four-way symmetry, decision
  * variables printed for the first steps of each region. Type the two
  * RADII in the TERMINAL (rx ry); EOF-safe demo values; any key or
- * ~12 s closes the window.
+ * stays open until you quit.
  *   - dark gray ellipse = ellipse() reference
  *   - yellow dots       = the midpoint algorithm points
  */
 #include <graphics.h>
+#include <ctime>
 #include <iostream>
 #include <cstdlib>
 #include <cmath>
@@ -100,7 +101,14 @@ int main()
     outtextxy(cx - 190, getmaxy() - 26, (char*)"Press any key in this window to close");
     cout << "Done - " << step << " region-1 + " << r2 << " region-2 steps, 4-way mirrored." << endl;
 
-    for (int t = 0; t < 1200; t++) {
+    /* v1.5.3: the window stays open until YOU quit (ESC / any key).
+     * The automated test battery sets BGI_AUTOEXIT_MS so runs still
+     * finish by themselves there; real users never set it. */
+    long autoexitMs = 0;
+    { const char* ae = getenv("BGI_AUTOEXIT_MS"); if (ae) autoexitMs = atol(ae); }
+    time_t begun = time(NULL);
+    for (;;) {                            /* runs until YOU quit */
+        if (autoexitMs > 0 && (long)(time(NULL) - begun) * 1000 >= autoexitMs) break;
         if (kbhit()) break;
         delay(10);
     }

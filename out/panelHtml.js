@@ -348,6 +348,7 @@ function buildPanelHtml(opts) {
         <div class="cheat-cat">
           <h4>Run it here</h4>
           <div class="cheat-fn"><code>Ctrl+Alt+R  (or F5)</code><span>Compile &amp; run the open .cpp — the compiler and graphics library are installed automatically on first run.</span></div>
+          <div class="cheat-fn"><code>ESC (or any key)</code><span>Programs run until YOU quit them — the graphics window and the terminal (with all output) stay open. Ctrl+Alt+S force-stops.</span></div>
           <div class="cheat-fn"><code>Ctrl+Alt+B</code><span>Compile only; compiler errors land in the Problems panel.</span></div>
           <div class="cheat-fn"><code>Ctrl+Alt+S</code><span>Stop the running graphics program and its terminal.</span></div>
         </div>

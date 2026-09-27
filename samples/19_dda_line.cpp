@@ -4,9 +4,10 @@
  * plots the line pixel by pixel in the graphics window. Y grows upward
  * from the window centre, like in math class. Headless-friendly: with
  * stdin closed or empty, a demo line is drawn instead.
- * The window closes on any key, or by itself after ~12 seconds.
+ * The window closes when you press a key.
  */
 #include <graphics.h>
+#include <ctime>
 #include <iostream>
 #include <cmath>
 #include <cstdlib>
@@ -71,8 +72,16 @@ int main ( )
     cout << "Done - line drawn with " << steps + 1 << " points." << endl;
     cout << "Press any key in the graphics window to close..." << endl;
 
-    /* wait up to ~12 s for a key, then close (headless-friendly self-exit) */
-    for (int t = 0; t < 1200; t++) {
+    /* waits for a key — the window stays open until then.
+       (the automated battery sets BGI_AUTOEXIT_MS to end runs itself) */
+    /* v1.5.3: the window stays open until YOU quit (ESC / any key).
+     * The automated test battery sets BGI_AUTOEXIT_MS so runs still
+     * finish by themselves there; real users never set it. */
+    long autoexitMs = 0;
+    { const char* ae = getenv("BGI_AUTOEXIT_MS"); if (ae) autoexitMs = atol(ae); }
+    time_t begun = time(NULL);
+    for (;;) {                            /* runs until YOU quit */
+        if (autoexitMs > 0 && (long)(time(NULL) - begun) * 1000 >= autoexitMs) break;
         if (kbhit()) break;
         delay(10);
     }

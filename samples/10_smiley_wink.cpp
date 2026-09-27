@@ -1,7 +1,8 @@
 /* 10_smiley_wink.cpp — a giant smiley that bobs around, winks at you
- * every few seconds and blows a heart. Runs 10 seconds or until a key.
+ * every few seconds and blows a heart. Runs until you press a key.
  */
 #include <graphics.h>
+#include <cstdlib>
 #include <cmath>
 #include <ctime>
 
@@ -9,12 +10,17 @@ int main ( )
 {
     initwindow(640, 480);
 
+    /* v1.5.3: runs until YOU quit (press a key). The automated test
+     * battery sets BGI_AUTOEXIT_MS so runs still finish by themselves
+     * there; real users never set it. */
+    long autoexitMs = 0;
+    { const char* ae = getenv("BGI_AUTOEXIT_MS"); if (ae) autoexitMs = atol(ae); }
     time_t start = time(NULL);
     int cx = 320, cy = 240;
     int blinkFrame = -1;          /* frame counter of the current wink */
     long tick = 0;
 
-    while (!kbhit() && time(NULL) - start < 10) {
+    while (!kbhit() && (autoexitMs <= 0 || time(NULL) - start < autoexitMs / 1000)) {
         cleardevice();
         setbkcolor(BLACK);
 

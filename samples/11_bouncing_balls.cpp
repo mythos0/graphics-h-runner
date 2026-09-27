@@ -1,7 +1,8 @@
 /* 11_bouncing_balls.cpp — seven colorful balls bounce around the screen
- * with trails, squishing off walls. Runs 10 seconds or until a key.
+ * with trails, squishing off walls. Runs until you press a key.
  */
 #include <graphics.h>
+#include <cstdlib>
 #include <ctime>
 
 int main ( )
@@ -22,10 +23,15 @@ int main ( )
         c[i]  = colors[i];
     }
 
+    /* v1.5.3: runs until YOU quit (press a key). The automated test
+     * battery sets BGI_AUTOEXIT_MS so runs still finish by themselves
+     * there; real users never set it. */
+    long autoexitMs = 0;
+    { const char* ae = getenv("BGI_AUTOEXIT_MS"); if (ae) autoexitMs = atol(ae); }
     time_t start = time(NULL);
     int maxx = getmaxx(), maxy = getmaxy();
 
-    while (!kbhit() && time(NULL) - start < 10) {
+    while (!kbhit() && (autoexitMs <= 0 || time(NULL) - start < autoexitMs / 1000)) {
         /* trailing effect: dark translucent-ish overlay */
         setfillstyle(SOLID_FILL, BLACK);
         bar(0, 0, maxx, maxy);

@@ -603,7 +603,7 @@ function auditExeAfterBuild(exePath) {
         /* audit must never break the build flow */
     }
 }
-function runBinary(sourceFile) {
+async function runBinary(sourceFile) {
     const platform = (0, toolchain_1.currentPlatform)();
     const bin = (0, toolchain_1.binaryPathFor)(sourceFile, platform);
     if (!fs.existsSync(bin)) {
@@ -620,42 +620,63 @@ function runBinary(sourceFile) {
         });
         return;
     }
-    /* v1.5.1: plain console programs (no graphics.h) print and exit within
-     * milliseconds — launched as the terminal's root process, the terminal
-     * closed before the output could be read ("normal programs are not
-     * running"). They get a pause wrapper; graphics programs keep the direct
-     * launch (the BGI window itself stays open and IS the visible output). */
-    let consolePause = lastBuildLibrary === 'none';
+    /* v1.5.3: "Run" used to execute whatever binary was on disk — a student
+     * who edits the source and presses Run saw the OLD program with no hint.
+     * When the source is newer than the exe (50 ms slack absorbs copy/zip
+     * mtime quirks), recompile first through the exact compileSource path
+     * Ctrl+Alt+B uses, so diagnostics and the DLL audit stay identical. */
     try {
-        const srcText = fs.readFileSync(sourceFile, 'utf8');
-        consolePause = !(0, detect_1.detectGraphicsInclude)(srcText);
+        if (fs.statSync(sourceFile).mtimeMs > fs.statSync(bin).mtimeMs + 50) {
+            log('[run] source is newer than the exe — recompiling first');
+            const staleness = await compileSource(sourceFile);
+            if (staleness !== 'ok') {
+                if (staleness === 'no-compiler') {
+                    showNoCompilerHelp();
+                }
+                else {
+                    showCompileFailure(sourceFile);
+                }
+                return;
+            }
+        }
     }
     catch {
-        /* unreadable source — keep the compile-plan based guess */
+        /* stat trouble — run what we have rather than blocking the student */
     }
+    /* v1.5.3: EVERY program — graphics or plain — runs through the pause
+     * wrapper. Students confirmed on real machines that when a program ended,
+     * its terminal closed too and all printf/cout output was lost (and on
+     * setups where VS Code closes terminals when the root process exits, even
+     * a graphics run's terminal vanished the moment the window closed). The
+     * wrapper keeps the terminal open with the full output until the user
+     * presses a key. */
     /* Always run inside the integrated terminal: the graphics window opens as
      * usual, AND the terminal gives the program a real console — cin/scanf/getch
      * input works and printf/cout output is visible. The old detached launch had
      * no stdio at all, so interactive programs could neither read input nor show
      * output. */
-    runInTerminal(bin, consolePause);
+    runInTerminal(bin);
 }
-function runInTerminal(bin, consolePause = false) {
+function runInTerminal(bin) {
     /* Run the compiled program inside the integrated terminal so it has a real
      * console (cin/scanf/getch read input, printf/cout output is visible) while
      * the graphics window opens as usual. v1.4.5 pinned Windows terminals to a
      * bare 'cmd.exe' shellPath that VS Code could not resolve on some machines;
-     * spawning the exe directly avoids that class of problem entirely — for
-     * GRAPHICS programs. v1.5.1: plain console programs exit in milliseconds
-     * and the root-process launch closed the terminal before the output was
-     * readable, so they now run through a pause wrapper (a generated .cmd run
-     * via the ABSOLUTE ComSpec path — one plain-path argument, no shell-quoting
-     * minefield — or /bin/bash -c on POSIX). The env now carries the COMPILER's
+     * the generated .cmd wrapper (a generated .cmd run via the ABSOLUTE ComSpec
+     * path — one plain-path argument, no shell-quoting minefield — or
+     * /bin/bash -c on POSIX) avoids that class of problem entirely.
+     * v1.5.1 wrapped plain console programs (they print and exit within
+     * milliseconds); v1.5.3 wraps GRAPHICS programs too, so when the program
+     * ends the terminal stays open with all output instead of dying with the
+     * root process. The env now carries the COMPILER's
      * bin dir (not just the program's folder) so even a non-static exe finds
      * its runtime DLLs. */
     const abs = path.resolve(bin);
     const platform = (0, toolchain_1.currentPlatform)();
     const compiler = getConfig().compilerPath;
+    /* v1.5.3: the runner terminal is named after the program — with several
+     * terminals open, students can tell which one hosts which program. */
+    const termName = TERMINAL_NAME + ' — ' + path.basename(abs).replace(/\.exe$/i, '');
     /* One runner terminal at a time: disposing the previous one also stops the
      * program it was hosting, so a new Run cleanly replaces the old run. */
     const previous = lastRunTerminal;
@@ -670,11 +691,11 @@ function runInTerminal(bin, consolePause = false) {
     }
     let term;
     let how;
-    if (consolePause && platform === 'windows') {
+    if (platform === 'windows') {
         const wrap = (0, runwrap_1.writePauseWrapper)(abs);
         if (wrap.fallback) {
             term = vscode.window.createTerminal({
-                name: TERMINAL_NAME,
+                name: termName,
                 shellPath: abs,
                 cwd: path.dirname(abs),
                 env: compilerEnv(compiler, [path.dirname(abs)])
@@ -684,7 +705,7 @@ function runInTerminal(bin, consolePause = false) {
         }
         else {
             term = vscode.window.createTerminal({
-                name: TERMINAL_NAME,
+                name: termName,
                 shellPath: wrap.shellPath,
                 shellArgs: wrap.shellArgs,
                 cwd: path.dirname(abs),
@@ -694,10 +715,10 @@ function runInTerminal(bin, consolePause = false) {
             (0, instrument_1.addExtensionBreadcrumb)('run', 'terminal-console-wrapper', { file: path.basename(abs) });
         }
     }
-    else if (consolePause) {
+    else {
         const wrap = (0, runwrap_1.buildPosixPauseLaunch)(abs);
         term = vscode.window.createTerminal({
-            name: TERMINAL_NAME,
+            name: termName,
             shellPath: wrap.shellPath,
             shellArgs: wrap.shellArgs,
             cwd: path.dirname(abs),
@@ -705,16 +726,6 @@ function runInTerminal(bin, consolePause = false) {
         });
         how = 'console wrapper (output stays visible)';
         (0, instrument_1.addExtensionBreadcrumb)('run', 'terminal-console-wrapper', { file: path.basename(abs) });
-    }
-    else {
-        term = vscode.window.createTerminal({
-            name: TERMINAL_NAME,
-            shellPath: abs,
-            cwd: path.dirname(abs),
-            env: compilerEnv(compiler, [path.dirname(abs)])
-        });
-        how = 'as terminal process';
-        (0, instrument_1.addExtensionBreadcrumb)('run', 'terminal-direct', { file: path.basename(abs) });
     }
     term.show(false); /* focus the terminal so prompts can be answered at once */
     log('[run] ' + abs + ' (' + how + ')');
@@ -1175,7 +1186,7 @@ function activate(context) {
             const result = await compileSource(file);
             if (result === 'ok') {
                 outputLine('Compiled OK — launching the graphics window.');
-                runBinary(file);
+                await runBinary(file);
                 return { ok: true, message: '' };
             }
             if (result === 'no-compiler') {
@@ -1198,7 +1209,7 @@ function activate(context) {
             }
             const result = await compileSource(file);
             if (result === 'ok') {
-                runBinary(file);
+                await runBinary(file);
             }
             else if (result === 'no-compiler') {
                 showNoCompilerHelp();
@@ -1236,7 +1247,7 @@ function activate(context) {
         if (!file) {
             return;
         }
-        runBinary(file);
+        await runBinary(file);
     })), vscode.commands.registerCommand('graphics-h-runner.stopProgram', trackedCommand('stopProgram', () => {
         void stopRunningProgram();
     })), vscode.commands.registerCommand('graphics-h-runner.doctor', trackedCommand('doctor', async () => {

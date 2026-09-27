@@ -1,8 +1,9 @@
 /* 03_bouncing_ball.cpp — classic delay()-based animation.
  * A red ball bounces inside a bordered court with ghost trails,
- * for 10 seconds or until a key is pressed.
+ * until you press a key.
  */
 #include <graphics.h>
+#include <cstdlib>
 #include <ctime>
 
 int main ( )
@@ -15,8 +16,13 @@ int main ( )
     /* the ball */
     int x = 120, y = 120, dx = 6, dy = 5, r = 26;
 
+    /* v1.5.3: runs until YOU quit (press a key). The automated test
+     * battery sets BGI_AUTOEXIT_MS so runs still finish by themselves
+     * there; real users never set it. */
+    long autoexitMs = 0;
+    { const char* ae = getenv("BGI_AUTOEXIT_MS"); if (ae) autoexitMs = atol(ae); }
     time_t start = time(NULL);
-    while (!kbhit() && time(NULL) - start < 10) {
+    while (!kbhit() && (autoexitMs <= 0 || time(NULL) - start < autoexitMs / 1000)) {
         cleardevice();
 
         /* court frame + title (redrawn every frame) */

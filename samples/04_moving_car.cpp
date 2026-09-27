@@ -1,7 +1,8 @@
 /* 04_moving_car.cpp — scrolling road scene with a moving car.
- * Demonstrates coordinated shape groups + animation. Runs 10 seconds.
+ * Demonstrates coordinated shape groups + animation. Runs until you press a key.
  */
 #include <graphics.h>
+#include <cstdlib>
 #include <ctime>
 
 static void drawCar (int x, int y)
@@ -38,8 +39,13 @@ int main ( )
     int x = -160;
     int maxx = getmaxx();
 
+    /* v1.5.3: runs until YOU quit (press a key). The automated test
+     * battery sets BGI_AUTOEXIT_MS so runs still finish by themselves
+     * there; real users never set it. */
+    long autoexitMs = 0;
+    { const char* ae = getenv("BGI_AUTOEXIT_MS"); if (ae) autoexitMs = atol(ae); }
     time_t start = time(NULL);
-    while (!kbhit() && time(NULL) - start < 10) {
+    while (!kbhit() && (autoexitMs <= 0 || time(NULL) - start < autoexitMs / 1000)) {
         cleardevice();
 
         setcolor(BLUE);

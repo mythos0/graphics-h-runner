@@ -1,5 +1,5 @@
 /* 14_aquarium.cpp — three fish swim back and forth above swaying
- * seaweed while bubbles rise to the surface. Runs 12 seconds or until
+ * seaweed while bubbles rise to the surface. Runs until
  * a key is pressed.
  */
 #include <graphics.h>
@@ -48,10 +48,15 @@ int main ( )
         bs[i] = 2 + i % 3;
     }
 
+    /* v1.5.3: runs until YOU quit (press a key). The automated test
+     * battery sets BGI_AUTOEXIT_MS so runs still finish by themselves
+     * there; real users never set it. */
+    long autoexitMs = 0;
+    { const char* ae = getenv("BGI_AUTOEXIT_MS"); if (ae) autoexitMs = atol(ae); }
     time_t start = time(NULL);
     long tick = 0;
 
-    while (!kbhit() && time(NULL) - start < 12) {
+    while (!kbhit() && (autoexitMs <= 0 || time(NULL) - start < autoexitMs / 1000)) {
         cleardevice();
 
         settextstyle(DEFAULT_FONT, HORIZ_DIR, 1);

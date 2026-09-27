@@ -1,8 +1,9 @@
 /* 13_solar_system.cpp — the sun at the center with three orbiting
  * planets (one with its own moon), plus a comet on a wild path.
- * Runs 12 seconds or until a key is pressed.
+ * Runs until a key is pressed.
  */
 #include <graphics.h>
+#include <cstdlib>
 #include <cmath>
 #include <ctime>
 
@@ -11,6 +12,11 @@ int main ( )
     initwindow(640, 480);
     setbkcolor(BLACK);
 
+    /* v1.5.3: runs until YOU quit (press a key). The automated test
+     * battery sets BGI_AUTOEXIT_MS so runs still finish by themselves
+     * there; real users never set it. */
+    long autoexitMs = 0;
+    { const char* ae = getenv("BGI_AUTOEXIT_MS"); if (ae) autoexitMs = atol(ae); }
     time_t start = time(NULL);
     long tick = 0;
     int cx = 320, cy = 240;
@@ -22,7 +28,7 @@ int main ( )
         stars[i][1] = (i * 157) % 480;
     }
 
-    while (!kbhit() && time(NULL) - start < 12) {
+    while (!kbhit() && (autoexitMs <= 0 || time(NULL) - start < autoexitMs / 1000)) {
         cleardevice();
 
         for (int i = 0; i < 40; i++) {

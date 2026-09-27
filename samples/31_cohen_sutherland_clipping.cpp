@@ -4,7 +4,7 @@
  * endpoint dots, and the TERMINAL prints each line's 4-bit outcodes
  * (TBRL: Top-Bottom-Right-Left) and the verdict:
  * inside / outside / clipped. The 8 region codes are labeled around
- * the window.  R = regenerate lines   ESC = quit   ~12 s self-exit
+ * the window.  R = regenerate lines   ESC = quit   runs until you quit
  */
 #include <graphics.h>
 #include <cstdio>
@@ -108,7 +108,14 @@ int main()
     }
     drawScene(lines);
 
-    for (int t = 0; t < 1200; t++) {
+    /* v1.5.3: the window stays open until YOU quit (ESC / any key).
+     * The automated test battery sets BGI_AUTOEXIT_MS so runs still
+     * finish by themselves there; real users never set it. */
+    long autoexitMs = 0;
+    { const char* ae = getenv("BGI_AUTOEXIT_MS"); if (ae) autoexitMs = atol(ae); }
+    time_t begun = time(NULL);
+    for (;;) {                            /* runs until YOU quit */
+        if (autoexitMs > 0 && (long)(time(NULL) - begun) * 1000 >= autoexitMs) break;
         if (kbhit()) {
             int k = getch();
             if (k == 27) break;

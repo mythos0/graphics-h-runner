@@ -1,9 +1,10 @@
 /* 20_turbo_tour.cpp — the classic Turbo C++ BGI toolkit on one screen:
  * bar3d, pieslice, sector, arc + ellipse, dashed lines, floodfill, every
- * popular fill pattern and growing text sizes. Runs at most 12 seconds;
+ * popular fill pattern and growing text sizes. Runs until you quit;
  * any key quits.
  */
 #include <graphics.h>
+#include <cstdlib>
 #include <cstdio>
 #include <ctime>
 
@@ -72,8 +73,13 @@ int main ( )
         outtextxy(40, 60 + s * 26, (char*)"Knowledge is Power");
     }
 
+    /* v1.5.3: runs until YOU quit (press a key). The automated test
+     * battery sets BGI_AUTOEXIT_MS so runs still finish by themselves
+     * there; real users never set it. */
+    long autoexitMs = 0;
+    { const char* ae = getenv("BGI_AUTOEXIT_MS"); if (ae) autoexitMs = atol(ae); }
     time_t start = time(NULL);
-    while (!kbhit() && time(NULL) - start < 12) {
+    while (!kbhit() && (autoexitMs <= 0 || time(NULL) - start < autoexitMs / 1000)) {
         delay(50);
     }
     closegraph();

@@ -1,8 +1,9 @@
 /* 21_viewport_bounce.cpp — setviewport() clipping the Turbo C++ way:
  * two independent panes, each with its own ball, both clipped to their
- * viewport rectangle. Runs at most 12 seconds; any key quits.
+ * viewport rectangle. Runs until you quit; any key quits.
  */
 #include <graphics.h>
+#include <cstdlib>
 #include <cstdio>
 #include <ctime>
 
@@ -20,8 +21,13 @@ int main ( )
     Ball a = { 160, 160,  4, 3, 18, LIGHTGREEN };
     Ball b = { 480, 360, -5, 4, 24, LIGHTRED  };
 
+    /* v1.5.3: runs until YOU quit (press a key). The automated test
+     * battery sets BGI_AUTOEXIT_MS so runs still finish by themselves
+     * there; real users never set it. */
+    long autoexitMs = 0;
+    { const char* ae = getenv("BGI_AUTOEXIT_MS"); if (ae) autoexitMs = atol(ae); }
     time_t start = time(NULL);
-    while (!kbhit() && time(NULL) - start < 12) {
+    while (!kbhit() && (autoexitMs <= 0 || time(NULL) - start < autoexitMs / 1000)) {
         cleardevice();
         setcolor(DARKGRAY);
         line(mx / 2, 0, mx / 2, my);

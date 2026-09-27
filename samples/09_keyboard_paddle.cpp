@@ -2,9 +2,10 @@
  * it alive with the LEFT / RIGHT arrow keys, and colored bricks at the top
  * disappear when hit. Headless-friendly: without input the paddle stays
  * put and the ball simply bounces on the floor (demo mode).
- * Runs at most 12 seconds, ESC quits.
+ * Runs until you quit (ESC).
  */
 #include <graphics.h>
+#include <cstdlib>
 #include <cstdio>
 #include <ctime>
 
@@ -48,8 +49,13 @@ int main ( )
         }
     }
 
+    /* v1.5.3: runs until YOU quit (press a key). The automated test
+     * battery sets BGI_AUTOEXIT_MS so runs still finish by themselves
+     * there; real users never set it. */
+    long autoexitMs = 0;
+    { const char* ae = getenv("BGI_AUTOEXIT_MS"); if (ae) autoexitMs = atol(ae); }
     time_t start = time(NULL);
-    while (!kbhit() && time(NULL) - start < 12) {
+    while (!kbhit() && (autoexitMs <= 0 || time(NULL) - start < autoexitMs / 1000)) {
         cleardevice();
 
         setcolor(WHITE);

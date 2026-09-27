@@ -5,9 +5,11 @@
  *     X=.., Y=.., RGB=(.., .., ..), COLOR=NAME
  * is printed in the TERMINAL — copy it anywhere: that is your
  * coordinate, copied. Teaches the screen coordinate system hands-on.
- *   C = crosshair on/off   ESC = quit   closes itself after ~12 s
+ *   C = crosshair on/off   ESC = quit   stays open until you quit
  */
 #include <graphics.h>
+#include <cstdlib>
+#include <ctime>
 #include <cstdio>
 
 static const char *colorName(int i)
@@ -119,7 +121,14 @@ int main()
     int mx = -1, my = -1, pinx = -1, piny = -1;
     bool cross = true, redraw = true, pinned = false;
 
-    for (int t = 0; t < 1200; t++) {     /* ~12 s self-exit */
+    /* v1.5.3: the window stays open until YOU quit (ESC / any key).
+     * The automated test battery sets BGI_AUTOEXIT_MS so runs still
+     * finish by themselves there; real users never set it. */
+    long autoexitMs = 0;
+    { const char* ae = getenv("BGI_AUTOEXIT_MS"); if (ae) autoexitMs = atol(ae); }
+    time_t begun = time(NULL);
+    for (;;) {                            /* runs until YOU quit */
+        if (autoexitMs > 0 && (long)(time(NULL) - begun) * 1000 >= autoexitMs) break;
         if (kbhit()) {
             int k = getch();
             if (k == 27) break;

@@ -1,8 +1,9 @@
 /* 05_tricolor_flag.cpp — the classic "draw a flag" college exercise.
  * Three stripes, a pole, a decorative sun and a caption.
- * Self-closes after 8 seconds or on keypress.
+ * Stays open until you press a key.
  */
 #include <graphics.h>
+#include <cstdlib>
 #include <cmath>
 #include <ctime>
 
@@ -50,8 +51,13 @@ int main ( )
     settextstyle(DEFAULT_FONT, HORIZ_DIR, 2);
     outtextxy(210, 330, (char*)"BGI FLAG");
 
+    /* v1.5.3: runs until YOU quit (press a key). The automated test
+     * battery sets BGI_AUTOEXIT_MS so runs still finish by themselves
+     * there; real users never set it. */
+    long autoexitMs = 0;
+    { const char* ae = getenv("BGI_AUTOEXIT_MS"); if (ae) autoexitMs = atol(ae); }
     time_t start = time(NULL);
-    while (!kbhit() && time(NULL) - start < 8) {
+    while (!kbhit() && (autoexitMs <= 0 || time(NULL) - start < autoexitMs / 1000)) {
         delay(40);
     }
 

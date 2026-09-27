@@ -1,8 +1,9 @@
 /* 02_shapes_showcase.cpp — exercises the classic BGI drawing primitives:
  * bar, rectangle, circle, ellipse, line, floodfill, polygons, text styles
- * and the 16-color palette. Self-closes after 10 seconds or on keypress.
+ * and the 16-color palette. Stays open until you press a key.
  */
 #include <graphics.h>
+#include <cstdlib>
 #include <ctime>
 
 int main ( )
@@ -51,8 +52,13 @@ int main ( )
     settextstyle(DEFAULT_FONT, HORIZ_DIR, 2);
     outtextxy(280, 350, (char*)"BGI shapes showcase");
 
+    /* v1.5.3: runs until YOU quit (press a key). The automated test
+     * battery sets BGI_AUTOEXIT_MS so runs still finish by themselves
+     * there; real users never set it. */
+    long autoexitMs = 0;
+    { const char* ae = getenv("BGI_AUTOEXIT_MS"); if (ae) autoexitMs = atol(ae); }
     time_t start = time(NULL);
-    while (!kbhit() && time(NULL) - start < 10) {
+    while (!kbhit() && (autoexitMs <= 0 || time(NULL) - start < autoexitMs / 1000)) {
         delay(40);
     }
 
