@@ -109,7 +109,11 @@ int main()
         }
         if (ismouseclick(WM_LBUTTONDOWN)) {
             int mx = 0, my = 0;
-            getmouseclick(WM_LBUTTONDOWN, &mx, &my);
+#ifdef _WIN32
+            getmouseclick(WM_LBUTTONDOWN, mx, my);      /* WinBGIm: reference args */
+#else
+            getmouseclick(WM_LBUTTONDOWN, &mx, &my);    /* SDL_bgi (C lib): pointer args */
+#endif
             clearmouseclick(WM_LBUTTONDOWN);
             if (mx >= 0 && my >= 0 && my < getmaxy() - 26) {
                 if (gSnap) { mx = (mx / 10) * 10; my = (my / 10) * 10; }

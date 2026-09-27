@@ -1,5 +1,36 @@
 # ChangeLog
 
+## 1.5.2 — 2026-09-27
+
+Correctness release driven by real student-machine reports: the two mouse
+lab programs failed to compile on Windows, and the new dependency audit
+scared users with false warnings on perfectly static builds.
+
+### Fixed
+- **24_coordinate_viewer / 25_pixel_inspector failed to compile on
+  Windows** ("invalid conversion from int* to int"): the WinBGIm header
+  declares `void getmouseclick(int kind, int& x, int& y)` with REFERENCE
+  arguments, but the samples passed `&mx, &my`. SDL_bgi on Linux (a C
+  library) accepts pointers, WinBGIm does not — so the samples ran in the
+  Linux test battery yet died on Windows. Both samples now carry an
+  `#ifdef _WIN32` shim and compile against BOTH libraries.
+- **Dependency-audit false positives on fully static builds**: the 1.5.1
+  audit string-scanned the .exe, so inert DLL-name strings inside the
+  statically linked MinGW runtime (e.g. `libgcc_s_dw2-1.dll`,
+  `libgcj-16.dll`) triggered the "-1073741515" warning even though the
+  program was fully self-contained. The audit now parses the REAL PE
+  import table (standard + delay-load descriptors); only DLLs the Windows
+  loader must resolve are reported. Static builds audit clean and silent;
+  non-PE or truncated files no longer produce warnings either.
+
+### Added
+- **Windows-header release gate** (`test/win-header-tests.js`): all 31
+  samples are syntax-checked against the exact WinBGIm headers the
+  extension installs on Windows (`-fsyntax-only -D_WIN32` with the real
+  graphics.h/winbgim.h). Windows-only API mismatches are now caught
+  before release — this gate would have flagged the getmouseclick bug
+  that shipped in 1.5.0/1.5.1.
+
 ## 1.5.1 — 2026-09-27
 
 Production-hardening release: fixes the "failed to launch (exit code

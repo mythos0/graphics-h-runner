@@ -127,7 +127,11 @@ int main()
         }
         if (ismouseclick(WM_MOUSEMOVE)) {
             int nx = -1, ny = -1;
-            getmouseclick(WM_MOUSEMOVE, &nx, &ny);
+#ifdef _WIN32
+            getmouseclick(WM_MOUSEMOVE, nx, ny);        /* WinBGIm: reference args */
+#else
+            getmouseclick(WM_MOUSEMOVE, &nx, &ny);      /* SDL_bgi (C lib): pointer args */
+#endif
             clearmouseclick(WM_MOUSEMOVE);
             if (nx >= 0 && ny >= 0 && (nx != mx || ny != my)) {
                 mx = nx; my = ny; redraw = true;
@@ -135,7 +139,11 @@ int main()
         }
         if (ismouseclick(WM_LBUTTONDOWN)) {
             int nx = -1, ny = -1;
-            getmouseclick(WM_LBUTTONDOWN, &nx, &ny);
+#ifdef _WIN32
+            getmouseclick(WM_LBUTTONDOWN, nx, ny);      /* WinBGIm: reference args */
+#else
+            getmouseclick(WM_LBUTTONDOWN, &nx, &ny);    /* SDL_bgi (C lib): pointer args */
+#endif
             clearmouseclick(WM_LBUTTONDOWN);
             if (nx >= 0 && ny >= 0 && ny < getmaxy() - 118) {
                 pinx = nx; piny = ny; pinned = true; redraw = true;
