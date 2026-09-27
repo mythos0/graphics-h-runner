@@ -239,6 +239,18 @@ export function planSetup(platform: Platform, probe: SetupProbe, sdl2DevOk = tru
           'Downloads graphics.h, winbgim.h and libbgi.a into the extension folder and wires them into the build settings automatically — no copying into MinGW folders, no admin rights.'
       });
     }
+    /* v1.5.1 major feature: graphics.h must work ANYWHERE — not only inside
+     * this extension. The step copies WinBGIM into the toolchain's own
+     * include/lib folders, adds the compiler bin dir to the user PATH and
+     * verifies with a no-flags probe compile. Idempotent; the executor in
+     * extension.ts skips it gracefully when prerequisites are still missing. */
+    steps.push({
+      id: 'make-global',
+      kind: 'auto',
+      title: 'Make graphics.h work EVERYWHERE (global, no extension needed)',
+      detail:
+        'Copies WinBGIM into the compiler toolchain\'s own include/lib folders and adds its bin\\ folder to your user PATH. After this, ANY terminal or IDE (cmd.exe, Dev-C++, Code::Blocks, CLion) can compile with: g++ main.cpp -o main.exe -lbgi -lgdi32 -lcomdlg32 -luuid -loleaut32 -lole32'
+    });
   }
 
   steps.push({

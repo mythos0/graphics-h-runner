@@ -1,5 +1,55 @@
 # ChangeLog
 
+## 1.5.1 — 2026-09-27
+
+Production-hardening release: fixes the "failed to launch (exit code
+-1073741515)" family of bugs reported by students, makes plain console
+programs usable again, and ships the #1 requested feature — a **global**
+setup so graphics.h compiles in ANY terminal or IDE without this extension.
+
+### Fixed
+- **Exit code -1073741515 (0xC0000135 DLL not found) for plain C++
+  programs**: v1.5.0 statically linked only graphics builds, so a normal
+  `cin`/`cout` program produced an .exe that needed `libstdc++-6.dll` /
+  `libgcc_s_seh-1.dll` and died before `main()` on PCs without MinGW in
+  PATH. **Every** Windows build is now fully static — the exe only imports
+  DLLs that ship with Windows itself.
+- **Plain console programs "not running"**: they printed and exited in
+  milliseconds, closing the terminal before the output could be read.
+  They now run through a pause wrapper (`[program finished with exit code
+  N]` + press-any-key); graphics programs keep the direct launch.
+- The run environment now carries the **compiler's** bin dir (previously
+  the program's own folder was added by mistake), so even a non-static
+  exe finds its runtime DLLs.
+- Post-compile **dependency audit**: every Windows build is scanned for
+  DLL imports that are not part of base Windows; a problem surfaces at
+  compile time with an actionable message instead of a hex code at run
+  time.
+- Sentry: benign VS Code command cancellations ("Canceled") are no longer
+  reported as errors.
+
+### Added
+- **Global setup (major)**: "Complete graphics.h Run Setup" now makes the
+  toolchain serve the WHOLE machine:
+  - WinBGIM (`graphics.h`, `winbgim.h`, `libbgi.a`) is copied into the
+    compiler toolchain's own `include`/`lib` folders — MinGW resolves them
+    with **zero -I/-L flags**.
+  - The compiler's `bin` folder is appended to your **user PATH**
+    (registry `HKCU\Environment\Path`, `REG_EXPAND_SZ` preserved,
+    idempotent) with a best-effort `WM_SETTINGCHANGE` broadcast.
+  - Verified by a **no-flags probe compile**: `g++ probe.cpp -lbgi ...`
+    must succeed without any extension settings before the step reports
+    success.
+  - A `graphics-h-anywhere.txt` readme with the universal command lands
+    in the toolchain root.
+  - The Setup Doctor gained a **"global (no flags)"** check that proves
+    `g++ main.cpp -o main.exe -lbgi -lgdi32 -lcomdlg32 -luuid -loleaut32
+    -lole32` works in ANY terminal (cmd.exe, Dev-C++, Code::Blocks, ...)
+    without the extension.
+  - Linux/macOS: the Setup summary now prints the exact `sudo cp` +
+    `ldconfig` commands to make SDL_bgi global as well.
+
+
 ## 1.5.0 — 2026-09-27
 
 The Computer Graphics Lab release: a dedicated lab section for the classic

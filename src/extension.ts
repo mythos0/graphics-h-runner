@@ -21,7 +21,7 @@ import {
   binaryPathFor
 } from './toolchain';
 import { detectGraphicsInclude } from './detect';
-import { buildCompilePlan, CompilePlan, LinuxLibrary } from './buildArgs';
+import { buildCompilePlan, CompilePlan, LinuxLibrary, BgiLibrary } from './buildArgs';
 import { probeEnvironment, DoctorResult } from './doctor';
 import {
   planSetup,
@@ -55,6 +55,9 @@ import {
   flushTelemetry
 } from './instrument';
 import { parseCompilerOutput, capCompilerDiagnostics } from './diagnostics';
+import { auditWindowsExe, buildAuditMessage } from './depsAudit';
+import { writePauseWrapper, buildPosixPauseLaunch } from './runwrap';
+import { makeGlobalWindows } from './globalize';
 
 const OUTPUT_CHANNEL_NAME = 'graphics.h Runner';
 const TERMINAL_NAME = 'graphics.h Runner';
@@ -72,6 +75,8 @@ let storageDir: string | undefined; /* globalStorage — real files for folder-l
 let diagnostics: vscode.DiagnosticCollection | undefined;
 /* live run feedback for the status bar: idle -> compiling -> running -> idle */
 let runState: 'idle' | 'compiling' | 'running' = 'idle';
+/* which back-end the last successful build used ('none' = plain console C++) */
+let lastBuildLibrary: BgiLibrary | 'none' = 'none';
 
 interface ExtensionConfig {
   compilerPath: string;
@@ -173,14 +178,20 @@ async function pruneStalePaths(): Promise<void> {
 }
 
 /** Spawn environment that also contains the compiler's own bin dir (DLL safety). */
-function compilerEnv(compiler: string): NodeJS.ProcessEnv {
+function compilerEnv(compiler: string, extraDirs: string[] = []): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { ...process.env };
   try {
-    if (path.isAbsolute(compiler)) {
-      const dir = path.dirname(compiler);
-      if (fs.existsSync(dir)) {
-        env.PATH = dir + path.delimiter + (env.PATH || '');
+    const dirs: string[] = [];
+    if (path.isAbsolute(compiler) && fs.existsSync(path.dirname(compiler))) {
+      dirs.push(path.dirname(compiler));
+    }
+    for (const d of extraDirs) {
+      if (d && fs.existsSync(d)) {
+        dirs.push(d);
       }
+    }
+    if (dirs.length > 0) {
+      env.PATH = dirs.join(path.delimiter) + path.delimiter + (env.PATH || '');
     }
   } catch {
     /* default env is fine */
@@ -238,6 +249,10 @@ async function runFullSetup(context: vscode.ExtensionContext): Promise<void> {
             await addPathsToSetting('extraIncludePaths', [res.includeDir]);
             await addPathsToSetting('extraLibPaths', [res.libDir]);
             summary.push('SDL_bgi downloaded, patched, built and installed into a user folder (no admin rights needed).');
+            summary.push(
+              'GLOBAL (optional): so graphics.h also works OUTSIDE VS Code, copy the library system-wide: ' +
+              `sudo cp "${res.includeDir}/graphics.h" /usr/local/include/ && sudo cp -r "${res.includeDir}/SDL2" /usr/local/include/ && sudo cp "${res.libDir}/libSDL_bgi.so" /usr/local/lib/ && sudo ldconfig`
+            );
             addExtensionBreadcrumb('setup.step', 'install-sdl_bgi ok');
           } catch (e) {
             output.appendLine('[setup] SDL_bgi install error: ' + String(e));
@@ -300,6 +315,52 @@ async function runFullSetup(context: vscode.ExtensionContext): Promise<void> {
             output.appendLine('[setup] WinBGIM install error: ' + String(e));
             summary.push('WinBGIM auto-install FAILED: ' + String(e));
             captureExtensionError(e, { setup_step: 'install-winbgim', platform: platform });
+          }
+        } else if (step.kind === 'auto' && step.id === 'make-global') {
+          /* v1.5.1 major feature: graphics.h must compile ANYWHERE after Full
+           * Setup — not only inside this extension. */
+          const fresh = getConfig();
+          const compilerOkNow = (await verifyCompilerRun(fresh.compilerPath || 'g++')).ok;
+          const wbInclude = path.join(storageRoot, 'winbgim', 'include');
+          const wbLib = path.join(storageRoot, 'winbgim', 'lib');
+          const haveWinbgim =
+            fs.existsSync(path.join(wbInclude, 'graphics.h')) &&
+            fs.existsSync(path.join(wbLib, 'libbgi.a'));
+          if (platform !== 'windows') {
+            summary.push('Global setup: handled automatically on this platform (system packages / user prefix).');
+          } else if (!compilerOkNow) {
+            summary.push('Global setup skipped: no working g++ yet — finish the compiler steps above, then re-run Full Setup.');
+          } else if (!haveWinbgim) {
+            summary.push('Global setup skipped: WinBGIM files are not installed yet — finish the WinBGIM step above, then re-run Full Setup.');
+          } else {
+            try {
+              progress.report({ message: 'Making graphics.h work in ANY terminal (global)…' });
+              const res = await makeGlobalWindows({
+                compilerPath: fresh.compilerPath,
+                includeDir: wbInclude,
+                libDir: wbLib,
+                onLog: (l) => log('[global] ' + l)
+              });
+              if (res.globalProbeOk) {
+                summary.push('GLOBAL: graphics.h now compiles ANYWHERE without this extension. From any terminal: ' + res.universalCommand);
+                if (res.includeTarget) {
+                  summary.push(`GLOBAL: WinBGIM lives in the toolchain itself (${res.includeTarget}, ${res.libTarget}).`);
+                }
+                addExtensionBreadcrumb('setup.step', 'make-global ok');
+              } else {
+                summary.push('Global setup could NOT make plain "g++ ..." resolve graphics.h (details in the output). The extension keeps working via its own settings.');
+                captureExtensionWarning('make-global probe failed', { platform: platform });
+              }
+              if (res.pathChanged) {
+                summary.push('PATH: the compiler folder was added to your user PATH — new terminals (and VS Code after a restart) can call g++ directly.');
+              } else if (!res.pathOk) {
+                summary.push('PATH update failed (non-fatal): add the compiler bin folder to PATH manually — details in the output.');
+              }
+            } catch (e) {
+              output.appendLine('[global] error: ' + String(e));
+              summary.push('Global setup FAILED: ' + String(e));
+              captureExtensionError(e, { setup_step: 'make-global', platform: platform });
+            }
           }
         } else if (step.kind === 'terminal') {
           summary.push(`ACTION NEEDED (run in a terminal): ${step.command}`);
@@ -486,6 +547,9 @@ async function compileSource(sourceFile: string): Promise<CompileResult> {
   addExtensionBreadcrumb('compile', result, { file: path.basename(sourceFile) });
   if (result === 'ok') {
     diagnostics?.delete(vscode.Uri.file(sourceFile));
+    if (currentPlatform() === 'windows') {
+      auditExeAfterBuild(binaryPathFor(sourceFile, currentPlatform()));
+    }
   } else if (result === 'failed') {
     /* Compile errors are the NORMAL edit-compile loop for a graphics.h
      * teaching tool — they belong in the Problems panel and the output
@@ -541,6 +605,45 @@ function publishCompilerDiagnostics(sourceFile: string, compilerText: string): v
   }
 }
 
+/**
+ * v1.5.1 safety net: scan the fresh Windows exe for DLL imports that are not
+ * part of base Windows. A dynamically-linked MinGW exe dies at launch with
+ * exit code -1073741515 (0xC0000135 STATUS_DLL_NOT_FOUND) on student PCs —
+ * this surfaces the problem AT COMPILE TIME, with the fix, instead of at run
+ * time with a hex code the student cannot google.
+ */
+function auditExeAfterBuild(exePath: string): void {
+  try {
+    const res = auditWindowsExe(exePath);
+    if (!res) {
+      return;
+    }
+    if (res.ok) {
+      log('[deps] import audit OK — ' + path.basename(exePath) + ' runs without MinGW runtime DLLs');
+      return;
+    }
+    log('[deps] WARNING: ' + buildAuditMessage(res, path.basename(exePath)));
+    captureExtensionWarning('windows exe imports non-system DLLs', {
+      exe: path.basename(exePath),
+      dlls: res.missing.join(',').slice(0, 200)
+    });
+    void vscode.window
+      .showWarningMessage(
+        path.basename(exePath) + ' needs ' + res.missing.join(', ') +
+        ' and would fail to launch on PCs without MinGW (exit code -1073741515). ' +
+        'Rebuild with static linking enabled (it is on by default).',
+        'Show Output'
+      )
+      .then((pick) => {
+        if (pick === 'Show Output') {
+          output.show(true);
+        }
+      });
+  } catch {
+    /* audit must never break the build flow */
+  }
+}
+
 function runBinary(sourceFile: string): void {
   const platform = currentPlatform();
   const bin = binaryPathFor(sourceFile, platform);
@@ -561,27 +664,43 @@ function runBinary(sourceFile: string): void {
     return;
   }
 
+  /* v1.5.1: plain console programs (no graphics.h) print and exit within
+   * milliseconds — launched as the terminal's root process, the terminal
+   * closed before the output could be read ("normal programs are not
+   * running"). They get a pause wrapper; graphics programs keep the direct
+   * launch (the BGI window itself stays open and IS the visible output). */
+  let consolePause = lastBuildLibrary === 'none';
+  try {
+    const srcText = fs.readFileSync(sourceFile, 'utf8');
+    consolePause = !detectGraphicsInclude(srcText);
+  } catch {
+    /* unreadable source — keep the compile-plan based guess */
+  }
+
   /* Always run inside the integrated terminal: the graphics window opens as
    * usual, AND the terminal gives the program a real console — cin/scanf/getch
    * input works and printf/cout output is visible. The old detached launch had
    * no stdio at all, so interactive programs could neither read input nor show
    * output. */
-  runInTerminal(bin);
+  runInTerminal(bin, consolePause);
 }
 
-function runInTerminal(bin: string): void {
-  /* Run the compiled program AS the terminal's root process — no shell is
-   * involved at all. v1.4.5 pinned Windows terminals to shellPath 'cmd.exe',
-   * a bare name VS Code could not resolve on some machines ("The terminal
-   * process failed to launch: Path to shell executable \"cmd.exe\" does not
-   * exist"); resolving or quoting ANY shell has the same class of risk. The
-   * exe is already verified with fs.existsSync by runBinary, so spawning it
-   * directly is the only failure-proof option: its stdin/stdout/stderr are
-   * wired to the terminal (cin/scanf/getch read input, printf/cout output is
-   * visible) while the graphics window opens as usual. The compiler bin dir
-   * is prepended to the environment so non-statically-linked exes still find
-   * their runtime DLLs. */
+function runInTerminal(bin: string, consolePause = false): void {
+  /* Run the compiled program inside the integrated terminal so it has a real
+   * console (cin/scanf/getch read input, printf/cout output is visible) while
+   * the graphics window opens as usual. v1.4.5 pinned Windows terminals to a
+   * bare 'cmd.exe' shellPath that VS Code could not resolve on some machines;
+   * spawning the exe directly avoids that class of problem entirely — for
+   * GRAPHICS programs. v1.5.1: plain console programs exit in milliseconds
+   * and the root-process launch closed the terminal before the output was
+   * readable, so they now run through a pause wrapper (a generated .cmd run
+   * via the ABSOLUTE ComSpec path — one plain-path argument, no shell-quoting
+   * minefield — or /bin/bash -c on POSIX). The env now carries the COMPILER's
+   * bin dir (not just the program's folder) so even a non-static exe finds
+   * its runtime DLLs. */
   const abs = path.resolve(bin);
+  const platform = currentPlatform();
+  const compiler = getConfig().compilerPath;
 
   /* One runner terminal at a time: disposing the previous one also stops the
    * program it was hosting, so a new Run cleanly replaces the old run. */
@@ -595,15 +714,53 @@ function runInTerminal(bin: string): void {
     /* terminal was already closed */
   }
 
-  const term = vscode.window.createTerminal({
-    name: TERMINAL_NAME,
-    shellPath: abs,
-    cwd: path.dirname(abs),
-    env: compilerEnv(bin)
-  });
+  let term: vscode.Terminal;
+  let how: string;
+  if (consolePause && platform === 'windows') {
+    const wrap = writePauseWrapper(abs);
+    if (wrap.fallback) {
+      term = vscode.window.createTerminal({
+        name: TERMINAL_NAME,
+        shellPath: abs,
+        cwd: path.dirname(abs),
+        env: compilerEnv(compiler, [path.dirname(abs)])
+      });
+      how = 'as terminal process (wrapper unavailable)';
+      addExtensionBreadcrumb('run', 'terminal-direct', { file: path.basename(abs) });
+    } else {
+      term = vscode.window.createTerminal({
+        name: TERMINAL_NAME,
+        shellPath: wrap.shellPath,
+        shellArgs: wrap.shellArgs,
+        cwd: path.dirname(abs),
+        env: compilerEnv(compiler, [path.dirname(abs)])
+      });
+      how = 'console wrapper (output stays visible)';
+      addExtensionBreadcrumb('run', 'terminal-console-wrapper', { file: path.basename(abs) });
+    }
+  } else if (consolePause) {
+    const wrap = buildPosixPauseLaunch(abs);
+    term = vscode.window.createTerminal({
+      name: TERMINAL_NAME,
+      shellPath: wrap.shellPath,
+      shellArgs: wrap.shellArgs,
+      cwd: path.dirname(abs),
+      env: compilerEnv(compiler, [path.dirname(abs)])
+    });
+    how = 'console wrapper (output stays visible)';
+    addExtensionBreadcrumb('run', 'terminal-console-wrapper', { file: path.basename(abs) });
+  } else {
+    term = vscode.window.createTerminal({
+      name: TERMINAL_NAME,
+      shellPath: abs,
+      cwd: path.dirname(abs),
+      env: compilerEnv(compiler, [path.dirname(abs)])
+    });
+    how = 'as terminal process';
+    addExtensionBreadcrumb('run', 'terminal-direct', { file: path.basename(abs) });
+  }
   term.show(false); /* focus the terminal so prompts can be answered at once */
-  log('[run] ' + abs + ' (as terminal process)');
-  addExtensionBreadcrumb('run', 'terminal-direct', { file: path.basename(abs) });
+  log('[run] ' + abs + ' (' + how + ')');
   lastRunTerminal = term;
   setRunState('running');
 }
@@ -822,6 +979,14 @@ async function runDoctor(verbose: boolean): Promise<DoctorResult> {
     log(`library ${lib.name.padEnd(9)}: ${lib.ok ? 'OK' : 'not found'} — ${lib.detail}`);
     if (!lib.ok && lib.fix) {
       log(`   fix -> ${lib.fix}`);
+    }
+  }
+  if (res.globalCheck) {
+    log(
+      `global       : ${res.globalCheck.ok ? 'OK — plain g++ resolves graphics.h in ANY terminal' : 'extension-only'} — ${res.globalCheck.detail}`
+    );
+    if (!res.globalCheck.ok && res.globalCheck.fix) {
+      log(`   fix -> ${res.globalCheck.fix}`);
     }
   }
   log(`graphics.h    : ${res.graphicsReady ? 'READY' : 'NOT READY'}`);
@@ -1216,6 +1381,14 @@ export function activate(context: vscode.ExtensionContext): void {
       'graphics-h-runner.setupEverything',
       trackedCommand('setupEverything', () => {
         void runFullSetup(context).catch((e) => {
+          const msg = e instanceof Error ? e.message : String(e);
+          if (msg.trim() === 'Canceled') {
+            /* user dismissed the progress notification — not an error
+             * (the only real issue Sentry ever saw for this command) */
+            log('[setup] canceled by the user');
+            panel?.setBusy(false);
+            return;
+          }
           log('[setup] crashed: ' + String(e));
           captureExtensionError(e, { command: 'setupEverything' });
           panel?.setBusy(false);

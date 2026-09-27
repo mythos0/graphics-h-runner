@@ -26,6 +26,12 @@ export interface DoctorResult {
   /** First library that compiled the probe successfully, if any. */
   bestLibrary: string | null;
   graphicsReady: boolean;
+  /**
+   * v1.5.1 "works anywhere" probe (Windows): compiles #include <graphics.h>
+   * + -lbgi with NO -I/-L flags — the exact command a student types in
+   * cmd.exe without this extension. ok = global setup is in effect.
+   */
+  globalCheck?: DoctorCheck;
 }
 
 export interface DoctorOptions {
@@ -220,11 +226,64 @@ export async function probeEnvironment(opts: DoctorOptions): Promise<DoctorResul
   }
 
   const best = libraryChecks.find((c) => c.ok);
+
+  /* v1.5.1 global probe (Windows only): can a plain terminal command
+   * `g++ probe.cpp -lbgi ...` resolve graphics.h with NO extension help? */
+  let globalCheck: DoctorCheck | undefined;
+  if (opts.platform === 'windows' && compilerCheck.ok && best && best.name === 'winbgim') {
+    globalCheck = await probeGlobalWindows(compiler);
+  }
+
   return {
     platform: opts.platform,
     compilerCheck,
     libraryChecks,
     bestLibrary: best ? best.name : null,
-    graphicsReady: compilerCheck.ok && Boolean(best)
+    graphicsReady: compilerCheck.ok && Boolean(best),
+    globalCheck
   };
+}
+
+const GLOBAL_FIX =
+  'Run "graphics.h: Complete graphics.h Run Setup" once — it copies WinBGIM into the ' +
+  'compiler toolchain folders and adds the compiler to your user PATH, so ANY terminal ' +
+  'or IDE can compile graphics.h programs without this extension.';
+
+/** Probe: plain `g++ probe.cpp -lbgi ...` with zero -I/-L (Windows). */
+async function probeGlobalWindows(compiler: string): Promise<DoctorCheck> {
+  let dir: string | null = null;
+  try {
+    dir = mkdtempSync(path.join(tmpdir(), 'bgi-globalcheck-'));
+    const srcPath = path.join(dir, 'global_probe.cpp');
+    const outPath = path.join(dir, 'global_probe.exe');
+    writeFileSync(srcPath, PROBE_SOURCE);
+    const res = await runProcess(
+      compiler,
+      [srcPath, '-o', outPath, '-lbgi', '-lgdi32', '-lcomdlg32', '-luuid', '-loleaut32', '-lole32'],
+      60000
+    );
+    return res.code === 0
+      ? {
+          name: 'global (no flags)',
+          ok: true,
+          detail: 'g++ resolves graphics.h + -lbgi with no -I/-L — works in ANY terminal without this extension'
+        }
+      : {
+          name: 'global (no flags)',
+          ok: false,
+          detail:
+            'plain "g++ ..." does not resolve graphics.h yet (the extension wires it via settings only)',
+          fix: GLOBAL_FIX
+        };
+  } catch (e) {
+    return { name: 'global (no flags)', ok: false, detail: 'probe crashed: ' + String(e), fix: GLOBAL_FIX };
+  } finally {
+    if (dir) {
+      try {
+        rmSync(dir, { recursive: true, force: true });
+      } catch {
+        /* ignore */
+      }
+    }
+  }
 }

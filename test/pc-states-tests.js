@@ -206,6 +206,28 @@ const section = (s) => console.log('\n== ' + s + ' ==');
     assert.strictEqual(plan.library, 'none');
     assert.ok(!plan.args.includes('-lbgi'));
   });
+  t('v1.5.1: plain C++ builds are statically linked too (the 0xC0000135 fix)', () => {
+    const plan = buildCompilePlan({
+      platform: 'windows', compilerPath: 'g++', sourceFile: 'a.cpp', outFile: 'a.exe'
+    }, false);
+    assert.strictEqual(plan.library, 'none');
+    for (const flag of ['-static', '-static-libgcc', '-static-libstdc++']) {
+      assert.ok(plan.args.includes(flag), 'missing ' + flag);
+    }
+  });
+  t('v1.5.1: staticLinkWindows=false leaves plain builds dynamic', () => {
+    const plan = buildCompilePlan({
+      platform: 'windows', compilerPath: 'g++', sourceFile: 'a.cpp', outFile: 'a.exe',
+      staticLinkWindows: false
+    }, false);
+    assert.ok(!plan.args.includes('-static'));
+  });
+  t('v1.5.1: linux plain builds unchanged (no -static)', () => {
+    const plan = buildCompilePlan({
+      platform: 'linux', compilerPath: 'g++', sourceFile: '/w/a.cpp', outFile: '/w/a'
+    }, false);
+    assert.ok(!plan.args.includes('-static'));
+  });
   t('SDL_bgi rpath added per custom lib dir (linux)', () => {
     const plan = buildCompilePlan({
       platform: 'linux', compilerPath: 'g++', sourceFile: '/w/a.cpp', outFile: '/w/a',
@@ -220,19 +242,19 @@ const section = (s) => console.log('\n== ' + s + ' ==');
   const WIN_BGI = { name: 'winbgim', ok: true };
   t('FRESH Windows (nothing installed)', () => {
     const ids = planSetup('windows', { compilerOk: false }).map((s) => s.id);
-    assert.deepStrictEqual(ids, ['install-compiler-winget', 'install-compiler-download', 'manual-compiler', 'install-winbgim', 'verify']);
+    assert.deepStrictEqual(ids, ['install-compiler-winget', 'install-compiler-download', 'manual-compiler', 'install-winbgim', 'make-global', 'verify']);
   });
   t('HALF Windows: compiler OK, WinBGIM missing', () => {
     const ids = planSetup('windows', { compilerOk: true, winbgimOk: false }).map((s) => s.id);
-    assert.deepStrictEqual(ids, ['install-winbgim', 'verify']);
+    assert.deepStrictEqual(ids, ['install-winbgim', 'make-global', 'verify']);
   });
   t('HALF Windows: WinBGIM installed, compiler missing (stale settings PC)', () => {
     const ids = planSetup('windows', { compilerOk: false, winbgimOk: true }).map((s) => s.id);
-    assert.deepStrictEqual(ids, ['install-compiler-winget', 'install-compiler-download', 'manual-compiler', 'verify']);
+    assert.deepStrictEqual(ids, ['install-compiler-winget', 'install-compiler-download', 'manual-compiler', 'make-global', 'verify']);
   });
-  t('READY Windows: only verify (idempotent re-run)', () => {
+  t('READY Windows: make-global + verify (idempotent re-run)', () => {
     const ids = planSetup('windows', { compilerOk: true, winbgimOk: true }).map((s) => s.id);
-    assert.deepStrictEqual(ids, ['verify']);
+    assert.deepStrictEqual(ids, ['make-global', 'verify']);
   });
   t('FRESH Linux (no compiler, no SDL2, no SDL_bgi)', () => {
     const ids = planSetup('linux', { compilerOk: false, sdlBgiOk: false }, false).map((s) => s.id);

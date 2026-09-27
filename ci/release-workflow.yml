@@ -1,0 +1,49 @@
+# NOTE: GitHub requires the "workflow" token scope to push files under .github/workflows/.
+# To activate CI: copy this file to .github/workflows/release.yml in your own clone (git mv) and push.
+
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Compile TypeScript
+        run: npm run compile
+
+      - name: Package VSIX
+        run: npx @vscode/vsce package --no-dependencies
+
+      - name: Attach VSIX to the GitHub release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: '*.vsix'
+
+      # To also publish to the VS Code Marketplace, add these secrets and
+      # uncomment:
+      #   VSCE_PAT  — Azure DevOps PAT with Marketplace > Manage scope
+      # - name: Publish to the VS Code Marketplace
+      #   run: npx @vscode/vsce publish --no-dependencies
+      #   env:
+      #     VSCE_PAT: ${{ secrets.VSCE_PAT }}
+      #
+      # To publish to OpenVSX, add OPEN_VSX_TOKEN and uncomment:
+      # - name: Publish to OpenVSX
+      #   run: npx ovsx publish --pat ${{ secrets.OPEN_VSX_TOKEN }}

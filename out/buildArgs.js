@@ -67,6 +67,16 @@ function buildCompilePlan(opts, useBgi, probe) {
     args.push(opts.sourceFile);
     args.push('-o', opts.outFile);
     let library = 'none';
+    /* v1.5.1: the static-link guarantee must cover PLAIN C++ builds too.
+     * A dynamically-linked hello-world exe needs libstdc++-6.dll /
+     * libgcc_s_seh-1.dll / libwinpthread-1.dll, which live only inside the
+     * compiler folder — on student PCs without MinGW in PATH the process dies
+     * with exit code -1073741515 (0xC0000135 STATUS_DLL_NOT_FOUND) before
+     * main() runs a single line ("The terminal process ... failed to launch").
+     * With -static the exe only imports DLLs that ship with Windows itself. */
+    if (!useBgi && opts.platform === 'windows' && opts.staticLinkWindows !== false) {
+        args.push('-static', '-static-libgcc', '-static-libstdc++');
+    }
     if (useBgi) {
         for (const p of libPaths) {
             args.push('-L' + p);

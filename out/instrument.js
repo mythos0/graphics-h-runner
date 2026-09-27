@@ -335,6 +335,13 @@ function initTelemetry() {
                 if (!telemetryAllowed()) {
                     return null;
                 }
+                /* v1.5.1: VS Code command cancellation (CancellationError) surfaces as
+                 * "Canceled: Canceled" and is pure user noise, not an extension error —
+                 * the only recurring issue the inbox ever saw for setupEverything. */
+                const exValues = event.exception?.values || [];
+                if (exValues.length > 0 && exValues.every((v) => v.type === 'Canceled')) {
+                    return null;
+                }
                 /* Anything NOT captured deliberately by our own code must belong to
                  * this extension: no frames at all (frame-less module-loader
                  * rejections), frames in another extension's folder, or paths naming

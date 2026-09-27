@@ -1,0 +1,126 @@
+{
+  "A": {
+    "rfx01_io_chart.cpp": {
+      "ok": true,
+      "exit": 0,
+      "analysis": {
+        "nonblack": 0.2277,
+        "unique_colors": 7
+      },
+      "secs": "8.3"
+    },
+    "rfx02_gravity_bounce.cpp": {
+      "ok": true,
+      "exit": 0,
+      "analysis": {
+        "nonblack": 0.0327,
+        "unique_colors": 6
+      },
+      "secs": "9.2"
+    },
+    "rfx03_conio_menu.cpp": {
+      "ok": true,
+      "exit": 0,
+      "analysis": {
+        "nonblack": 0.0552,
+        "unique_colors": 10
+      },
+      "secs": "10.0"
+    },
+    "rfx04_julia_morph.cpp": {
+      "ok": true,
+      "exit": 0,
+      "analysis": {
+        "nonblack": 0.2493,
+        "unique_colors": 23
+      },
+      "secs": "8.4"
+    },
+    "rfx05_image_ops.cpp": {
+      "ok": true,
+      "exit": 0,
+      "analysis": {
+        "nonblack": 0.0104,
+        "unique_colors": 6
+      },
+      "secs": "7.6"
+    },
+    "rfx06_viewport_clip.cpp": {
+      "ok": true,
+      "exit": 0,
+      "analysis": {
+        "nonblack": 0.0129,
+        "unique_colors": 4
+      },
+      "secs": "7.1"
+    },
+    "rfx07_text_matrix.cpp": {
+      "ok": true,
+      "exit": 0,
+      "analysis": {
+        "nonblack": 0.0108,
+        "unique_colors": 12
+      },
+      "secs": "8.0"
+    },
+    "rfx08_fill_stress.cpp": {
+      "ok": true,
+      "exit": 0,
+      "analysis": {
+        "nonblack": 0.5737,
+        "unique_colors": 9
+      },
+      "secs": "8.1"
+    },
+    "rfx09_stress_prims.cpp": {
+      "ok": true,
+      "exit": 0,
+      "analysis": {
+        "nonblack": 0.4946,
+        "unique_colors": 16
+      },
+      "secs": "7.2"
+    },
+    "rfx10_key_echo.cpp": {
+      "ok": true,
+      "exit": 0,
+      "analysis": {
+        "nonblack": 0.0091,
+        "unique_colors": 5
+      },
+      "secs": "11.0"
+    }
+  },
+  "B": {
+    "interactive": {
+      "exit": 0,
+      "out": "=== graphics.h I/O chart ===\nhow many bars (1-8)? value 1 (1-200)? value 2 (1-200)? value 3 (1-200)? BARS: 40 70 25\nchart window closed cleanly\n"
+    },
+    "eof": {
+      "exit": 0,
+      "out": "=== graphics.h I/O chart ===\nhow many bars (1-8)? [no or invalid input - demo mode, 5 bars]\nBARS: 20 35 50 65 80\nchart window closed cleanly\n"
+    }
+  },
+  "C": {
+    "exit": null,
+    "signal": "SIGSEGV"
+  },
+  "D": {
+    "first": "SIGKILL",
+    "second": 0
+  },
+  "E": {
+    "count": 2,
+    "first": {
+      "file": "/tmp/my-project/graphics-h-runner/build/robust/rfx12_broken.cpp",
+      "line": 5,
+      "column": 5,
+      "severity": "error",
+      "message": "‘win’ was not declared in this scope; did you mean ‘sin’?"
+    }
+  },
+  "F": {
+    "allKilled": true,
+    "last": "SIGKILL"
+  }
+}
