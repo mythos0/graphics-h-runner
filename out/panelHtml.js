@@ -387,7 +387,7 @@ function buildPanelHtml(opts) {
         <div class="cheat-cat">
           <h4>Celebrations</h4>
           <div class="cheat-fn"><code>\ud83c\udf89 Confetti on success</code><span>Every successful compilation ends with a full-screen confetti burst (canvas-confetti). Click anywhere or press Esc to dismiss it early.</span></div>
-          <div class="cheat-fn"><code>\u2744 Snow on errors</code><span>A 3-second snowfall plays when a compile stops on errors, so a failed build is impossible to miss.</span></div>
+          <div class="cheat-fn"><code>\u274c Error overlay</code><span>When a compile stops on errors, a full-screen error overlay shows a giant shaking \u2717 and the compiler\u2019s first error messages in big type \u2014 click or press Esc to dismiss.</span></div>
           <div class="cheat-fn"><code>\ud83c\udf92 School Pride</code><span>The first time the graphics.h panel opens in a session, a 5-second School Pride show greets you (once per session).</span></div>
           <div class="cheat-fn"><code>\ud83c\udf86 Fireworks Simulator</code><span>The festive action button launches a full-screen fireworks show — click it again (or Esc, or the red Stop button) to stop.</span></div>
         </div>

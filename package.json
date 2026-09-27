@@ -2,7 +2,7 @@
   "name": "graphics-h-runner",
   "displayName": "graphics.h Runner. One-click Setup",
   "description": "Compile & run C++ graphics.h programs (WinBGIM / SDL_bgi) with one keypress or F5. Auto-detects graphics.h, applies the right linker flags per OS, auto-installs everything from zero, runs programs in a real terminal (stdin/stdout), surfaces compiler errors in the Problems panel, and ships a sidebar with 31 runnable examples (Turbo C++ classics, conio.h keyboard pads, DDA line input) plus a Computer Graphics Lab \u2014 coordinate viewer, pixel inspector, DDA, Bresenham, circle, ellipse, transforms, clipping \u2014 a searchable graphics.h cheat sheet, a Setup Doctor, and a global one-click setup \u2014 graphics.h then compiles in ANY terminal or IDE without this extension.",
-  "version": "1.5.5",
+  "version": "1.5.6",
   "publisher": "mythos0-labs",
   "author": {
     "name": "Department of CSE, Dhaka International University",
@@ -272,7 +272,7 @@
         "graphics-h-runner.celebrations.enabled": {
           "type": "boolean",
           "default": true,
-          "description": "Celebrate results: confetti on every successful compilation, snow for 3 seconds on compile errors, and a School Pride show the first time the panel opens each session. The Fireworks Simulator button always works."
+          "description": "Celebrate results: confetti on every successful compilation, a full-screen error overlay (giant \u2717 + the first compiler errors in big type) on compile errors, and a School Pride show the first time the panel opens each session. The Fireworks Simulator button always works."
         }
       }
     },

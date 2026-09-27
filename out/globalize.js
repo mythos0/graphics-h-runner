@@ -55,6 +55,7 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.defaultRunner = void 0;
 exports.computeGlobalTargets = computeGlobalTargets;
+exports.resolveCompilerOnPath = resolveCompilerOnPath;
 exports.parseRegQueryPath = parseRegQueryPath;
 exports.appendPathEntry = appendPathEntry;
 exports.makeGlobalWindows = makeGlobalWindows;
@@ -91,6 +92,28 @@ function computeGlobalTargets(compilerPath) {
         libCandidates.push(path.join(toolchainRoot, triplet, 'lib'));
     }
     return { binDir, toolchainRoot, includeCandidates, libCandidates, triplet };
+}
+/** Windows `where` / POSIX `which` — first absolute hit that exists on disk. */
+async function resolveCompilerOnPath(compilerPath, platform, runner) {
+    if (path.isAbsolute(compilerPath) && fs.existsSync(compilerPath)) {
+        return compilerPath;
+    }
+    try {
+        const res = await runner(platform === 'windows' ? 'where' : 'which', [compilerPath], 15000);
+        if (res.code !== 0) {
+            return null;
+        }
+        for (const line of res.stdout.split(/\r?\n/)) {
+            const candidate = line.trim();
+            if (path.isAbsolute(candidate) && fs.existsSync(candidate)) {
+                return candidate;
+            }
+        }
+    }
+    catch {
+        /* fall through */
+    }
+    return null;
 }
 /** Extract the raw (unexpanded) value from `reg query HKCU\Environment /v Path`. */
 function parseRegQueryPath(stdout) {
@@ -141,8 +164,38 @@ async function makeGlobalWindows(opts) {
             throw new Error('WinBGIM file missing: ' + f + ' — run the WinBGIM setup step first');
         }
     }
-    const targets = computeGlobalTargets(opts.compilerPath);
-    say('toolchain root: ' + targets.toolchainRoot);
+    /* v1.5.6 SAFETY GATE: the compiler path must resolve to a REAL toolchain.
+     * A bare "g++" (compiler found on PATH, never written back as an absolute
+     * path) used to be resolved against the extension host's CWD — producing
+     * garbage targets like binDir=<VS Code install dir> and toolchainRoot=E:\ ,
+     * which then polluted the user PATH and littered the drive root. */
+    const realCompiler = await resolveCompilerOnPath(opts.compilerPath, 'windows', runner);
+    if (!realCompiler) {
+        say('could not locate the real toolchain folder for "' + opts.compilerPath +
+            '" — global setup skipped. The extension itself keeps working via its settings. ' +
+            '(Set "graphics-h-runner.compilerPath" to the full g++.exe path to enable global setup.)');
+        return {
+            globalProbeOk: false,
+            pathOk: false,
+            pathChanged: false,
+            universalCommand: (0, runwrap_1.universalCommandDoc)(),
+            log
+        };
+    }
+    const exeName = path.basename(realCompiler);
+    const targets = computeGlobalTargets(realCompiler);
+    if (!fs.existsSync(path.join(targets.binDir, exeName))) {
+        say('compiler location check failed (' + targets.binDir + ' does not contain ' + exeName +
+            ') — global setup skipped to avoid touching the wrong folders.');
+        return {
+            globalProbeOk: false,
+            pathOk: false,
+            pathChanged: false,
+            universalCommand: (0, runwrap_1.universalCommandDoc)(),
+            log
+        };
+    }
+    say('toolchain root: ' + targets.toolchainRoot + ' (compiler: ' + realCompiler + ')');
     /* 1. copy the trio into the toolchain's own include/lib, probe-compile
      *    with ZERO -I/-L flags; on failure try the next layout candidate. */
     let globalProbeOk = false;

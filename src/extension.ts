@@ -31,7 +31,9 @@ import {
   installCompilerViaWinget,
   installCompilerWindowsDirect,
   discoverGppWindows,
-  verifyCompilerRun
+  verifyCompilerRun,
+  compilerArchitecture,
+  bgiLinkProbe
 } from './setup';
 import { loadProgramCatalog, LoadedProgram, resolveProgramTarget } from './programs';
 import { GhPanelProvider, PanelClick } from './panelView';
@@ -54,7 +56,7 @@ import {
   setTelemetryContext,
   flushTelemetry
 } from './instrument';
-import { parseCompilerOutput, capCompilerDiagnostics } from './diagnostics';
+import { parseCompilerOutput, capCompilerDiagnostics, looksLikeBgiLinkFailure, pickErrorHeaders } from './diagnostics';
 import { auditWindowsExe, buildAuditMessage } from './depsAudit';
 import { cmdRunLine, posixRunLine } from './runwrap';
 import { makeGlobalWindows } from './globalize';
@@ -83,7 +85,7 @@ let diagnostics: vscode.DiagnosticCollection | undefined;
 let runState: 'idle' | 'compiling' | 'running' = 'idle';
 /* which back-end the last successful build used ('none' = plain console C++) */
 let lastBuildLibrary: BgiLibrary | 'none' = 'none';
-/* v1.5.5: the celebration overlay (confetti / snow / school pride /
+/* v1.5.5: the celebration overlay (confetti / error / school pride /
  * Fireworks Simulator) — exactly one panel, driven by the commands below */
 let celebrator: Celebrator | undefined;
 /* School Pride fires once per session: the first time the activity-bar
@@ -137,7 +139,7 @@ function trackedCommand<A extends unknown[], R>(
   };
 }
 
-/** v1.5.5 celebrations master switch (confetti / snow / school pride). */
+/** v1.5.6 celebrations master switch (confetti / error / school pride). */
 function celebrationsEnabled(): boolean {
   return vscode.workspace
     .getConfiguration('graphics-h-runner.celebrations')
@@ -145,12 +147,12 @@ function celebrationsEnabled(): boolean {
 }
 
 /** Fire a timed celebration; a celebration must never break a compile. */
-function celebrate(kind: 'confetti' | 'snow' | 'schoolpride'): void {
+function celebrate(kind: 'confetti' | 'error' | 'schoolpride', errorLines?: string[]): void {
   if (!celebrator || !celebrationsEnabled()) {
     return;
   }
   try {
-    celebrator.show(kind);
+    celebrator.show(kind, undefined, errorLines ? { errorLines } : undefined);
   } catch {
     /* ignore — the compile result matters more than the party */
   }
@@ -177,15 +179,31 @@ async function setCompilerPathSetting(gppPath: string): Promise<void> {
   }
 }
 
-/** First g++.exe candidate that actually runs (Windows). */
-async function findWorkingGpp(): Promise<{ gppPath: string; version: string } | undefined> {
-  for (const candidate of discoverGppWindows()) {
+/** First g++.exe candidate that actually runs (Windows). v1.5.6: a candidate
+ * whose target architecture is x86_64 is always preferred over legacy 32-bit
+ * compilers — the bundled WinBGIM library is 64-bit and 32-bit compilers
+ * can never link it. With `requireBgiCapable`, 32-bit/unknown candidates are
+ * rejected outright (used when the current compiler is known-incompatible). */
+async function findWorkingGpp(opts: { requireBgiCapable?: boolean } = {}): Promise<
+  { gppPath: string; version: string; arch: string } | undefined
+> {
+  const candidates = discoverGppWindows();
+  const scored: Array<{ gppPath: string; version: string; arch: string }> = [];
+  for (const candidate of candidates) {
     const v = await verifyCompilerRun(candidate);
-    if (v.ok) {
-      return { gppPath: candidate, version: v.version };
+    if (!v.ok) {
+      continue;
+    }
+    const arch = await compilerArchitecture(candidate);
+    if (opts.requireBgiCapable && arch !== 'x86_64') {
+      continue;
+    }
+    scored.push({ gppPath: candidate, version: v.version, arch });
+    if (arch === 'x86_64') {
+      return scored[scored.length - 1]; /* best possible — take it at once */
     }
   }
-  return undefined;
+  return scored[0];
 }
 
 /**
@@ -254,13 +272,44 @@ async function runFullSetup(context: vscode.ExtensionContext): Promise<void> {
         libgraphOk: doctor.libraryChecks.some((c) => c.name === 'libgraph' && c.ok)
       };
 
+      /* v1.5.6 THE "Full Setup said READY but nothing runs" fix: a compiler
+       * that runs --version can still be UNABLE to link the bundled 64-bit
+       * WinBGIM library (legacy 32-bit MinGW.org g++). Detect it up front so
+       * the plan installs a compatible 64-bit MinGW-w64 compiler. */
+      let compilerBgiIncompatible = false;
+      if (platform === 'windows' && probe.compilerOk) {
+        const wbLib = path.join(storageRoot, 'winbgim', 'lib');
+        const wbInc = path.join(storageRoot, 'winbgim', 'include');
+        if (fs.existsSync(path.join(wbLib, 'libbgi.a'))) {
+          /* library present: test the REAL thing — compile+link a probe */
+          const link = await bgiLinkProbe({
+            compiler: cfg.compilerPath || 'g++',
+            includeDir: wbInc,
+            libDir: wbLib,
+            platform
+          });
+          compilerBgiIncompatible = !link.ok && link.undefinedRefs;
+          log('[setup] bgi link probe: ' + (link.ok ? 'OK' : 'FAILED — ' + link.detail.slice(0, 160)));
+          if (compilerBgiIncompatible) {
+            addExtensionBreadcrumb('setup.probe', 'compiler cannot link the graphics library');
+          }
+        } else {
+          /* library not installed yet: fall back to the target architecture */
+          const arch = await compilerArchitecture(cfg.compilerPath || 'g++');
+          compilerBgiIncompatible = arch === 'mingw32' || arch === 'i686';
+          if (compilerBgiIncompatible) {
+            log(`[setup] compiler target is ${arch} (32-bit) — it cannot link the 64-bit graphics library`);
+          }
+        }
+      }
+
       let sdl2DevOk = true;
       if (platform === 'linux' || platform === 'macos') {
         progress.report({ message: 'Checking SDL2 headers…' });
         sdl2DevOk = await checkSdl2Dev({ cc: platform === 'macos' ? 'clang' : 'gcc' });
       }
 
-      const plan = planSetup(platform, probe, sdl2DevOk);
+      const plan = planSetup(platform, { ...probe, compilerBgiIncompatible }, sdl2DevOk);
       log('[setup] plan: ' + plan.map((s) => `${s.id}(${s.kind})`).join(' -> '));
 
       for (const step of plan) {
@@ -292,11 +341,16 @@ async function runFullSetup(context: vscode.ExtensionContext): Promise<void> {
           }
         } else if (step.kind === 'auto' && step.id === 'install-compiler-winget') {
           /* half-setup fast path: a compiler may already be on disk (previous
-           * winget run, manual install, IDE bundle) — skip the whole download */
-          const existing = await findWorkingGpp();
+           * winget run, manual install, IDE bundle) — skip the whole download.
+           * v1.5.6: a BGI-incompatible compiler (32-bit MinGW.org) does NOT
+           * count — it is exactly what we are here to replace. */
+          const existing = await findWorkingGpp({ requireBgiCapable: compilerBgiIncompatible });
           if (existing) {
             await setCompilerPathSetting(existing.gppPath);
-            summary.push(`Compiler already present on this PC — using ${existing.gppPath} (${existing.version}). winget step skipped.`);
+            summary.push(
+              `Compiler already present on this PC — using ${existing.gppPath} (${existing.version}` +
+                (existing.arch ? `, ${existing.arch}` : '') + '). winget step skipped.'
+            );
             continue;
           }
           const winget = await installCompilerViaWinget((p) =>
@@ -304,20 +358,24 @@ async function runFullSetup(context: vscode.ExtensionContext): Promise<void> {
           );
           log('[setup] winget: ' + winget.detail);
           addExtensionBreadcrumb('setup.step', 'install-compiler-winget', { ok: String(winget.ok) });
-          const found = await findWorkingGpp();
+          const found = await findWorkingGpp({ requireBgiCapable: true });
           if (found) {
             await setCompilerPathSetting(found.gppPath);
-            summary.push(`Compiler installed automatically via winget: ${found.gppPath} (${found.version})`);
+            summary.push(`Compiler installed automatically via winget: ${found.gppPath} (${found.version}, ${found.arch})`);
           } else if (winget.ok) {
             summary.push('winget finished but no working g++.exe was found — trying the direct-download fallback next.');
           } else {
             summary.push('winget automatic install not possible: ' + winget.detail + ' — trying the direct-download fallback next.');
           }
         } else if (step.kind === 'auto' && step.id === 'install-compiler-download') {
+          /* v1.5.6: "already" must mean a BGI-CAPABLE compiler when the
+           * current one is known-incompatible — otherwise this step would be
+           * skipped on the very PCs that need it most. */
           const current = getConfig();
-          const already =
-            (await verifyCompilerRun(current.compilerPath || 'g++')).ok ||
-            Boolean(await findWorkingGpp());
+          const runsOk = (await verifyCompilerRun(current.compilerPath || 'g++')).ok;
+          const currentArch = runsOk ? await compilerArchitecture(current.compilerPath || 'g++') : 'unknown';
+          const currentIsGood = runsOk && (!compilerBgiIncompatible || currentArch === 'x86_64');
+          const already = currentIsGood || Boolean(await findWorkingGpp({ requireBgiCapable: compilerBgiIncompatible }));
           if (already) {
             summary.push('Compiler already available — direct download skipped.');
           } else {
@@ -583,7 +641,11 @@ async function compileSource(sourceFile: string): Promise<CompileResult> {
       auditExeAfterBuild(binaryPathFor(sourceFile, currentPlatform()));
     }
   } else if (result === 'failed') {
-    celebrate('snow'); /* v1.5.5: 3 s snowfall so errors are impossible to miss */
+    /* v1.5.6: the snowfall is gone — a failed build now gets a relatable
+     * ERROR overlay: giant ✗ + shake, the actual compiler error headers in
+     * big type, and a red-ember rain for 5 s (click/Esc to dismiss). */
+    const errorHeaders = pickErrorHeaders(compilerText, 3, 120);
+    celebrate('error', errorHeaders);
     /* Compile errors are the NORMAL edit-compile loop for a graphics.h
      * teaching tool — they belong in the Problems panel and the output
      * channel, NOT in the telemetry error inbox (a single student session
@@ -591,15 +653,36 @@ async function compileSource(sourceFile: string): Promise<CompileResult> {
      * first error lines ride along as a breadcrumb so any genuinely
      * unrelated crash in the same session still carries compiler context. */
     publishCompilerDiagnostics(sourceFile, compilerText);
-    const firstErrors = compilerText
-      .split(/\r?\n/)
-      .filter((l) => /:\s+(fatal error|error):/.test(l))
-      .slice(0, 3)
-      .join(' | ');
+    const firstErrors = errorHeaders.join(' | ');
     addExtensionBreadcrumb('compile', 'failed', {
       file: path.basename(sourceFile),
       errors: (firstErrors || 'no error lines captured').slice(0, 600)
     });
+    /* v1.5.6: undefined references to graphics symbols = the graphics
+     * library could not be LINKED (classic: 32-bit MinGW.org g++ vs the
+     * 64-bit libbgi.a). Turn the wall of linker errors into one fix. */
+    if (looksLikeBgiLinkFailure(compilerText)) {
+      log('[deps] graphics library could not be linked — the compiler is incompatible with libbgi.a');
+      captureExtensionWarning('graphics library link failed (incompatible compiler/library)', {
+        file: path.basename(sourceFile)
+      });
+      void vscode.window
+        .showErrorMessage(
+          'The graphics library (libbgi.a) could not be LINKED — every graphics symbol is unresolved. ' +
+            'This compiler cannot use the installed 64-bit graphics library (typical cause: the legacy ' +
+            '32-bit MinGW.org g++). Complete Run Setup can install a compatible 64-bit MinGW-w64 ' +
+            'compiler automatically.',
+          'Complete Run Setup (recommended)',
+          'Show Output'
+        )
+        .then((pick) => {
+          if (pick === 'Complete Run Setup (recommended)') {
+            vscode.commands.executeCommand('graphics-h-runner.setupEverything');
+          } else if (pick === 'Show Output') {
+            output.show(true);
+          }
+        });
+    }
   }
   return result;
 }

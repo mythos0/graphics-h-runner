@@ -1,8 +1,9 @@
-/* graphics.h Runner — celebration overlay controller (v1.5.5).
+/* graphics.h Runner — celebration overlay controller (v1.5.6).
  *
  * Runs inside the celebration WebviewPanel. Consumes
- *   window.__GHR_CELEBRATE__ = { kind: 'confetti'|'snow'|'schoolpride',
- *                                durationMs: number }
+ *   window.__GHR_CELEBRATE__ = { kind: 'confetti'|'error'|'schoolpride',
+ *                                durationMs: number,
+ *                                errorLines?: string[] }
  * written by celebrate.ts. The confetti library
  * (media/confetti.browser.js — catdad/canvas-confetti v1.9.4, ISC) is
  * loaded before this script.
@@ -10,9 +11,11 @@
  * Effects:
  *   confetti    — the canvas-confetti README "Realistic Look" staged
  *                 burst (plus one later wave for the full-screen feel).
- *   snow        — a snowfall of soft white flakes for the duration
- *                 (3 s per the host schedule), spawned above the top
- *                 edge with gentle gravity and sideways drift.
+ *   error       — a red-ember rain across the whole screen for the
+ *                 duration (5 s); the giant shaking ✗, the "COMPILE
+ *                 ERROR" headline and the big compiler error headers are
+ *                 DOM built by celebrate.ts (kind:'error' replaced the
+ *                 old snowfall, which read as weather instead of failure).
  *   schoolpride — the canvas-confetti README "School Pride" side
  *                 cannons, exact preset, fired for the duration (5 s).
  *
@@ -67,28 +70,30 @@
       if (stopped) { return; }
       confetti({ particleCount: 90, spread: 100, origin: { y: 0.6 }, scalar: 0.9 });
     }, 550);
-  } else if (kind === 'snow') {
-    /* gentle snowfall: flakes spawn above the top edge, fall with low
-     * gravity and a sideways drift; ticks sized so flakes finish their
-     * fall inside the 3-second window */
-    var snowEnd = Date.now() + durationMs + 300;
+  } else if (kind === 'error') {
+    /* red-ember rain behind the big ✗ / COMPILE ERROR headline and the
+     * big-font error headers (DOM built by celebrate.ts): embers spawn
+     * above the top edge with slow gravity and a slight drift, in an
+     * error palette — impossible to mistake for weather or success */
+    var emberEnd = Date.now() + durationMs + 300;
+    var emberColors = ['#ef4444', '#f87171', '#b91c1c', '#fbbf24', '#7f1d1d'];
     (function loop() {
       if (stopped) { return; }
-      for (var i = 0; i < 3; i++) {
+      for (var i = 0; i < 4; i++) {
         confetti({
           particleCount: 1,
           startVelocity: 0,
           angle: 90,
           spread: 0,
-          ticks: 210,
-          gravity: 0.35,
-          drift: (Math.random() - 0.5) * 1.6,
-          scalar: 0.5 + Math.random() * 0.7,
+          ticks: 220,
+          gravity: 0.45,
+          drift: (Math.random() - 0.5) * 1.2,
+          scalar: 0.5 + Math.random() * 0.8,
           origin: { x: Math.random(), y: -0.05 },
-          colors: ['#ffffff', '#e8f4ff', '#dfe9f5']
+          colors: emberColors
         });
       }
-      if (Date.now() < snowEnd) { requestAnimationFrame(loop); }
+      if (Date.now() < emberEnd) { requestAnimationFrame(loop); }
     }());
   } else if (kind === 'schoolpride') {
     /* canvas-confetti README — "School Pride" (side cannons, 5 s) */

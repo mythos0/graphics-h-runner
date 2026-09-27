@@ -50,7 +50,7 @@ Press **`Ctrl+Alt+R`** → compiled with the right linker flags → graphics win
 | **🐛 Compiler errors in the Problems panel** | g++/gcc output is parsed into clickable file:line diagnostics with inline squiggles — compile errors are visible where you edit, not only in the output. |
 | **🛡️ Messy-settings healing** | Real-world PCs have messy configs. The extension heals them on every run: quoted paths (`"C:\...\g++.exe"`), `%ENV%`/`$VAR` variables, `~`, trailing slashes, **directory-instead-of-exe** paths, missing `.exe` suffixes, stale include/lib dirs from old installs (auto-pruned), and Windows' raw `-4058` spawn failures are all recognized and routed to the one-click fix instead of cryptic errors. |
 | **✂️ Snippets** | `gfxprog`, `gfx-anim`, `gfx-mouse`, `gfx-kbd`, `gfx-text`, `gfx-bar`. |
-| **🎆 Celebrations** | Full-screen celebration overlays: **confetti** (canvas-confetti "Realistic Look") on every successful compilation, **snow for 3 s** when a compile stops on errors, a **School Pride** show for 5 s the first time the panel opens each session, and a festive **Fireworks Simulator** action button (the [troyxun/fireworks-simulator](https://github.com/troyxun/fireworks-simulator) engine, MIT — by Caleb Miller) that takes over the editor area until you stop it from the same button, the red Stop pill, Esc, or the view title bar. All bundled — zero remote requests — and gated by `graphics-h-runner.celebrations.enabled`. |
+| **🎆 Celebrations** | Full-screen celebration overlays: **confetti** (canvas-confetti "Realistic Look") on every successful compilation, **full-screen error overlay** (giant shaking ✗ + the first compiler errors in big type) when a compile stops on errors, a **School Pride** show for 5 s the first time the panel opens each session, and a festive **Fireworks Simulator** action button (the [troyxun/fireworks-simulator](https://github.com/troyxun/fireworks-simulator) engine, MIT — by Caleb Miller) that takes over the editor area until you stop it from the same button, the red Stop pill, Esc, or the view title bar. All bundled — zero remote requests — and gated by `graphics-h-runner.celebrations.enabled`. |
 | **🎮 31 example programs** | Classic starters, Turbo C++ classics (`bar3d`/`pieslice`/`sector`/`floodfill`/fill-pattern tours, viewport clipping, `getimage`/`putimage` sprites), a **conio.h** keyboard drawing pad (`kbhit`/`getch`), fun ones (Fireworks, Solar System, Aquarium, Helicopter, Warp Starfield) and **DDA Line with terminal input** — all auto-exiting and screenshot-verified. The **Computer Graphics Lab** adds the course classics as runnable labs: **Coordinate Viewer** (grid / axes / origin / labels / snap), **Pixel Inspector** (mouse x/y + color readout, click prints a copy-ready coordinate), **DDA**, **Bresenham** (line + circle), **Midpoint Ellipse**, **2D Transformations** and **Cohen-Sutherland Clipping**. |
 
 ## Install
@@ -145,7 +145,7 @@ The **graphics.h Runner** icon in the Activity Bar opens the modern panel:
 | `graphics-h-runner.extraLibPaths` | `[]` | Extra `-L` dirs (auto-managed by Full Setup) |
 | `graphics-h-runner.extraCompilerArgs` | `[]` | e.g. `["-std=c++17", "-Wall"]` |
 | `graphics-h-runner.showStatusBarItem` | `true` | Show the BGI status indicator |
-| `graphics-h-runner.celebrations.enabled` | `true` | Confetti on compile success, 3 s snow on compile errors, 5 s School Pride on the first panel open of each session (the Fireworks Simulator button always works) |
+| `graphics-h-runner.celebrations.enabled` | `true` | Confetti on compile success, the error overlay (giant ✗ + big-font compiler error headers) on compile errors, 5 s School Pride on the first panel open of each session (the Fireworks Simulator button always works) |
 
 ## Telemetry (automatic error collection)
 
@@ -248,6 +248,14 @@ user-prefix install → compile → verified render, plus WinBGIM asset validati
 - **Compiled but the window is black on a self-installed SDL_bgi 3.x** — set
   `SDL_BGI_RATE=auto`, or re-run Complete Setup so the patched build is installed for you.
 - **Windows: `winget` missing** — use the WinLibs manual download shown by Complete Setup.
+- **`undefined reference to \`circle\` / \`getmaxx\` / ...` at link time** — your compiler cannot
+  use the installed graphics library. The bundled WinBGIM is **64-bit**: the legacy 32-bit
+  MinGW.org g++ (`g++ -dumpmachine` → `mingw32`) silently skips it and every graphics symbol
+  comes out unresolved. Re-run **Complete Run Setup** — since v1.5.6 it detects the
+  incompatibility and installs a compatible 64-bit MinGW-w64 compiler automatically.
+- **The error overlay shows my compiler errors in big type** — a failed build plays a short
+  full-screen error overlay (giant ✗ + the first error headers, 5 s) so the failure explains
+  itself; click or press Esc to dismiss it instantly.
 
 ## Publishing notes (for maintainers)
 

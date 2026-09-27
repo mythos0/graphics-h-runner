@@ -18,6 +18,7 @@ const {
   computeGlobalTargets,
   parseRegQueryPath,
   appendPathEntry,
+  resolveCompilerOnPath,
   makeGlobalWindows
 } = require(path.join(ROOT, 'out', 'globalize'));
 const {
@@ -232,6 +233,77 @@ function makeFakeWorld(brokenProbe) {
         }),
       (e) => /WinBGIM file missing/.test(e.message) && e.message.includes('libbgi.a')
     );
+  });
+
+  /* ---------------------------------------------------------------- */
+  section('D. v1.5.6 safety gate — unresolved compilers must touch NOTHING');
+
+  await t('bare "g++" with `where` failing -> skip gracefully, zero registry writes', async () => {
+    /* THE E:\ BUG: a bare "g++" used to be resolved against the extension
+     * host CWD, producing binDir=<VS Code dir> and root=E:\ — polluting the
+     * user PATH ("+ E:\Microsoft VS Code") and littering the drive root. */
+    const w = makeFakeWorld(false);
+    const res = await makeGlobalWindows({
+      compilerPath: 'g++',
+      includeDir: w.includeDir,
+      libDir: w.libDir,
+      runner: async (cmd, args) => {
+        w.calls.push([cmd, ...args].join(' '));
+        if (cmd === 'where') {
+          return { code: 1, stdout: '', stderr: 'INFO: Could not find files for the given pattern(s).' };
+        }
+        return { code: 0, stdout: '', stderr: '' };
+      }
+    });
+    assert.strictEqual(res.globalProbeOk, false);
+    assert.strictEqual(res.pathOk, false);
+    assert.strictEqual(res.pathChanged, false, 'no PATH change may happen without a real toolchain');
+    assert.ok(!w.calls.some((c) => c.startsWith('reg add')), 'registry must not be touched');
+    assert.ok(!fs.existsSync(path.join(w.root, 'include', 'graphics.h')), 'no blind copies either');
+    assert.ok(res.log.join('\n').includes('could not locate the real toolchain folder'), 'clear skip reason');
+  });
+
+  await t('bare "g++" located via `where` -> resolved to the REAL toolchain', async () => {
+    const w = makeFakeWorld(false);
+    const res = await makeGlobalWindows({
+      compilerPath: 'g++',
+      includeDir: w.includeDir,
+      libDir: w.libDir,
+      runner: async (cmd, args) => {
+        w.calls.push([cmd, ...args].join(' '));
+        if (cmd === 'where') {
+          return { code: 0, stdout: 'E:\\MinGW\\bin\\g++.exe\r\n', stderr: '' };
+        }
+        if (cmd.endsWith('g++.exe')) {
+          /* resolution validates the REAL file on disk — not the fake world one */
+          return { code: 0, stdout: '', stderr: '' };
+        }
+        return w.runner(cmd, args);
+      }
+    });
+    /* E:\MinGW\bin\g++.exe does not exist on this POSIX sandbox, so the
+     * existence check must fail -> skipped. Either way: NO garbage PATHs. */
+    assert.strictEqual(res.pathChanged, false);
+    assert.ok(!w.calls.some((c) => c.startsWith('reg add')));
+  });
+
+  await t('resolveCompilerOnPath: absolute+existing wins without spawning', async () => {
+    let spawned = false;
+    const hit = await resolveCompilerOnPath(__filename, 'windows', async () => {
+      spawned = true;
+      return { code: 0, stdout: '', stderr: '' };
+    });
+    assert.strictEqual(hit, __filename);
+    assert.strictEqual(spawned, false, 'existing absolute path needs no lookup');
+  });
+
+  await t('resolveCompilerOnPath: returns null when lookup finds nothing absolute', async () => {
+    const out = await resolveCompilerOnPath('g++', 'windows', async () => ({
+      code: 0,
+      stdout: 'g++\r\nrelative\r\n',
+      stderr: ''
+    }));
+    assert.strictEqual(out, null, 'relative lines must be ignored');
   });
 
   console.log('\nglobalize-tests: ' + passed + ' passed, ' + failed + ' failed, exitCode=' + (process.exitCode || 0));

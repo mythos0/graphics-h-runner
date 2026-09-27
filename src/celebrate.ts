@@ -1,5 +1,5 @@
 /**
- * celebrate.ts — full-screen celebration overlays (v1.5.5), PURE builders.
+ * celebrate.ts — full-screen celebration overlays (v1.5.6), PURE builders.
  *
  * A dedicated WebviewPanel takes over the editor area (the closest thing
  * VS Code offers to "full VS Code screen") and plays a canvas effect:
@@ -7,8 +7,11 @@
  *   confetti     — canvas-confetti "Realistic Look" burst on every
  *                  successful compilation (vendored: catdad/canvas-confetti
  *                  v1.9.4, ISC license — media/confetti.browser.js).
- *   snow         — 3 seconds of falling snow when a compile stops on
- *                  errors, so a failed build is impossible to miss.
+ *   error        — a relatable COMPILE-ERROR overlay when a build stops on
+ *                  errors: a giant shaking ✗, the actual compiler error
+ *                  headers in big type, and a red-ember rain. Replaces the
+ *                  old snowfall (v1.5.5) that looked like weather, not like
+ *                  a failure.
  *   schoolpride  — canvas-confetti "School Pride" side cannons for 5 s,
  *                  fired once per session the first time the activity-bar
  *                  panel opens (every fresh desktop / window start).
@@ -29,13 +32,13 @@
 
 import * as path from 'path';
 
-export type CelebrationKind = 'confetti' | 'snow' | 'schoolpride' | 'fireworks';
-export type TimedCelebrationKind = 'confetti' | 'snow' | 'schoolpride';
+export type CelebrationKind = 'confetti' | 'error' | 'schoolpride' | 'fireworks';
+export type TimedCelebrationKind = 'confetti' | 'error' | 'schoolpride';
 
 /** How long each timed overlay stays open (fireworks runs until stopped). */
 export const CELEBRATION_DURATIONS_MS: Record<TimedCelebrationKind, number> = {
   confetti: 3200,
-  snow: 3000,
+  error: 5000,
   schoolpride: 5000
 };
 
@@ -46,8 +49,8 @@ export function celebrationTitle(kind: CelebrationKind): string {
   switch (kind) {
     case 'confetti':
       return 'graphics.h — 🎉 Compiled OK';
-    case 'snow':
-      return 'graphics.h — ❄ Compile errors';
+    case 'error':
+      return 'graphics.h — ✗ Compile error';
     case 'schoolpride':
       return 'graphics.h — 🎒 School Pride';
     case 'fireworks':
@@ -105,12 +108,52 @@ const CELEBRATION_CSS = `
   .cap { position:fixed; right:14px; bottom:12px; z-index:0;
     font-size:12px; font-weight:600; color:rgba(255,255,255,.55);
     letter-spacing:.3px; user-select:none; pointer-events:none; }
+
+  /* ---- v1.5.6 error overlay: giant ✗ + shake + big error headers ---- */
+  .err-stage { position:fixed; inset:0; z-index:2; display:flex;
+    flex-direction:column; align-items:center; justify-content:center;
+    gap:10px; padding:4vh 5vw; box-sizing:border-box; pointer-events:none;
+    animation: err-vignette 2.2s ease-in-out infinite; }
+  @keyframes err-vignette {
+    0%, 100% { box-shadow: inset 0 0 18vmin rgba(190,18,18,.28); }
+    50%      { box-shadow: inset 0 0 26vmin rgba(190,18,18,.55); }
+  }
+  .err-x { font: 900 22vmin/0.9 'Segoe UI', system-ui, sans-serif;
+    color:#ef4444; text-shadow: 0 0 4vmin rgba(239,68,68,.55),
+      0 6px 0 rgba(0,0,0,.35); user-select:none;
+    animation: err-shake 0.55s cubic-bezier(.36,.07,.19,.97) both,
+      err-pulse 1.6s ease-in-out .6s infinite; }
+  @keyframes err-shake {
+    10%, 90% { transform: translateX(-2px); }
+    20%, 80% { transform: translateX(4px); }
+    30%, 50%, 70% { transform: translateX(-7px); }
+    40%, 60% { transform: translateX(7px); }
+  }
+  @keyframes err-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: .82; }
+  }
+  .err-title { font-size: clamp(26px, 5vw, 44px); font-weight: 800;
+    letter-spacing: 4px; color:#fecaca; text-transform: uppercase;
+    user-select:none; text-align:center; }
+  .err-lines { display:flex; flex-direction:column; gap:8px;
+    max-width: 88vw; margin-top: 8px; }
+  .err-line { font-family: Consolas, 'Courier New', monospace;
+    font-size: clamp(17px, 2.6vw, 26px); font-weight: 600; line-height: 1.45;
+    color:#fecaca; background: rgba(127,29,29,.42);
+    border: 1px solid rgba(248,113,113,.35); border-left: 5px solid #ef4444;
+    border-radius: 8px; padding: 10px 16px; overflow-wrap: anywhere;
+    text-align: left; user-select: text; }
+  .err-hint { margin-top: 10px; font-size: 14px; color: rgba(255,255,255,.6);
+    user-select:none; }
 `;
 
 /**
- * Timed celebration page: confetti / snow / school pride. The canvas-
+ * Timed celebration page: confetti / error / school pride. The canvas-
  * confetti library renders onto its own fixed full-window canvas; any
  * click, Esc or the schedule closes the panel from the host side.
+ * The error kind additionally renders the compiler's error headers as
+ * DOM in big type (escaped; they travel via JSON, never raw HTML).
  */
 export function buildCelebrationHtml(opts: {
   kind: TimedCelebrationKind;
@@ -119,15 +162,32 @@ export function buildCelebrationHtml(opts: {
   confettiJsUri: string;
   celebrateJsUri: string;
   durationMs: number;
+  /** v1.5.6: first compiler error headers, shown big for kind=error */
+  errorLines?: string[];
 }): string {
   const { kind, nonce, cspSource, confettiJsUri, celebrateJsUri, durationMs } = opts;
   const caption =
     kind === 'confetti'
       ? '🎉 Compiled OK — confetti!'
-      : kind === 'snow'
-        ? '❄ Compile errors — fix and press Ctrl+Alt+R again'
+      : kind === 'error'
+        ? '✗ Compile error — fix and press Ctrl+Alt+R again'
         : '🎒 Welcome! The graphics.h panel is ready';
-  const cfg = { kind, durationMs };
+  const errorLines = (opts.errorLines || []).slice(0, 4);
+  const cfg = { kind, durationMs, errorLines };
+  const errDom =
+    kind === 'error'
+      ? `
+  <div class="err-stage" aria-live="assertive">
+    <div class="err-x">✗</div>
+    <div class="err-title">Compile error</div>
+    <div class="err-lines">${
+      errorLines.length
+        ? errorLines.map((l) => `<div class="err-line">${esc(l)}</div>`).join('\n')
+        : '<div class="err-line">The compiler reported errors — open the graphics.h Runner output for details.</div>'
+    }</div>
+    <div class="err-hint">click or Esc to dismiss</div>
+  </div>`
+      : '';
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -137,7 +197,7 @@ export function buildCelebrationHtml(opts: {
 <style>${CELEBRATION_CSS}</style>
 </head>
 <body>
-  <div class="cap">${esc(caption)} · click or Esc to dismiss</div>
+  <div class="cap">${esc(caption)} · click or Esc to dismiss</div>${errDom}
   <script nonce="${nonce}">window.__GHR_WORKER__ = window.Worker; window.Worker = undefined;</script>
   <script nonce="${nonce}" src="${esc(confettiJsUri)}"></script>
   <script nonce="${nonce}">window.__GHR_CELEBRATE__ = ${jsonForScript(cfg)};</script>

@@ -45,7 +45,12 @@ const fs_1 = require("fs");
 const os_1 = require("os");
 const path = __importStar(require("path"));
 const normalize_1 = require("./normalize");
-const PROBE_SOURCE = '#include <graphics.h>\n\nint main () { return 0; }\n';
+/* v1.5.6: the probe must REFERENCE a graphics function. A `main(){return 0;}`
+ * probe links nothing from the graphics library, so a 32-bit compiler that
+ * silently skips the 64-bit libbgi.a looked "OK" and every real program then
+ * failed with undefined references (the user-reported Full Setup failure).
+ * circle() forces the linker to actually pull the symbol from the archive. */
+const PROBE_SOURCE = '#include <graphics.h>\n\nint main () { circle ( 100, 100, 50 ); return 0; }\n';
 function runProcess(cmd, args, timeoutMs) {
     return new Promise((resolve) => {
         (0, child_process_1.execFile)(cmd, args, { timeout: timeoutMs, windowsHide: true, maxBuffer: 16 * 1024 * 1024 }, (err, _stdout, stderr) => {
@@ -109,12 +114,20 @@ async function probeLibrary(opts, libName, compiler) {
         }
         const res = await runProcess(compiler, args, 30000);
         const tail = res.stderr.trim().split('\n').slice(-3).join(' ').slice(0, 300);
+        /* v1.5.6: undefined references to graphics symbols mean the library
+         * exists but THIS compiler cannot link it (classic: 32-bit MinGW.org
+         * g++ + 64-bit libbgi.a — its ld skips the incompatible archive). */
+        const unresolved = /undefined reference to [`'](?:circle|line|initwindow|initgraph|cleardevice|closegraph|setcolor|outtextxy|getmaxx|getmaxy|bar|delay|setfillstyle|settextstyle|putpixel|getpixel|rectangle|fillellipse|kbhit|getch)/i.test(res.stderr);
         return {
             name: libName,
             ok: res.code === 0,
             detail: res.code === 0
-                ? 'graphics.h probe compiled successfully'
-                : `probe failed (exit ${res.code})${tail ? ': ' + tail : ''}`,
+                ? 'graphics.h probe compiled AND linked successfully'
+                : unresolved
+                    ? 'headers compile but the graphics library cannot be LINKED — every graphics symbol is unresolved. ' +
+                        'This compiler is incompatible with the installed graphics library ' +
+                        '(e.g. a 32-bit MinGW.org g++ with the 64-bit library).'
+                    : `probe failed (exit ${res.code})${tail ? ': ' + tail : ''}`,
             fix: res.code === 0
                 ? undefined
                 : libName === 'winbgim'
@@ -168,13 +181,25 @@ async function probeEnvironment(opts) {
     const versionLine = versionRes.code === 0
         ? versionRes.stdout.split(/\r?\n/).find((l) => l.trim()) || ''
         : '';
+    /* v1.5.6: surface the compiler's target architecture — the legacy 32-bit
+     * MinGW.org (dumpmachine "mingw32") cannot link the bundled 64-bit
+     * WinBGIM library, and this one line explains a LOT of broken setups. */
+    let archNote = '';
+    if (versionRes.code === 0) {
+        const machineRes = await runProcess(compiler, ['-dumpmachine'], 15000);
+        const machine = machineRes.code === 0 ? machineRes.stdout.trim().toLowerCase() : '';
+        if (machine === 'mingw32' || (!machine.includes('w64') && machine.includes('mingw') && machine.includes('32'))) {
+            archNote = ' — target ' + machine + ' (32-bit: cannot link the bundled 64-bit graphics library — run Full Setup)';
+        }
+        else if (machine) {
+            archNote = ' — target ' + machine;
+        }
+    }
     const compilerCheck = {
         name: `compiler (${compiler})`,
         ok: versionRes.code === 0,
         detail: versionRes.code === 0
-            ? versionLine
-                ? `found and executable — ${versionLine.trim().slice(0, 90)}`
-                : 'found and executable'
+            ? `found and executable — ${(versionLine.trim().slice(0, 90) || 'no version line')}${archNote}`
             : `could not run "${compiler}" (exit ${versionRes.code})`,
         fix: versionRes.code === 0
             ? undefined

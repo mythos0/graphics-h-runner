@@ -1,12 +1,14 @@
 #!/usr/bin/env node
 /**
- * celebrate-tests.js — unit tests for the v1.5.5 celebration overlays
+ * celebrate-tests.js — unit tests for the v1.5.6 celebration overlays
  * (src/celebrate.ts -> out/celebrate.js) and their bundled media.
  *
  * Contract (from the user requirements):
  *   - confetti  = canvas-confetti "Realistic Look", on EVERY successful
  *                 compilation, full-screen overlay, auto-dismiss;
- *   - snow      = 3 seconds exactly, when a compile stops on errors;
+ *   - error     = a RELATABLE error overlay (giant shaking ✗ + the actual
+ *                 compiler error headers in big type + red-ember rain)
+ *                 when a compile stops on errors — replaces v1.5.5's snow;
  *   - schoolpride = canvas-confetti "School Pride" side cannons, 5 seconds,
  *                 first activity-bar panel open of every session;
  *   - fireworks = the vendored troyxun/fireworks-simulator show, full
@@ -50,19 +52,22 @@ console.log('celebrate-tests — full-screen celebration overlays\n');
 
 /* ---------- durations & titles ---------- */
 
-check('durations match the requirements (snow exactly 3s, school pride 5s)', () => {
-  assert.strictEqual(CELEBRATION_DURATIONS_MS.snow, 3000, 'snow must be exactly 3000 ms');
+check('durations: error overlay is readable (5s), school pride 5s', () => {
+  assert.strictEqual(CELEBRATION_DURATIONS_MS.error, 5000,
+    'error overlay must stay 5s so the big error headers are readable');
   assert.strictEqual(CELEBRATION_DURATIONS_MS.schoolpride, 5000, 'school pride must be exactly 5000 ms');
   assert.ok(CELEBRATION_DURATIONS_MS.confetti >= 2000 && CELEBRATION_DURATIONS_MS.confetti <= 5000,
     'confetti window should be short and unobtrusive');
+  assert.ok(!('snow' in CELEBRATION_DURATIONS_MS), 'snow must be gone (replaced by the error overlay)');
 });
 
 check('every kind has a human title; fireworks mentions stopping', () => {
-  for (const kind of ['confetti', 'snow', 'schoolpride', 'fireworks']) {
+  for (const kind of ['confetti', 'error', 'schoolpride', 'fireworks']) {
     const t = celebrationTitle(kind);
     assert.ok(t && t.length > 5, 'no title for ' + kind);
   }
   assert.ok(/stop/i.test(celebrationTitle('fireworks')), 'fireworks title must mention how to stop');
+  assert.ok(/error/i.test(celebrationTitle('error')), 'error title must say the compile failed');
   assert.strictEqual(CELEBRATION_VIEW_TYPE, 'graphicsHRunnerCelebration');
 });
 
@@ -102,7 +107,7 @@ check('vendored libraries are the real upstream files (licenses intact)', () => 
   }
 });
 
-/* ---------- celebration page (confetti / snow / school pride) ---------- */
+/* ---------- celebration page (confetti / error / school pride) ---------- */
 
 function celebrationHtml(kind) {
   return buildCelebrationHtml({
@@ -115,7 +120,7 @@ function celebrationHtml(kind) {
   });
 }
 
-for (const kind of ['confetti', 'snow', 'schoolpride']) {
+for (const kind of ['confetti', 'error', 'schoolpride']) {
   check(kind + ' page: CSP-locked, nonce scripts, kind payload + duration embedded', () => {
     const h = celebrationHtml(kind);
     assert.ok(h.includes(`script-src 'nonce-abc123' ${CSP};`), 'script CSP must be nonce + cspSource');
@@ -129,13 +134,68 @@ for (const kind of ['confetti', 'snow', 'schoolpride']) {
   });
 }
 
-check('snow page carries the exact 3000 ms schedule', () => {
-  const h = celebrationHtml('snow');
-  assert.ok(h.includes('"durationMs":3000'), 'snow duration must be 3000');
+check('error page carries the exact 5000 ms schedule', () => {
+  const h = celebrationHtml('error');
+  assert.ok(h.includes('"durationMs":5000'), 'error duration must be 5000');
+});
+
+check('ERROR overlay (v1.5.6): giant ✗ + headline + big-font error headers', () => {
+  const h = buildCelebrationHtml({
+    kind: 'error',
+    nonce: 'e1',
+    cspSource: CSP,
+    confettiJsUri: CSP + '/c.js',
+    celebrateJsUri: CSP + '/m.js',
+    durationMs: 5000,
+    errorLines: [
+      'main.cpp:12:5: error: \'foo\' was not declared in this scope',
+      '24_coordinate_viewer.cpp:(.text+0xc): undefined reference to `getmaxx\''
+    ]
+  });
+  assert.ok(h.includes('class="err-x"'), 'giant ✗ missing');
+  assert.ok(h.includes('err-shake'), 'the ✗ must shake in');
+  assert.ok(h.includes('class="err-title"') && /Compile error/i.test(h), 'headline missing');
+  assert.ok(h.includes('class="err-line"'), 'big error lines missing');
+  assert.ok(h.includes('error: \'foo\' was not declared in this scope'), 'first error header not rendered');
+  assert.ok(h.includes('undefined reference to `getmaxx\''), 'linker error header not rendered');
+  assert.ok(h.includes('font-size: clamp(17px, 2.6vw, 26px)'), 'error lines must render in big type');
+  assert.ok(!h.includes('snow'), 'no snow residue on the error page');
+});
+
+check('ERROR overlay renders a fallback line when no headers were captured', () => {
+  const h = buildCelebrationHtml({
+    kind: 'error',
+    nonce: 'e2',
+    cspSource: CSP,
+    confettiJsUri: CSP + '/c.js',
+    celebrateJsUri: CSP + '/m.js',
+    durationMs: 5000
+  });
+  assert.ok(h.includes('open the graphics.h Runner output'), 'fallback guidance missing');
+});
+
+check('error headers with hostile content cannot break out (escaped + JSON-safe)', () => {
+  const hostile = ['#include <graphics.h>', 'x" onclick="alert(1)', '</script><script>alert(2)</script>'];
+  const h = buildCelebrationHtml({
+    kind: 'error',
+    nonce: 'e3',
+    cspSource: CSP,
+    confettiJsUri: CSP + '/c.js',
+    celebrateJsUri: CSP + '/m.js',
+    durationMs: 10,
+    errorLines: hostile
+  });
+  assert.ok(!h.includes('</script><script>alert(2)'), 'raw </script> got through!');
+  assert.ok(!h.includes('onclick="alert(1)'), 'raw attribute injection got through!');
+  assert.ok(h.includes('&lt;script&gt;'), 'script tag must be entity-escaped in the DOM');
+  /* the JSON payload must survive unescaping round-trip */
+  const payload = h.match(/window\.__GHR_CELEBRATE__ = ([\s\S]*?);<\/script>/)[1];
+  const parsed = JSON.parse(payload.replace(/\\u003c/g, '<').replace(/\\u003e/g, '>').replace(/\\u0026/g, '&'));
+  assert.deepStrictEqual(parsed.errorLines, hostile);
 });
 
 check('celebration pages contain no remote URLs (everything bundled)', () => {
-  for (const kind of ['confetti', 'snow', 'schoolpride']) {
+  for (const kind of ['confetti', 'error', 'schoolpride']) {
     const h = celebrationHtml(kind);
     const stripped = h.replace(/https:\/\/\*\.vscode-cdn\.net/g, '');
     assert.ok(!/https?:\/\//.test(stripped), kind + ' page references a remote URL');
@@ -241,8 +301,10 @@ check('fireworks page carries the upstream credit (MIT, Caleb Miller / troyxun)'
 
 check('controller implements all three confetti presets + dismissal + schedule', () => {
   const src = fs.readFileSync(media.celebrateJs, 'utf8');
-  assert.ok(src.includes("'confetti'") && src.includes("'snow'") && src.includes("'schoolpride'"),
+  assert.ok(src.includes("'confetti'") && src.includes("'error'") && src.includes("'schoolpride'"),
     'a celebration kind is missing from the controller');
+  assert.ok(!/['"]snow['"]/.test(src), 'snow must be gone from the controller');
+  assert.ok(src.includes('emberColors'), 'error kind must drive the red-ember rain');
   assert.ok(src.includes('postMessage({ type: \'stop\' })') || src.includes("postMessage({ type: 'stop' });"),
     'controller must be able to stop early');
   assert.ok(src.includes('requestAnimationFrame'), 'effects must be frame-driven');

@@ -1,5 +1,49 @@
 # ChangeLog
 
+## 1.5.6 — 2026-09-27
+
+The "works on ANY PC" release, built from a real user's Full Setup log:
+their PC ran the legacy 32-bit **MinGW.org GCC 6.3.0**, Full Setup declared
+everything READY, and then EVERY program failed to build with a wall of
+`undefined reference to \`getmaxx\` / \`circle\` / \`line\` ...` linker errors.
+
+### Fixed
+- **Full Setup can no longer bless a compiler that cannot build graphics.h**
+  (the reported "ran Full Setup, still doesn't run" failure):
+  - The Setup Doctor / Full Setup probe now **compiles AND links** a probe
+    that actually calls a graphics function. The old probe never referenced
+    any BGI symbol, so the linker never touched `libbgi.a` and a 32-bit
+    compiler silently skipping the 64-bit archive looked "READY".
+  - Full Setup detects a **BGI-incompatible compiler** up front (a real
+    link probe when WinBGIM is installed, `g++ -dumpmachine` architecture
+    sniffing otherwise) and **installs a compatible 64-bit MinGW-w64
+    compiler automatically** (winget, then the sha256-verified direct
+    download fallback) — with the reason spelled out in the step detail.
+  - Compiler discovery now **prefers x86_64 candidates** and rejects
+    32-bit ones when replacing a known-incompatible compiler, so the old
+    MinGW.org g++ can never be re-selected after an install.
+  - When a real build fails with undefined references to graphics symbols,
+    the extension now explains it in one line and offers **one click to
+    Complete Run Setup** instead of a wall of linker errors.
+  - The doctor's compiler line shows the target architecture, e.g.
+    `— target mingw32 (32-bit: cannot link the bundled 64-bit graphics library — run Full Setup)`.
+- **The "global" setup can no longer write to the wrong folders**: a bare
+  `g++` compiler path (compiler found on PATH, never stored absolutely)
+  was resolved against the extension host's working directory, producing
+  garbage targets — on the reported PC it tried `E:\include`, added the
+  VS Code install dir (`E:\Microsoft VS Code`) to the user PATH and
+  littered the drive root. The compiler is now resolved through the OS
+  (`where`/`which`), validated to really exist in its bin folder, and the
+  whole global step is SKIPPED with a clear message when it cannot be.
+
+### Changed
+- **The snow-on-errors animation is replaced by a relatable ERROR overlay**:
+  a giant shaking red \u2717, a big "COMPILE ERROR" headline, the compiler's
+  first error messages in **big monospace type** on red panels, a pulsing
+  red vignette and a red-ember rain — 5 s (click or Esc to dismiss), so
+  the failure actually explains itself.
+
+
 ## 1.5.5 — 2026-09-27
 
 Celebrations release, plus the definitive fix for the fallback-view bug

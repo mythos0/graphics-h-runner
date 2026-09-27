@@ -75,3 +75,61 @@ export function capCompilerDiagnostics(list: CompilerDiagnostic[], max = 200): C
   }
   return out;
 }
+
+/* ------------------------------------------------------------------ */
+/* v1.5.6 — BGI link-failure signature ("works on my PC" killer)        */
+/* ------------------------------------------------------------------ */
+
+/**
+ * The graphics functions WinBGIM/SDL_bgi/libgraph provide. When a LINK
+ * fails with "undefined reference" to any of these, the graphics library
+ * itself could not be connected to the program — the classic cause is a
+ * compiler that cannot use the installed library (e.g. the legacy 32-bit
+ * MinGW.org g++ with the 64-bit libbgi.a: its ld silently skips the
+ * incompatible archive and every graphics symbol comes out unresolved).
+ */
+const BGI_SYMBOLS_RE =
+  /undefined reference to [`'](?:initwindow|initgraph|closegraph|cleardevice|circle|line|rectangle|bar|putpixel|getpixel|outtextxy|setcolor|setbkcolor|setfillstyle|fillellipse|settextstyle|getmaxx|getmaxy|delay|kbhit|getch|ismouseclick|getmouseclick|clearmouseclick|mousex|mousey)[`']/;
+
+/** `C:\Users\...\Temp\ccABC123.o:` / `/tmp/ccABC123.o:` object-file prefix. */
+const TEMP_OBJECT_PREFIX_RE = /^.*(?:[/\\]\.o|\.o):/;
+
+/**
+ * True when the compiler output says the graphics library could not be
+ * linked (undefined references to BGI symbols). Used to turn the scary
+ * wall of linker errors into one actionable explanation + fix.
+ */
+export function looksLikeBgiLinkFailure(compilerText: string): boolean {
+  return BGI_SYMBOLS_RE.test(String(compilerText || ''));
+}
+
+/**
+ * Pick the most useful error "headers" for the big-font error overlay:
+ * real `file:line:col: error: …` lines first, then linker errors, deduped,
+ * with temp object-file prefixes stripped (`ccXyZ.o:main.cpp:(...)` ->
+ * `main.cpp:(...)`). At most `max` lines, each capped to `maxLen` chars.
+ */
+export function pickErrorHeaders(compilerText: string, max = 3, maxLen = 120): string[] {
+  const lines = String(compilerText || '').split(/\r?\n/);
+  const headerLines = lines.filter((l) =>
+    /:\s+(fatal error|error):/i.test(l) || /undefined reference to/.test(l)
+  );
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of headerLines) {
+    const line = raw.replace(TEMP_OBJECT_PREFIX_RE, '').trim();
+    if (!line || line.length < 8) {
+      continue;
+    }
+    const key = line.toLowerCase();
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    out.push(line.length > maxLen ? line.slice(0, maxLen - 1) + '…' : line);
+    if (out.length >= max) {
+      break;
+    }
+  }
+  return out;
+}

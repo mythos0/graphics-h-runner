@@ -4,7 +4,7 @@
  *
  * Celebrator owns ONE WebviewPanel at a time (the "full VS Code screen"
  * overlay in the editor area). It:
- *   - shows confetti / snow / school pride for their scheduled duration
+ *   - shows confetti / error / school pride for their scheduled duration
  *     and closes itself;
  *   - shows the Fireworks Simulator and stays open until the user stops
  *     (overlay Stop button, Esc, the activity-bar button, the panel
@@ -67,8 +67,9 @@ class Celebrator {
      * Show an overlay. Any overlay already on screen is replaced. Timed
      * kinds auto-close after their scheduled duration (explicit durationMs
      * overrides it — used by tests); fireworks stays until stopped.
+     * `payload` feeds the error overlay (compiler error headers in big type).
      */
-    show(kind, durationMs) {
+    show(kind, durationMs, payload) {
         this.close();
         if (durationMs === undefined && kind !== 'fireworks') {
             durationMs = celebrate_1.CELEBRATION_DURATIONS_MS[kind];
@@ -107,7 +108,8 @@ class Celebrator {
                         cspSource,
                         confettiJsUri: uri(media.confettiJs),
                         celebrateJsUri: uri(media.celebrateJs),
-                        durationMs: durationMs || 0
+                        durationMs: durationMs || 0,
+                        errorLines: payload?.errorLines
                     });
         }
         catch (e) {

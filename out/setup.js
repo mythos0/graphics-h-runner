@@ -49,7 +49,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.WINLIBS_FALLBACK = exports.WINGET_COMPILER_PACKAGE_ID = exports.WINBGIM_SOURCES = exports.SDL_BGI_TARBALL_URLS = void 0;
+exports.BGI_LINK_PROBE_SOURCE = exports.WINLIBS_FALLBACK = exports.WINGET_COMPILER_PACKAGE_ID = exports.WINBGIM_SOURCES = exports.SDL_BGI_TARBALL_URLS = void 0;
 exports.wingetInstallCompilerArgs = wingetInstallCompilerArgs;
 exports.detectLinuxPackageFamily = detectLinuxPackageFamily;
 exports.planSetup = planSetup;
@@ -59,6 +59,8 @@ exports.runProcessStreaming = runProcessStreaming;
 exports.installCompilerViaWinget = installCompilerViaWinget;
 exports.discoverGppWindows = discoverGppWindows;
 exports.verifyCompilerRun = verifyCompilerRun;
+exports.compilerArchitecture = compilerArchitecture;
+exports.bgiLinkProbe = bgiLinkProbe;
 exports.installCompilerWindowsDirect = installCompilerWindowsDirect;
 exports.installWinbgimWindows = installWinbgimWindows;
 exports.patchSdlBgiSources = patchSdlBgiSources;
@@ -200,14 +202,21 @@ function planSetup(platform, probe, sdl2DevOk = true) {
         }
     }
     if (platform === 'windows') {
-        if (!probe.compilerOk) {
+        /* v1.5.6: "a compiler exists" is no longer enough — the legacy 32-bit
+         * MinGW.org g++ cannot link the 64-bit WinBGIM library, which made Full
+         * Setup declare READY and then fail every real build with undefined
+         * references. Treat a BGI-incompatible compiler as "needs a compiler". */
+        if (!probe.compilerOk || probe.compilerBgiIncompatible) {
+            const why = probe.compilerBgiIncompatible
+                ? ' Your current g++ is a 32-bit compiler (for example the legacy MinGW.org 6.3) that cannot link the 64-bit graphics library — every build ends in "undefined reference" errors. This installs a compatible 64-bit MinGW-w64 compiler for you.'
+                : '';
             steps.push({
                 id: 'install-compiler-winget',
                 kind: 'auto',
                 title: 'Install MinGW-w64 g++ automatically (winget)',
                 detail: 'Runs "winget install BrechtSanders.WinLibs.POSIX.UCRT" for you — a per-user, portable ' +
                     'install (no administrator rights). The extension then finds the new g++ and wires it into ' +
-                    'its settings automatically.'
+                    'its settings automatically.' + why
             });
             steps.push({
                 id: 'install-compiler-download',
@@ -472,6 +481,89 @@ async function verifyCompilerRun(candidate) {
     }
     catch {
         return { ok: false, version: '' };
+    }
+}
+async function compilerArchitecture(compiler, run = (cmd, args, opts) => runProcess(cmd, args, opts)) {
+    try {
+        const res = await run(compiler, ['-dumpmachine'], { timeoutMs: 20000 });
+        if (res.code !== 0) {
+            return 'unknown';
+        }
+        const machine = (res.stdout || res.stderr).trim().toLowerCase();
+        if (!machine) {
+            return 'unknown';
+        }
+        if (machine.includes('x86_64')) {
+            return 'x86_64';
+        }
+        if (machine.includes('i686') || machine.includes('i386')) {
+            return 'i686';
+        }
+        /* legacy MinGW.org: plain "mingw32" (no w64 triplet) is always 32-bit */
+        if (machine === 'mingw32' || (!machine.includes('w64') && machine.includes('mingw'))) {
+            return 'mingw32';
+        }
+        return 'unknown';
+    }
+    catch {
+        return 'unknown';
+    }
+}
+/* probe source that actually REFERENCES a graphics symbol — a headers-only
+ * or unreferenced probe links nothing from libbgi.a and would repeat the
+ * v1.5.5 bug where a 32-bit compiler looked "READY" but could not link a
+ * single graphics call. */
+exports.BGI_LINK_PROBE_SOURCE = '#include <graphics.h>\n\nint main ( ) { circle ( 100, 100, 50 ); return 0; }\n';
+/**
+ * v1.5.6: the REAL compatibility test — compile AND link a probe that calls
+ * a graphics function with the exact library flags the extension uses.
+ * Catches: 32-bit compiler vs 64-bit libbgi.a, broken/corrupt archives,
+ * missing library deps — everything a headers-only probe silently passes.
+ */
+async function bgiLinkProbe(opts) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bgi-linkprobe-'));
+    try {
+        const srcPath = path.join(dir, 'bgi_link_probe.cpp');
+        const outPath = path.join(dir, opts.platform === 'windows' ? 'bgi_link_probe.exe' : 'bgi_link_probe');
+        fs.writeFileSync(srcPath, exports.BGI_LINK_PROBE_SOURCE);
+        const args = [];
+        if (opts.includeDir) {
+            args.push('-I' + opts.includeDir);
+        }
+        args.push(srcPath, '-o', outPath);
+        if (opts.libDir) {
+            args.push('-L' + opts.libDir);
+        }
+        for (const a of opts.extraCompilerArgs || []) {
+            args.push(a);
+        }
+        args.push('-lbgi');
+        if (opts.platform === 'windows') {
+            /* the WinBGIM Windows dependency stack — only real on Windows (the
+             * Linux/macOS probe path is exercised by tests with a stub archive) */
+            args.push('-lgdi32', '-lcomdlg32', '-luuid', '-loleaut32', '-lole32');
+        }
+        const res = await runProcess(opts.compiler, args, { timeoutMs: 60000 });
+        const tail = res.stderr.trim().split(/\r?\n/).slice(-3).join(' ').slice(0, 300);
+        if (res.code === 0) {
+            return { ok: true, detail: 'probe compiled AND linked', undefinedRefs: false };
+        }
+        return {
+            ok: false,
+            detail: tail || `link probe failed (exit ${res.code})`,
+            undefinedRefs: /undefined reference to [`'](circle|line|initwindow|initgraph|cleardevice|closegraph)/i.test(res.stderr)
+        };
+    }
+    catch (e) {
+        return { ok: false, detail: 'link probe crashed: ' + String(e), undefinedRefs: false };
+    }
+    finally {
+        try {
+            fs.rmSync(dir, { recursive: true, force: true });
+        }
+        catch {
+            /* ignore */
+        }
     }
 }
 /**

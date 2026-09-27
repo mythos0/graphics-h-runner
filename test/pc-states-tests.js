@@ -26,9 +26,11 @@ const {
 } = require(path.join(ROOT, 'out', 'normalize'));
 const { buildCompilePlan } = require(path.join(ROOT, 'out', 'buildArgs'));
 const { probeEnvironment } = require(path.join(ROOT, 'out', 'doctor'));
+const { looksLikeBgiLinkFailure, pickErrorHeaders } = require(path.join(ROOT, 'out', 'diagnostics'));
 const {
   planSetup, discoverGppWindows, verifyCompilerRun,
-  installCompilerWindowsDirect, wingetInstallCompilerArgs
+  installCompilerWindowsDirect, wingetInstallCompilerArgs,
+  compilerArchitecture, bgiLinkProbe
 } = require(path.join(ROOT, 'out', 'setup'));
 
 let passed = 0, failed = 0;
@@ -398,6 +400,90 @@ const section = (s) => console.log('\n== ' + s + ' ==');
     const v = await verifyCompilerRun('g++');
     assert.ok(v.ok, 'sandbox g++ must run');
     assert.match(v.version, /g\+\+/);
+  });
+
+  /* ================================================================== */
+  section('G. v1.5.6 — 32-bit compiler vs 64-bit graphics library (the user-reported failure)');
+  t('plan: BGI-incompatible compiler (32-bit MinGW.org) MUST install a new compiler', () => {
+    const ids = planSetup('windows', { compilerOk: true, compilerBgiIncompatible: true, winbgimOk: false }).map((s) => s.id);
+    assert.deepStrictEqual(ids, ['install-compiler-winget', 'install-compiler-download', 'manual-compiler', 'install-winbgim', 'make-global', 'verify']);
+    const wingetDetail = planSetup('windows', { compilerOk: true, compilerBgiIncompatible: true })[0].detail;
+    assert.match(wingetDetail, /32-bit/, 'the step must say WHY the compiler is being replaced');
+  });
+  t('plan: compatible compiler keeps the fast path (no compiler steps)', () => {
+    const ids = planSetup('windows', { compilerOk: true, compilerBgiIncompatible: false, winbgimOk: true }).map((s) => s.id);
+    assert.deepStrictEqual(ids, ['make-global', 'verify']);
+  });
+  t('compilerArchitecture maps dumpmachine output (fake runner)', async () => {
+    const run = (out, code = 0) => async () => ({ code, stdout: out, stderr: '' });
+    assert.strictEqual(await compilerArchitecture('g++', run('x86_64-w64-mingw32\n')), 'x86_64');
+    assert.strictEqual(await compilerArchitecture('g++', run('i686-w64-mingw32\n')), 'i686');
+    assert.strictEqual(await compilerArchitecture('g++', run('mingw32\n')), 'mingw32');
+    assert.strictEqual(await compilerArchitecture('g++', run('x86_64-pc-linux-gnu\n')), 'x86_64');
+    assert.strictEqual(await compilerArchitecture('g++', run('whatever', 1)), 'unknown');
+  });
+  t('looksLikeBgiLinkFailure detects the exact user log signature', () => {
+    const userLine = 'C:\\Users\\N\\AppData\\Local\\Temp\\cc2YIktj.o:24_coordinate_viewer.cpp:(.text+0xc): undefined reference to `getmaxx\'';
+    assert.ok(looksLikeBgiLinkFailure(userLine), 'must match the real-world linker error');
+    assert.ok(!looksLikeBgiLinkFailure('main.cpp:3:1: error: expected ; before }'),
+      'plain compile errors are NOT link failures');
+    assert.ok(!looksLikeBgiLinkFailure('undefined reference to `SDL_malloc\''),
+      'unrelated undefined refs must not trigger the BGI fix');
+  });
+  t('pickErrorHeaders cleans temp-object prefixes, dedupes, caps length', () => {
+    const txt = [
+      'C:\\Temp\\cc1.o:main.cpp:(.text+0xc): undefined reference to `getmaxx\'',
+      'main.cpp:12:5: error: \'foo\' was not declared in this scope',
+      'C:\\Temp\\cc1.o:main.cpp:(.text+0x14): undefined reference to `getmaxy\'',
+      'collect2.exe: error: ld returned 1 exit status'
+    ].join('\n');
+    const lines = pickErrorHeaders(txt, 3, 120);
+    assert.strictEqual(lines.length, 3);
+    /* order follows the compiler output: the first reported problem leads */
+    assert.ok(lines[0].includes('undefined reference to `getmaxx\''), 'first reported error leads, got: ' + lines[0]);
+    assert.ok(lines.some((l) => l.startsWith('main.cpp:12:5: error:')), 'compile error header kept');
+    assert.ok(!lines.some((l) => l.includes('cc1.o:')), 'temp object prefix must be stripped');
+  });
+  await tAsync('bgiLinkProbe REAL: stub libbgi.a links; empty archive -> undefined refs', async () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'bgi-lp-'));
+    try {
+      const inc = path.join(tmp, 'include');
+      const lib = path.join(tmp, 'lib');
+      fs.mkdirSync(inc, { recursive: true });
+      fs.mkdirSync(lib, { recursive: true });
+      fs.writeFileSync(path.join(inc, 'graphics.h'), 'void circle(int x, int y, int r);\n');
+      const gpp = 'g++';
+      /* positive: a real static archive that DEFINES circle */
+      const cSrc = path.join(tmp, 'circle.c');
+      fs.writeFileSync(cSrc, 'void circle(int x, int y, int r){(void)x;(void)y;(void)r;}\n');
+      const oPath = path.join(tmp, 'circle.o');
+      const { execFileSync } = require('child_process');
+      execFileSync(gpp, ['-c', cSrc, '-o', oPath]);
+      execFileSync('ar', ['rcs', path.join(lib, 'libbgi.a'), oPath]);
+      const okRes = await bgiLinkProbe({ compiler: gpp, includeDir: inc, libDir: lib, platform: 'linux' });
+      assert.ok(okRes.ok, 'probe with a real circle() definition must link: ' + okRes.detail);
+      /* negative: an archive WITHOUT the symbol -> undefined reference
+       * (ar rcs ADDS objects — delete the positive archive first) */
+      const emptySrc = path.join(tmp, 'noop.c');
+      fs.writeFileSync(emptySrc, 'int noop_var = 1;\n');
+      const emptyO = path.join(tmp, 'noop.o');
+      execFileSync(gpp, ['-c', emptySrc, '-o', emptyO]);
+      fs.rmSync(path.join(lib, 'libbgi.a'), { force: true });
+      execFileSync('ar', ['rcs', path.join(lib, 'libbgi.a'), emptyO]);
+      const badRes = await bgiLinkProbe({ compiler: gpp, includeDir: inc, libDir: lib, platform: 'linux' });
+      assert.strictEqual(badRes.ok, false, 'probe must fail without the symbol');
+      assert.strictEqual(badRes.undefinedRefs, true, 'failure must be classified as undefined refs');
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+  await tAsync('doctor winbgim probe now reports the LINK failure (32-bit PC simulation)', async () => {
+    /* the doctor probe must REFERENCE a graphics symbol (circle) so a
+     * library that cannot link is never reported as READY again */
+    const { BGI_LINK_PROBE_SOURCE } = require(path.join(ROOT, 'out', 'setup'));
+    assert.ok(/circle\s*\(/.test(BGI_LINK_PROBE_SOURCE), 'setup link probe must call a BGI function');
+    const docSrc = fs.readFileSync(path.join(ROOT, 'src', 'doctor.ts'), 'utf8');
+    assert.ok(/int main \(\) \{ circle/.test(docSrc), 'doctor probe must call a BGI function');
   });
 
   /* ================================================================== */
