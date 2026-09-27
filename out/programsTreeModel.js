@@ -7,15 +7,35 @@
  * 18 example programs, so a webview failure costs the user zero features.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.TREE_RUN_COMMAND = void 0;
+exports.TREE_RUN_COMMAND_PREFIX = exports.TREE_RUN_COMMAND = void 0;
+exports.treeRunCommandId = treeRunCommandId;
 exports.buildTreeModel = buildTreeModel;
 const programs_1 = require("./programs");
-/** Command id used for "click a program to run it" in the fallback tree. */
+/** Generic "run an example program" command (palette + programmatic use;
+ * takes the program id as its single argument). */
 exports.TREE_RUN_COMMAND = 'graphics-h-runner.runSample';
+/**
+ * Per-node command ids for the fallback tree: TREE_RUN_COMMAND + '.' + id.
+ *
+ * v1.5.5 BUG FIX — TreeItem.command must NOT carry `arguments`. VS Code's
+ * command converter caches argument-carrying tree commands under a
+ * throwaway delegate id ("graphics-h-runner.runSample /N"); when the
+ * extension host restarts (or the cache entry is disposed) while the tree
+ * is still rendered, EVERY click fails with
+ *   "Actual command not found, wanted to execute
+ *    graphics-h-runner.runSample /2"
+ * Static per-node ids involve no converter cache and survive every host
+ * restart — the extension re-registers them all on activation.
+ */
+exports.TREE_RUN_COMMAND_PREFIX = 'graphics-h-runner.runSample.';
+/** Static per-node command id for one example program. */
+function treeRunCommandId(programId) {
+    return exports.TREE_RUN_COMMAND_PREFIX + programId;
+}
 /**
  * Pure model: actions first, then every example program.
  */
-function buildTreeModel(programs, runCommandId = exports.TREE_RUN_COMMAND) {
+function buildTreeModel(programs) {
     const entries = [
         { kind: 'section', id: 'tree-section-actions', label: 'Actions' }
     ];
@@ -36,7 +56,7 @@ function buildTreeModel(programs, runCommandId = exports.TREE_RUN_COMMAND) {
             label: p.title,
             description: p.description,
             filename: p.filename,
-            runCommandId
+            runCommandId: treeRunCommandId(p.id)
         });
     }
     if (lab.length > 0) {
@@ -52,7 +72,7 @@ function buildTreeModel(programs, runCommandId = exports.TREE_RUN_COMMAND) {
                 label: p.title,
                 description: p.description,
                 filename: p.filename,
-                runCommandId
+                runCommandId: treeRunCommandId(p.id)
             });
         }
     }

@@ -60,12 +60,28 @@ function envCard(status) {
      * pushed the actions down (removed on user request, v1.4.7). */
     return '';
 }
-function actionButtons(commands) {
+function actionButtons(commands, fireworksRunning) {
     return commands
-        .map((c) => `<button class="btn${c.primary ? ' btn-accent btn-hero' : ''}" data-cmd="${esc(c.commandId)}" id="${esc(c.id)}" title="${esc(c.title)}">
-           <span class="btn-ico">${c.icon}</span>
-           <span class="btn-body"><span class="btn-title">${esc(c.title)}</span><span class="btn-hint">${esc(c.hint)}</span></span>
-         </button>`)
+        .map((c) => {
+        /* v1.5.5: the Fireworks Simulator button is the one festive button
+         * (animated gradient) and flips to the red Stop state while the
+         * show runs — data-cmd stays the toggle command either way. */
+        const festive = c.variant === 'festive';
+        const cls = c.primary
+            ? 'btn-accent btn-hero'
+            : festive
+                ? fireworksRunning
+                    ? 'btn-festive btn-festive-stop'
+                    : 'btn-festive'
+                : '';
+        const title = festive && fireworksRunning ? 'Stop Fireworks' : c.title;
+        const hint = festive && fireworksRunning ? 'show running — click to stop' : c.hint;
+        const icon = festive && fireworksRunning ? '\u23f9' : c.icon;
+        return `<button class="btn${cls ? ' ' + cls : ''}" data-cmd="${esc(c.commandId)}" id="${esc(c.id)}" title="${esc(title)}">
+           <span class="btn-ico">${icon}</span>
+           <span class="btn-body"><span class="btn-title">${esc(title)}</span><span class="btn-hint">${esc(hint)}</span></span>
+         </button>`;
+    })
         .join('\n        ');
 }
 function programCards(programs) {
@@ -86,6 +102,7 @@ function programCards(programs) {
 }
 function buildPanelHtml(opts) {
     const { commands, status, version, nonce, cspSource, logoUri } = opts;
+    const fireworksRunning = !!opts.fireworksRunning;
     /* two sections: the classic catalog first, the Computer Graphics Lab
        (coordinate viewer, algorithm labs, pixel inspector) below it */
     const programs = opts.programs.filter((p) => !p.lab);
@@ -167,6 +184,21 @@ function buildPanelHtml(opts) {
   .btn-hero .btn-ico { width:30px; height:30px; flex:0 0 30px; font-size:17px; border-radius:9px; }
   .btn-hero .btn-title { font-size:14.5px; font-weight:800; letter-spacing:.2px; }
   .btn-hero .btn-hint { font-size:11px; }
+
+  /* v1.5.5: the Fireworks Simulator action button — deliberately festive
+     (animated violet->pink->amber gradient), the one non-neutral button
+     beside the green hero; flips to solid red while the show runs */
+  .btn-festive { color:#fff; border-color:transparent;
+    background:linear-gradient(120deg, #4c1d95, #7c3aed 30%, #db2777 65%, #f59e0b);
+    background-size:220% 220%; animation:festive-shift 3.5s ease infinite; }
+  .btn-festive:hover { border-color:rgba(255,255,255,.4); }
+  .btn-festive .btn-ico { background:rgba(255,255,255,.2); }
+  .btn-festive .btn-hint { color:rgba(255,255,255,.85); }
+  @keyframes festive-shift { 0%,100% { background-position:0% 50%; } 50% { background-position:100% 50%; } }
+  .btn-festive-stop { background:linear-gradient(135deg, #ef4444, #b91c1c); animation:none; }
+  .btn-festive-stop:hover { background:linear-gradient(135deg, #f87171, #dc2626); }
+
+
 
   /* header layout: the action buttons live in the same header row as the
      title / status-pill row and fill the empty space beside
@@ -302,7 +334,7 @@ function buildPanelHtml(opts) {
     <div class="header-actions">
       <div class="sec sec-tight"><h2>Actions</h2></div>
       <div class="stack">
-        ${actionButtons(commands)}
+        ${actionButtons(commands, fireworksRunning)}
       </div>
     </div>
   </div>
@@ -351,6 +383,15 @@ function buildPanelHtml(opts) {
           <div class="cheat-fn"><code>ESC or Q (in the window)</code><span>Programs run until YOU quit them — the graphics window and the terminal (with all output) stay open. Random keystrokes never stop a program. Ctrl+Alt+S force-stops.</span></div>
           <div class="cheat-fn"><code>Ctrl+Alt+B</code><span>Compile only; compiler errors land in the Problems panel.</span></div>
           <div class="cheat-fn"><code>Ctrl+Alt+S</code><span>Stop the running graphics program (Ctrl+C) — the runner terminal stays open with all output, ready for the next run.</span></div>
+        </div>
+        <div class="cheat-cat">
+          <h4>Celebrations</h4>
+          <div class="cheat-fn"><code>\ud83c\udf89 Confetti on success</code><span>Every successful compilation ends with a full-screen confetti burst (canvas-confetti). Click anywhere or press Esc to dismiss it early.</span></div>
+          <div class="cheat-fn"><code>\u2744 Snow on errors</code><span>A 3-second snowfall plays when a compile stops on errors, so a failed build is impossible to miss.</span></div>
+          <div class="cheat-fn"><code>\ud83c\udf92 School Pride</code><span>The first time the graphics.h panel opens in a session, a 5-second School Pride show greets you (once per session).</span></div>
+          <div class="cheat-fn"><code>\ud83c\udf86 Fireworks Simulator</code><span>The festive action button launches a full-screen fireworks show — click it again (or Esc, or the red Stop button) to stop.</span></div>
+        </div>
+        
         </div>
         <div class="cheat-cat">
           <h4>Setup &amp; lifecycle</h4>

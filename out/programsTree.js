@@ -8,6 +8,10 @@
  *
  * The tree model comes from programsTreeModel.ts (pure, unit-tested); the
  * provider below is a thin adapter that maps model entries to TreeItems.
+ *
+ * v1.5.5: program items invoke STATIC per-node command ids
+ * (graphics-h-runner.runSample.<id>) — never TreeItem.command arguments,
+ * which break across extension-host restarts.
  */
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
@@ -73,7 +77,12 @@ class GhFallbackTreeProvider {
         item.id = 'tree-program-' + entry.id;
         item.description = entry.description;
         item.tooltip = new vscode.MarkdownString(`**${entry.label}**  \n${entry.description}  \n\`${entry.filename}\`\n\nClick to open, compile and run.`);
-        item.command = { command: entry.runCommandId, title: 'Run example program', arguments: [entry.id] };
+        /* v1.5.5: NO `arguments` here — VS Code caches argument-carrying tree
+         * commands under a throwaway id, and after a host restart every click
+         * fails with "Actual command not found, wanted to execute
+         * graphics-h-runner.runSample /N". Each program has its own static
+         * command id instead (registered on every activation). */
+        item.command = { command: entry.runCommandId, title: 'Run example program' };
         item.contextValue = 'ghr-program';
         return item;
     }

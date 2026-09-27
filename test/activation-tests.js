@@ -37,7 +37,9 @@ exports.run = async function () {
     'graphics-h-runner.openExamplesFolder',
     'graphics-h-runner.openProgram',
     'graphics-h-runner.runSample',
-    'graphics-h-runner.reloadPanel'
+    'graphics-h-runner.reloadPanel',
+    'graphics-h-runner.fireworks',
+    'graphics-h-runner.stopFireworks'
   ]) {
     assert.ok(cmds.includes(id), 'command not registered: ' + id);
   }
@@ -129,5 +131,50 @@ exports.run = async function () {
   await new Promise((r) => setTimeout(r, 300));
   console.log('activation-tests: fallback flow OK — list view revealed, runSample click path ran, reloadPanel clean');
 
-  console.log('activation-tests: extension active, 11 commands present, panel focused, doctor ran, all run paths + fallback PASS');
+  /* 8. v1.5.5 PER-NODE TREE CLICK PATH — the "Actual command not found,
+   * wanted to execute graphics-h-runner.runSample /N" fix: the tree now
+   * invokes static per-node ids; execute a main and a lab one directly
+   * (exactly what a real click does — no arguments involved). */
+  await vscode.commands.executeCommand('graphics-h-runner.runSample.hello');
+  await new Promise((r) => setTimeout(r, 5000)); /* compile + launch */
+  assert.ok(fs.existsSync(binPath), 'per-node tree command (hello) did not compile the sample');
+  await vscode.commands.executeCommand('graphics-h-runner.stopProgram');
+  await new Promise((r) => setTimeout(r, 800));
+  await vscode.commands.executeCommand('graphics-h-runner.runSample.ddalab');
+  /* the runner terminal steals focus as soon as the compile finishes, so
+   * poll the TAB GROUPS for the opened lab source instead of relying on
+   * the active editor */
+  let labFile;
+  {
+    const end = Date.now() + 12000;
+    while (Date.now() < end) {
+      for (const g of vscode.window.tabGroups.all) {
+        for (const t of g.tabs) {
+          const uri = t.input && t.input.uri;
+          if (uri && uri.fsPath.endsWith('26_dda_lab.cpp')) { labFile = uri.fsPath; }
+        }
+      }
+      if (labFile) { break; }
+      await new Promise((r) => setTimeout(r, 250));
+    }
+  }
+  assert.ok(labFile, 'ddalab source not opened (tabs: ' + JSON.stringify(vscode.window.tabGroups.all.map((g) => g.tabs.map((t) => (t.input && t.input.uri) ? t.input.uri.fsPath : t.label))) + ')');
+  await new Promise((r) => setTimeout(r, 8000)); /* compile + launch */
+  const labBin = labFile.replace(/\.cpp$/i, '');
+  assert.ok(fs.existsSync(labBin), 'per-node tree command (ddalab) did not compile the lab sample');
+  await vscode.commands.executeCommand('graphics-h-runner.stopProgram');
+  await new Promise((r) => setTimeout(r, 800));
+  console.log('activation-tests: per-node tree click path OK — runSample.hello + runSample.ddalab compiled and launched');
+
+  /* 9. v1.5.5 FIREWORKS SIMULATOR — the toggle command opens the full-
+   * screen overlay, the same command stops it, and Stop is idempotent. */
+  await vscode.commands.executeCommand('graphics-h-runner.fireworks');
+  await new Promise((r) => setTimeout(r, 1200));
+  await vscode.commands.executeCommand('graphics-h-runner.fireworks'); /* toggle off */
+  await new Promise((r) => setTimeout(r, 400));
+  await vscode.commands.executeCommand('graphics-h-runner.stopFireworks'); /* idempotent no-op */
+  await new Promise((r) => setTimeout(r, 300));
+  console.log('activation-tests: fireworks toggle OK — start, toggle-stop and idempotent Stop all clean');
+
+  console.log('activation-tests: extension active, 13 commands present, panel focused, doctor ran, all run paths + fallback + celebrations PASS');
 };

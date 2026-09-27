@@ -5,8 +5,12 @@
  *
  * Contract: the list view mirrors the webview panel — the same 8 actions,
  * the same 23 example programs and the 8 Computer Graphics Lab programs —
- * and every program click runs through a single registered command with
- * the program id as its argument.
+ * and every program click runs through its own STATIC per-node command id
+ * (graphics-h-runner.runSample.<id>). TreeItem.command must never carry
+ * `arguments`: VS Code caches argument-carrying tree commands under a
+ * throwaway id and clicks fail with "Actual command not found, wanted to
+ * execute graphics-h-runner.runSample /N" after a host restart (fixed
+ * in v1.5.5).
  */
 'use strict';
 const path = require('path');
@@ -56,13 +60,16 @@ check('actions mirror COMMAND_META ids and command ids 1:1', () => {
   }
 });
 
-check('every program is wired to the run command with its id as argument data', () => {
+check('every program carries its own STATIC per-node run command (no arguments)', () => {
   const m = buildTreeModel(catalog);
   const programs = m.filter((e) => e.kind === 'program');
   const ids = new Set();
   for (const p of programs) {
-    assert.strictEqual(p.runCommandId, TREE_RUN_COMMAND, 'wrong run command for ' + p.id);
-    assert.strictEqual(TREE_RUN_COMMAND, 'graphics-h-runner.runSample', 'run command id drifted');
+    assert.strictEqual(p.runCommandId, TREE_RUN_COMMAND + '.' + p.id,
+      'per-node run command wrong for ' + p.id + ' (got ' + p.runCommandId + ')');
+    assert.strictEqual(TREE_RUN_COMMAND, 'graphics-h-runner.runSample', 'run command prefix drifted');
+    assert.ok(!Object.prototype.hasOwnProperty.call(p, 'arguments'),
+      'tree model must not carry command arguments (v1.5.5 regression)');
     assert.ok(p.label && p.description && p.filename, 'empty fields for ' + p.id);
     assert.ok(/\.cpp$/.test(p.filename), 'filename not a .cpp for ' + p.id);
     ids.add(p.id);
@@ -71,6 +78,12 @@ check('every program is wired to the run command with its id as argument data', 
   for (const loaded of catalog) {
     assert.ok(ids.has(loaded.id), 'catalog program missing from tree: ' + loaded.id);
   }
+});
+
+check('per-node command ids are unique across the whole catalog', () => {
+  const m = buildTreeModel(catalog);
+  const runIds = m.filter((e) => e.kind === 'program').map((e) => e.runCommandId);
+  assert.strictEqual(new Set(runIds).size, runIds.length, 'duplicate per-node command ids');
 });
 
 check('sections come first, actions before programs (fallback UX order)', () => {

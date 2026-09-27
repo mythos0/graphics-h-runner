@@ -36,6 +36,9 @@ export type PanelClick =
 export interface PanelHooks {
   /** Lifecycle notifications from the liveness watchdog. */
   onWebviewEvent?(ev: WebviewEvent): void;
+  /** v1.5.5: fired ONCE per session, the first time the panel view
+   * resolves — the user just opened the activity-bar panel. */
+  onPanelFirstOpen?(): void;
 }
 
 export class GhPanelProvider implements vscode.WebviewViewProvider {
@@ -47,6 +50,8 @@ export class GhPanelProvider implements vscode.WebviewViewProvider {
   private busyLabel: string | null = null;
   private health: WebviewHealth | undefined;
   private fallbackActive = false;
+  private fireworksRunning = false;
+  private firstOpenNotified = false;
 
   constructor(
     private readonly extensionRoot: string,
@@ -89,6 +94,16 @@ export class GhPanelProvider implements vscode.WebviewViewProvider {
     return this.fallbackActive;
   }
 
+  /** v1.5.5: the Fireworks Simulator overlay started/stopped — re-render
+   * so the festive action button shows the red Stop state while running. */
+  setFireworksState(running: boolean): void {
+    if (this.fireworksRunning === running) {
+      return;
+    }
+    this.fireworksRunning = running;
+    this.postState();
+  }
+
   resolveWebviewView(view: vscode.WebviewView): void {
     this.view = view;
     view.webview.options = {
@@ -128,6 +143,12 @@ export class GhPanelProvider implements vscode.WebviewViewProvider {
       return;
     }
     this.health.start();
+
+    /* v1.5.5: first panel open of the session (School Pride trigger) */
+    if (!this.firstOpenNotified) {
+      this.firstOpenNotified = true;
+      this.notifyFirstOpen();
+    }
 
     view.webview.onDidReceiveMessage((msg: PanelClick) => {
       try {
@@ -170,6 +191,14 @@ export class GhPanelProvider implements vscode.WebviewViewProvider {
   private notify(ev: WebviewEvent): void {
     try {
       this.hooks.onWebviewEvent?.(ev);
+    } catch {
+      /* hooks must never crash the provider */
+    }
+  }
+
+  private notifyFirstOpen(): void {
+    try {
+      this.hooks.onPanelFirstOpen?.();
     } catch {
       /* hooks must never crash the provider */
     }
@@ -237,7 +266,8 @@ export class GhPanelProvider implements vscode.WebviewViewProvider {
       status: this.currentStatus(),
       version: this.version,
       nonce,
-      cspSource: this.view.webview.cspSource
+      cspSource: this.view.webview.cspSource,
+      fireworksRunning: this.fireworksRunning
     });
   }
 

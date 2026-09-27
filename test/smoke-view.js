@@ -43,7 +43,7 @@ function check(name, fn) {
 
 const LOGO = 'https://*.vscode-cdn.net/media/diu-logo.png';
 
-function html(status, logoUri) {
+function html(status, logoUri, fireworksRunning) {
   return buildPanelHtml({
     programs,
     commands: COMMAND_META,
@@ -51,7 +51,8 @@ function html(status, logoUri) {
     version: '1.4.0',
     nonce: 'testnonce123',
     cspSource: 'https://*.vscode-cdn.net',
-    logoUri: logoUri === undefined ? LOGO : logoUri
+    logoUri: logoUri === undefined ? LOGO : logoUri,
+    fireworksRunning: !!fireworksRunning
   });
 }
 
@@ -107,10 +108,10 @@ check('31 program cards (23 + 8 lab), each with Run + Open', () => {
   assert.strictEqual((h.match(/tag tag-lab/g) || []).length, 8, 'lab tag count wrong');
 });
 
-check('7 action buttons carrying COMMAND_META ids (no Open Examples Folder)', () => {
+check('8 action buttons carrying COMMAND_META ids (no Open Examples Folder)', () => {
   const h = html({});
   const cmds = (h.match(/data-cmd="/g) || []).length;
-  assert.strictEqual(cmds, 7, 'data-cmd count ' + cmds);
+  assert.strictEqual(cmds, 8, 'data-cmd count ' + cmds);
   for (const c of COMMAND_META) {
     assert.ok(h.includes(`id="${c.id}"`), 'button id missing: ' + c.id);
   }
@@ -122,14 +123,30 @@ check('action buttons: exactly one green accent (primary), all others uniform ne
   const h = html({});
   const re = /<button class="([^"]*)" data-cmd="[^"]*" id="(cmd-[^"]+)"/g;
   let m, accent = 0, total = 0, firstId = null;
+  const btns = [];
   while ((m = re.exec(h)) !== null) {
     total++;
+    btns.push({ cls: m[1], id: m[2] });
     if (m[1].includes('btn-accent')) { accent++; firstId = firstId || m[2]; }
     assert.ok(!/btn-(violet|amber|emerald|blue|cyan|rose|fuchsia|lime)/.test(m[1]), 'rainbow color class found on ' + m[2]);
   }
-  assert.strictEqual(total, 7, 'action button count ' + total);
+  assert.strictEqual(total, 8, 'action button count ' + total);
   assert.strictEqual(accent, 1, 'accent button count ' + accent);
   assert.strictEqual(firstId, 'cmd-compileAndRun', 'accent is not the 1st action button');
+  const festive = btns.filter((b) => b.cls.includes('btn-festive') && !b.cls.includes('btn-festive-stop'));
+  const festiveStop = btns.filter((b) => b.cls.includes('btn-festive-stop'));
+  assert.strictEqual(festive.length, 1, 'festive button count ' + festive.length);
+  assert.ok(festive[0] && festive[0].id === 'cmd-fireworks', 'festive button is not the Fireworks Simulator');
+  assert.strictEqual(festiveStop.length, 0, 'stop state must not render while idle');
+});
+
+check('fireworksRunning: the festive button flips to the red Stop state (same command)', () => {
+  const h = html({}, LOGO, true);
+  const m = h.match(/<button class="btn btn-festive btn-festive-stop"[^>]*>/g) || [];
+  assert.strictEqual(m.length, 1, 'stop-state button count ' + m.length);
+  assert.ok(h.includes('data-cmd="graphics-h-runner.fireworks"'), 'stop state lost the toggle command');
+  assert.ok(h.includes('Stop Fireworks'), 'Stop Fireworks title missing');
+  assert.ok(h.includes('show running'), 'running hint missing');
   assert.ok(!h.includes('mini-run'), 'card Run buttons must stay neutral');
 });
 
@@ -273,7 +290,7 @@ check('hero button: exactly one, it is Compile & Run, full-width alone on its ro
   while ((m2 = re.exec(h)) !== null) {
     if (!m2[1].includes('btn-hero')) grid++;
   }
-  assert.strictEqual(grid, 6, 'secondary buttons not in the grid: ' + grid);
+  assert.strictEqual(grid, 7, 'secondary buttons not in the grid: ' + grid);
   assert.ok(h.includes('repeat(2, minmax(0, 1fr))'), '2-per-row grid rule missing');
   assert.ok(h.includes('@media (max-width: 299px)'), 'very-narrow single-column fallback missing');
 });

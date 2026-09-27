@@ -64,6 +64,8 @@ class GhPanelProvider {
         this.busy = false;
         this.busyLabel = null;
         this.fallbackActive = false;
+        this.fireworksRunning = false;
+        this.firstOpenNotified = false;
     }
     setDoctorResult(res) {
         this.doctorStatus = res;
@@ -92,6 +94,15 @@ class GhPanelProvider {
     }
     isFallbackActive() {
         return this.fallbackActive;
+    }
+    /** v1.5.5: the Fireworks Simulator overlay started/stopped — re-render
+     * so the festive action button shows the red Stop state while running. */
+    setFireworksState(running) {
+        if (this.fireworksRunning === running) {
+            return;
+        }
+        this.fireworksRunning = running;
+        this.postState();
     }
     resolveWebviewView(view) {
         this.view = view;
@@ -128,6 +139,11 @@ class GhPanelProvider {
             return;
         }
         this.health.start();
+        /* v1.5.5: first panel open of the session (School Pride trigger) */
+        if (!this.firstOpenNotified) {
+            this.firstOpenNotified = true;
+            this.notifyFirstOpen();
+        }
         view.webview.onDidReceiveMessage((msg) => {
             try {
                 if (msg && msg.type === 'pong') {
@@ -168,6 +184,14 @@ class GhPanelProvider {
     notify(ev) {
         try {
             this.hooks.onWebviewEvent?.(ev);
+        }
+        catch {
+            /* hooks must never crash the provider */
+        }
+    }
+    notifyFirstOpen() {
+        try {
+            this.hooks.onPanelFirstOpen?.();
         }
         catch {
             /* hooks must never crash the provider */
@@ -229,7 +253,8 @@ class GhPanelProvider {
             status: this.currentStatus(),
             version: this.version,
             nonce,
-            cspSource: this.view.webview.cspSource
+            cspSource: this.view.webview.cspSource,
+            fireworksRunning: this.fireworksRunning
         });
     }
     renderFallbackHtml() {

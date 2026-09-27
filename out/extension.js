@@ -66,6 +66,8 @@ const diagnostics_1 = require("./diagnostics");
 const depsAudit_1 = require("./depsAudit");
 const runwrap_1 = require("./runwrap");
 const globalize_1 = require("./globalize");
+const celebrateHost_1 = require("./celebrateHost");
+const programsTreeModel_1 = require("./programsTreeModel");
 const OUTPUT_CHANNEL_NAME = 'graphics.h Runner';
 const TERMINAL_NAME = 'graphics.h Runner';
 const CONFIG_PREFIX = 'graphics-h-runner.';
@@ -86,6 +88,12 @@ let diagnostics;
 let runState = 'idle';
 /* which back-end the last successful build used ('none' = plain console C++) */
 let lastBuildLibrary = 'none';
+/* v1.5.5: the celebration overlay (confetti / snow / school pride /
+ * Fireworks Simulator) — exactly one panel, driven by the commands below */
+let celebrator;
+/* School Pride fires once per session: the first time the activity-bar
+ * panel opens after a fresh desktop / window start. */
+let schoolPrideDone = false;
 /** Existence-probe options for the normalizers (real filesystem). */
 function normOpts() {
     return { platform: (0, toolchain_1.currentPlatform)() };
@@ -114,6 +122,24 @@ function trackedCommand(name, fn) {
         (0, instrument_1.addExtensionBreadcrumb)('ui.command', name);
         return fn(...args);
     };
+}
+/** v1.5.5 celebrations master switch (confetti / snow / school pride). */
+function celebrationsEnabled() {
+    return vscode.workspace
+        .getConfiguration('graphics-h-runner.celebrations')
+        .get('enabled', true);
+}
+/** Fire a timed celebration; a celebration must never break a compile. */
+function celebrate(kind) {
+    if (!celebrator || !celebrationsEnabled()) {
+        return;
+    }
+    try {
+        celebrator.show(kind);
+    }
+    catch {
+        /* ignore — the compile result matters more than the party */
+    }
 }
 /* ---------------- full setup (0 -> running) ---------------- */
 async function addPathsToSetting(key, additions) {
@@ -512,12 +538,14 @@ async function compileSource(sourceFile) {
     setRunState(stillRunning ? 'running' : 'idle');
     (0, instrument_1.addExtensionBreadcrumb)('compile', result, { file: path.basename(sourceFile) });
     if (result === 'ok') {
+        celebrate('confetti'); /* v1.5.5: every successful compilation */
         diagnostics?.delete(vscode.Uri.file(sourceFile));
         if ((0, toolchain_1.currentPlatform)() === 'windows') {
             auditExeAfterBuild((0, toolchain_1.binaryPathFor)(sourceFile, (0, toolchain_1.currentPlatform)()));
         }
     }
     else if (result === 'failed') {
+        celebrate('snow'); /* v1.5.5: 3 s snowfall so errors are impossible to miss */
         /* Compile errors are the NORMAL edit-compile loop for a graphics.h
          * teaching tool — they belong in the Problems panel and the output
          * channel, NOT in the telemetry error inbox (a single student session
@@ -1103,6 +1131,13 @@ function activate(context) {
     const panelProvider = new panelView_1.GhPanelProvider(context.extensionPath, version, catalog, (msg) => {
         void handlePanelClick(msg);
     }, {
+        onPanelFirstOpen: () => {
+            /* v1.5.5 School Pride — once per session, first panel open */
+            if (!schoolPrideDone) {
+                schoolPrideDone = true;
+                celebrate('schoolpride');
+            }
+        },
         onWebviewEvent: (ev) => {
             if (ev === 'retry') {
                 log('[panel] webview did not answer — re-rendering once to clear the service-worker race');
@@ -1131,6 +1166,18 @@ function activate(context) {
         }
     });
     panel = panelProvider;
+    /* v1.5.5: the celebration overlay + its workbench state sync */
+    celebrator = new celebrateHost_1.Celebrator(context.extensionPath, {
+        onStateChange: (kind) => {
+            const running = kind === 'fireworks';
+            void vscode.commands
+                .executeCommand('setContext', 'graphics-h-runner.fireworksRunning', running)
+                .then(() => undefined, () => undefined);
+            panelProvider.setFireworksState(running);
+        },
+        onLog: log
+    });
+    context.subscriptions.push({ dispose: () => celebrator?.dispose() });
     if (doctorCache) {
         panelProvider.setDoctorResult(doctorCache);
     }
@@ -1144,6 +1191,20 @@ function activate(context) {
     }), vscode.commands.registerCommand('graphics-h-runner.runSample', trackedCommand('runSample', async (programId) => {
         /* used by the fallback tree: open + compile + run in one click */
         await handlePanelClick({ type: 'runProgram', id: String(programId || '') });
+    })), 
+    /* v1.5.5: one STATIC command per example program for the fallback tree
+     * (TreeItem.command must not carry arguments — see programsTreeModel). */
+    ...catalog.map((p) => vscode.commands.registerCommand((0, programsTreeModel_1.treeRunCommandId)(p.id), trackedCommand('runSample:' + p.id, async () => {
+        await handlePanelClick({ type: 'runProgram', id: p.id });
+    }))), vscode.commands.registerCommand('graphics-h-runner.fireworks', trackedCommand('fireworks', () => {
+        /* the SAME button starts and stops the show */
+        if (celebrator?.running === 'fireworks') {
+            celebrator.stop();
+            return;
+        }
+        celebrator?.show('fireworks');
+    })), vscode.commands.registerCommand('graphics-h-runner.stopFireworks', trackedCommand('stopFireworks', () => {
+        celebrator?.stop();
     })), vscode.commands.registerCommand('graphics-h-runner.reloadPanel', trackedCommand('reloadPanel', () => {
         panel?.reloadPanel();
     })), vscode.commands.registerCommand('graphics-h-runner.openProgram', trackedCommand('openProgram', async (program) => {

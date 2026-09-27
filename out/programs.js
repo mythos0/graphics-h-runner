@@ -104,7 +104,10 @@ exports.COMMAND_META = [
     { id: 'cmd-compile', commandId: 'graphics-h-runner.compile', title: 'Compile', hint: 'Ctrl+Alt+B', icon: '🛠' },
     { id: 'cmd-run', commandId: 'graphics-h-runner.run', title: 'Run Last Build', hint: 'opens a terminal', icon: '🎬' },
     { id: 'cmd-stop', commandId: 'graphics-h-runner.stopProgram', title: 'Stop Running Program', hint: 'kills the window', icon: '⏹' },
-    { id: 'cmd-copycmd', commandId: 'graphics-h-runner.copyCompileCommand', title: 'Copy Compile Command', hint: 'exact g++ line', icon: '📋' }
+    { id: 'cmd-copycmd', commandId: 'graphics-h-runner.copyCompileCommand', title: 'Copy Compile Command', hint: 'exact g++ line', icon: '📋' },
+    /* v1.5.5: the Fireworks Simulator (festive design; the SAME button
+     * stops the show while it runs — toggle handled by the command). */
+    { id: 'cmd-fireworks', commandId: 'graphics-h-runner.fireworks', title: 'Fireworks Simulator', hint: 'full-screen show', icon: '🎆', variant: 'festive' }
 ];
 /** Load the full catalog: sample sources from disk. */
 function loadProgramCatalog(extensionRoot) {

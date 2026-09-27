@@ -58,6 +58,9 @@ import { parseCompilerOutput, capCompilerDiagnostics } from './diagnostics';
 import { auditWindowsExe, buildAuditMessage } from './depsAudit';
 import { cmdRunLine, posixRunLine } from './runwrap';
 import { makeGlobalWindows } from './globalize';
+import { Celebrator } from './celebrateHost';
+import type { CelebrationKind } from './celebrate';
+import { treeRunCommandId } from './programsTreeModel';
 
 const OUTPUT_CHANNEL_NAME = 'graphics.h Runner';
 const TERMINAL_NAME = 'graphics.h Runner';
@@ -80,6 +83,12 @@ let diagnostics: vscode.DiagnosticCollection | undefined;
 let runState: 'idle' | 'compiling' | 'running' = 'idle';
 /* which back-end the last successful build used ('none' = plain console C++) */
 let lastBuildLibrary: BgiLibrary | 'none' = 'none';
+/* v1.5.5: the celebration overlay (confetti / snow / school pride /
+ * Fireworks Simulator) — exactly one panel, driven by the commands below */
+let celebrator: Celebrator | undefined;
+/* School Pride fires once per session: the first time the activity-bar
+ * panel opens after a fresh desktop / window start. */
+let schoolPrideDone = false;
 
 interface ExtensionConfig {
   compilerPath: string;
@@ -126,6 +135,25 @@ function trackedCommand<A extends unknown[], R>(
     addExtensionBreadcrumb('ui.command', name);
     return fn(...args);
   };
+}
+
+/** v1.5.5 celebrations master switch (confetti / snow / school pride). */
+function celebrationsEnabled(): boolean {
+  return vscode.workspace
+    .getConfiguration('graphics-h-runner.celebrations')
+    .get<boolean>('enabled', true);
+}
+
+/** Fire a timed celebration; a celebration must never break a compile. */
+function celebrate(kind: 'confetti' | 'snow' | 'schoolpride'): void {
+  if (!celebrator || !celebrationsEnabled()) {
+    return;
+  }
+  try {
+    celebrator.show(kind);
+  } catch {
+    /* ignore — the compile result matters more than the party */
+  }
 }
 
 /* ---------------- full setup (0 -> running) ---------------- */
@@ -549,11 +577,13 @@ async function compileSource(sourceFile: string): Promise<CompileResult> {
   setRunState(stillRunning ? 'running' : 'idle');
   addExtensionBreadcrumb('compile', result, { file: path.basename(sourceFile) });
   if (result === 'ok') {
+    celebrate('confetti'); /* v1.5.5: every successful compilation */
     diagnostics?.delete(vscode.Uri.file(sourceFile));
     if (currentPlatform() === 'windows') {
       auditExeAfterBuild(binaryPathFor(sourceFile, currentPlatform()));
     }
   } else if (result === 'failed') {
+    celebrate('snow'); /* v1.5.5: 3 s snowfall so errors are impossible to miss */
     /* Compile errors are the NORMAL edit-compile loop for a graphics.h
      * teaching tool — they belong in the Problems panel and the output
      * channel, NOT in the telemetry error inbox (a single student session
@@ -1206,6 +1236,13 @@ export function activate(context: vscode.ExtensionContext): void {
   const panelProvider = new GhPanelProvider(context.extensionPath, version, catalog, (msg) => {
     void handlePanelClick(msg);
   }, {
+    onPanelFirstOpen: () => {
+      /* v1.5.5 School Pride — once per session, first panel open */
+      if (!schoolPrideDone) {
+        schoolPrideDone = true;
+        celebrate('schoolpride');
+      }
+    },
     onWebviewEvent: (ev) => {
       if (ev === 'retry') {
         log('[panel] webview did not answer — re-rendering once to clear the service-worker race');
@@ -1234,6 +1271,20 @@ export function activate(context: vscode.ExtensionContext): void {
     }
   });
   panel = panelProvider;
+
+  /* v1.5.5: the celebration overlay + its workbench state sync */
+  celebrator = new Celebrator(context.extensionPath, {
+    onStateChange: (kind: CelebrationKind | undefined) => {
+      const running = kind === 'fireworks';
+      void vscode.commands
+        .executeCommand('setContext', 'graphics-h-runner.fireworksRunning', running)
+        .then(() => undefined, () => undefined);
+      panelProvider.setFireworksState(running);
+    },
+    onLog: log
+  });
+  context.subscriptions.push({ dispose: () => celebrator?.dispose() });
+
   if (doctorCache) {
     panelProvider.setDoctorResult(doctorCache);
   }
@@ -1255,6 +1306,36 @@ export function activate(context: vscode.ExtensionContext): void {
       trackedCommand('runSample', async (programId: string) => {
         /* used by the fallback tree: open + compile + run in one click */
         await handlePanelClick({ type: 'runProgram', id: String(programId || '') });
+      })
+    ),
+
+    /* v1.5.5: one STATIC command per example program for the fallback tree
+     * (TreeItem.command must not carry arguments — see programsTreeModel). */
+    ...catalog.map((p) =>
+      vscode.commands.registerCommand(
+        treeRunCommandId(p.id),
+        trackedCommand('runSample:' + p.id, async () => {
+          await handlePanelClick({ type: 'runProgram', id: p.id });
+        })
+      )
+    ),
+
+    vscode.commands.registerCommand(
+      'graphics-h-runner.fireworks',
+      trackedCommand('fireworks', () => {
+        /* the SAME button starts and stops the show */
+        if (celebrator?.running === 'fireworks') {
+          celebrator.stop();
+          return;
+        }
+        celebrator?.show('fireworks');
+      })
+    ),
+
+    vscode.commands.registerCommand(
+      'graphics-h-runner.stopFireworks',
+      trackedCommand('stopFireworks', () => {
+        celebrator?.stop();
       })
     ),
 

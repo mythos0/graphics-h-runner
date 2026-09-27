@@ -22,7 +22,8 @@ export interface TreeProgramEntry {
   label: string;
   description: string;
   filename: string;
-  /** Command invoked on click, with the program id as the only argument. */
+  /** Command invoked on click — a STATIC per-node id (never with
+   *  arguments; see TREE_RUN_COMMAND_PREFIX for why). */
   runCommandId: string;
 }
 
@@ -37,15 +38,35 @@ export type TreeEntry = TreeSectionEntry | TreeActionEntry | TreeProgramEntry;
 /** Node identity inside the tree: sections expand, leaves carry commands. */
 export type TreeNode = TreeSectionEntry | TreeActionEntry | TreeProgramEntry;
 
-/** Command id used for "click a program to run it" in the fallback tree. */
+/** Generic "run an example program" command (palette + programmatic use;
+ * takes the program id as its single argument). */
 export const TREE_RUN_COMMAND = 'graphics-h-runner.runSample';
+
+/**
+ * Per-node command ids for the fallback tree: TREE_RUN_COMMAND + '.' + id.
+ *
+ * v1.5.5 BUG FIX — TreeItem.command must NOT carry `arguments`. VS Code's
+ * command converter caches argument-carrying tree commands under a
+ * throwaway delegate id ("graphics-h-runner.runSample /N"); when the
+ * extension host restarts (or the cache entry is disposed) while the tree
+ * is still rendered, EVERY click fails with
+ *   "Actual command not found, wanted to execute
+ *    graphics-h-runner.runSample /2"
+ * Static per-node ids involve no converter cache and survive every host
+ * restart — the extension re-registers them all on activation.
+ */
+export const TREE_RUN_COMMAND_PREFIX = 'graphics-h-runner.runSample.';
+
+/** Static per-node command id for one example program. */
+export function treeRunCommandId(programId: string): string {
+  return TREE_RUN_COMMAND_PREFIX + programId;
+}
 
 /**
  * Pure model: actions first, then every example program.
  */
 export function buildTreeModel(
-  programs: Array<Pick<LoadedProgram, 'id' | 'title' | 'description' | 'filename' | 'lab'>>,
-  runCommandId: string = TREE_RUN_COMMAND
+  programs: Array<Pick<LoadedProgram, 'id' | 'title' | 'description' | 'filename' | 'lab'>>
 ): TreeEntry[] {
   const entries: TreeEntry[] = [
     { kind: 'section', id: 'tree-section-actions', label: 'Actions' }
@@ -67,7 +88,7 @@ export function buildTreeModel(
       label: p.title,
       description: p.description,
       filename: p.filename,
-      runCommandId
+      runCommandId: treeRunCommandId(p.id)
     });
   }
   if (lab.length > 0) {
@@ -83,7 +104,7 @@ export function buildTreeModel(
         label: p.title,
         description: p.description,
         filename: p.filename,
-        runCommandId
+        runCommandId: treeRunCommandId(p.id)
       });
     }
   }

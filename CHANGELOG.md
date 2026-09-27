@@ -1,5 +1,59 @@
 # ChangeLog
 
+## 1.5.5 — 2026-09-27
+
+Celebrations release, plus the definitive fix for the fallback-view bug
+("Actual command not found, wanted to execute graphics-h-runner.runSample /2").
+
+### Fixed
+- **The fallback list view works on every click, after every restart**:
+  the tree passed the clicked program to `graphics-h-runner.runSample` via
+  `TreeItem.command.arguments`. VS Code's command converter caches such
+  argument-carrying tree commands under a throwaway delegate id
+  (`graphics-h-runner.runSample /N`); when the extension host restarts (or
+  the cache entry is disposed) while the list is still rendered, EVERY
+  click fails with "Actual command not found, wanted to execute
+  graphics-h-runner.runSample /2". Each program now has its own STATIC
+  per-node command id (`graphics-h-runner.runSample.<id>`, registered on
+  every activation) and the tree passes NO arguments — the failure mode is
+  structurally impossible now. A new `registry-tests.js` suite pins the
+  whole command graph (contributed ↔ registered ↔ referenced) and a
+  real-host E2E exercises two per-node click paths + the fireworks toggle.
+
+### Added
+- **🎉 Confetti on every successful compilation** — a full-screen overlay
+  plays the canvas-confetti "Realistic Look" burst (vendored
+  catdad/canvas-confetti v1.9.4, ISC). Click anywhere or Esc to dismiss;
+  auto-closes after ~3 s. Never fires for failed builds.
+- **❄️ Snow for 3 seconds on compile errors** — a failed build is
+  impossible to miss: a snowfall overlay drops for exactly 3 s while the
+  Problems panel carries the clickable errors.
+- **🎒 School Pride on the first panel open of every session** — the
+  canvas-confetti "School Pride" side cannons play for 5 s the first time
+  the graphics.h panel opens after each desktop/window start.
+- **🎆 Fireworks Simulator action button** — the festive (animated
+  violet→pink→amber) button in the action grid launches the full-screen
+  [Fireworks Simulator](https://github.com/troyxun/fireworks-simulator)
+  (MIT — simulation by Caleb Miller, cmiller.tech; vendored verbatim with
+  its settings menu: shell type/size, quality, sky lighting, scale,
+  auto-launch, finale mode, long exposure). The SAME button turns into
+  **Stop Fireworks** while the show runs (also on the view title bars, in
+  the palette, via Esc, or the red in-overlay Stop button). Audio is
+  silently skipped when the streamed samples are unavailable — the show
+  itself never depends on them.
+- **`graphics-h-runner.celebrations.enabled`** setting (default `true`)
+  gates the automatic celebrations; the Fireworks Simulator button always
+  works.
+
+### Security
+- Both overlay pages run under the same CSP discipline as the panel:
+  `default-src 'none'`, nonce'd scripts + the webview cspSource only,
+  zero remote requests. canvas-confetti's blob:-URL Worker renderer is
+  deliberately bypassed (Worker hidden during library load, restored
+  immediately after) — the strict CSP would block blob: workers and leave
+  the transferred OffscreenCanvas blank; the main-thread renderer is used
+  instead (verified pixel-for-pixel in a real Chromium).
+
 ## 1.5.4 — 2026-09-27
 
 Stability release driven by two stubborn student reports: programs still
