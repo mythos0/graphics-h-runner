@@ -13,7 +13,7 @@
       "ok": true,
       "exit": 0,
       "analysis": {
-        "nonblack": 0.0327,
+        "nonblack": 0.0326,
         "unique_colors": 6
       },
       "secs": "7.6"
@@ -34,7 +34,7 @@
         "nonblack": 0.2493,
         "unique_colors": 23
       },
-      "secs": "6.8"
+      "secs": "6.7"
     },
     "rfx05_image_ops.cpp": {
       "ok": true,
@@ -52,7 +52,7 @@
         "nonblack": 0.013,
         "unique_colors": 4
       },
-      "secs": "5.4"
+      "secs": "5.3"
     },
     "rfx07_text_matrix.cpp": {
       "ok": true,
@@ -85,7 +85,7 @@
       "ok": true,
       "exit": 0,
       "analysis": {
-        "nonblack": 0.0089,
+        "nonblack": 0.0092,
         "unique_colors": 5
       },
       "secs": "9.4"

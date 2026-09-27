@@ -42,6 +42,9 @@ export function resolveProgramTarget(
 }
 
 const SAMPLE_META: ProgramMeta[] = [
+  /* v1.5.8: the fireworks simulation leads the list — the requested
+   * showpiece first (shells, rockets, particle physics), rest unchanged */
+  { id: 'fireworks',  kind: 'sample', filename: '12_fireworks.cpp',       title: 'Fireworks Show',      description: 'Shells, rockets & particle physics over a night city', emoji: '🎆', tag: 'fun' },
   { id: 'hello',      kind: 'sample', filename: '01_hello_graphics.cpp',  title: 'Hello, graphics.h!',  description: 'First window — shapes, colors, text',   emoji: '👋', tag: 'classic' },
   { id: 'shapes',     kind: 'sample', filename: '02_shapes_showcase.cpp', title: 'Shapes Showcase',     description: 'Bars, circles, ellipses, polygons',     emoji: '🔷', tag: 'classic' },
   { id: 'ball',       kind: 'sample', filename: '03_bouncing_ball.cpp',   title: 'Bouncing Ball',       description: 'delay()-based animation loop',          emoji: '🔴', tag: 'classic' },
@@ -53,7 +56,6 @@ const SAMPLE_META: ProgramMeta[] = [
   { id: 'paddle',     kind: 'sample', filename: '09_keyboard_paddle.cpp', title: 'Keyboard Paddle',     description: 'kbhit()/getch() mini game',             emoji: '🏓', tag: 'interactive' },
   { id: 'smiley',     kind: 'sample', filename: '10_smiley_wink.cpp',     title: 'Winking Smiley',      description: 'Giant bobbing smiley that winks at you',emoji: '😊', tag: 'fun' },
   { id: 'balls',      kind: 'sample', filename: '11_bouncing_balls.cpp',  title: 'Bouncing Balls',      description: 'Seven colorful balls with ghost trails',emoji: '🎱', tag: 'fun' },
-  { id: 'fireworks',  kind: 'sample', filename: '12_fireworks.cpp',       title: 'Fireworks Show',      description: 'Rockets exploding over a city skyline', emoji: '🎆', tag: 'fun' },
   { id: 'solar',      kind: 'sample', filename: '13_solar_system.cpp',    title: 'Solar System',        description: 'Orbiting planets, moon and a comet',    emoji: '🪐', tag: 'fun' },
   { id: 'aquarium',   kind: 'sample', filename: '14_aquarium.cpp',        title: 'Aquarium',            description: 'Swimming fish, bubbles and seaweed',    emoji: '🐠', tag: 'fun' },
   { id: 'spiral',     kind: 'sample', filename: '15_rainbow_spiral.cpp',  title: 'Rainbow Spiral',      description: 'Ever-growing rotating rainbow spiral',  emoji: '🌈', tag: 'fun' },

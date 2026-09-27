@@ -48,8 +48,8 @@ const INTERNAL = new Set(['setContext']); /* workbench-internal, not ours to reg
 
 console.log('registry-tests — command graph consistency\n');
 
-check('version is 1.5.7', () => {
-  assert.strictEqual(pkg.version, '1.5.7');
+check('version is 1.5.8', () => {
+  assert.strictEqual(pkg.version, '1.5.8');
 });
 
 check('every panel action button is a contributed command', () => {

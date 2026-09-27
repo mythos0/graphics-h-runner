@@ -69,7 +69,8 @@ const SHOT_AT = {
   '06_fractal_tree.cpp': 8.0,
   '07_mandelbrot.cpp': 7.5,
   '08_mouse_paint.cpp': 2.0,
-  '09_keyboard_paddle.cpp': 2.0
+  '09_keyboard_paddle.cpp': 2.0,
+  '12_fireworks.cpp': 3.4
 };
 const TIMEOUT_MS = {
   '07_mandelbrot.cpp': 90000

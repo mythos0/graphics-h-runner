@@ -36,6 +36,7 @@ export type PanelClick =
   | { type: 'command'; command: string }
   | { type: 'runProgram'; id: string }
   | { type: 'openProgram'; id: string }
+  | { type: 'cheat'; open: boolean }
   | { type: 'pong' };
 
 export interface PanelHooks {
@@ -62,6 +63,12 @@ export class GhPanelProvider implements vscode.WebviewViewProvider {
    * re-render while it is active replays the REMAINING time, so busy
    * updates and visibility changes never lose the show. */
   private celebration: { kind: PanelCelebrationKind; endsAt: number } | null = null;
+  /* v1.5.8: the panel page reports while its cheat sheet is open; the
+   * provider then DEFERS full re-renders (doctor/busy/celebration
+   * updates) until it closes, so the sheet can never be destroyed by a
+   * page swap. A boot-restore on every fresh page re-syncs this flag. */
+  private cheatOpen = false;
+  private pendingRender = false;
 
   constructor(
     private readonly extensionRoot: string,
@@ -193,6 +200,15 @@ export class GhPanelProvider implements vscode.WebviewViewProvider {
           this.health?.pong();
           return;
         }
+        /* v1.5.8: cheat-sheet open/close sync from the page */
+        if (msg && msg.type === 'cheat') {
+          this.cheatOpen = !!msg.open;
+          if (!this.cheatOpen && this.pendingRender) {
+            /* sheet closed — deliver the re-render that was deferred */
+            this.postState();
+          }
+          return;
+        }
         this.onClick(msg);
       } catch {
         /* never let a panel click crash the host */
@@ -259,6 +275,15 @@ export class GhPanelProvider implements vscode.WebviewViewProvider {
     if (!this.view) {
       return;
     }
+    /* v1.5.8: while the cheat sheet is open the page must NOT be swapped
+       out from under the user — park the render and deliver it when the
+       sheet reports closed (see the 'cheat' message handler above). */
+    if (this.cheatOpen) {
+      this.pendingRender = true;
+      return;
+    }
+    this.pendingRender = false;
+    this.cheatOpen = false;
     /* full re-render: the HTML is cheap to rebuild and always consistent */
     this.view.webview.html = this.fallbackActive ? this.renderFallbackHtml() : this.renderHtml();
   }

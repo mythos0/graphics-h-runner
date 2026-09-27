@@ -1164,6 +1164,9 @@ async function handlePanelClick(msg) {
     if (msg.type === 'pong') {
         return; /* liveness heartbeat — handled by the panel's watchdog */
     }
+    if (msg.type === 'cheat') {
+        return; /* v1.5.8: cheat-sheet open/close sync — handled by the panel provider itself */
+    }
     if (msg.type === 'command') {
         const known = await vscode.commands.getCommands().then((all) => all.includes(msg.command));
         if (known) {

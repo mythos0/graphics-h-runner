@@ -1,5 +1,48 @@
 # ChangeLog
 
+## 1.5.8 — 2026-09-28
+
+The "?" cheat-sheet reliability release, from the report
+"? button click not opens cheatsheet" — plus the requested showpiece:
+a proper graphics.h fireworks simulation leading the Example Programs.
+
+### Added
+- **The Fireworks Show sample is now a real shell-based simulation**
+  (and it now leads the Example Programs list): a pool of up to six
+  shells, each a gravity-driven rocket that leans as it climbs and
+  drops spark trail, exploding near its apex into one of four burst
+  types — peony, ring, willow (long golden droop) and crackle (white
+  flicker finale). Particles fly with velocity, air drag, gravity,
+  shimmer and fade to embers; the burst flashes and lights up the city
+  below; stars twinkle, windows lit, moon with craters. Written with
+  crash-safe classic BGI primitives only (no putpixel), so the SAME
+  source compiles and runs against WinBGIm on Windows and SDL_bgi on
+  Linux/macOS — verified in both gates.
+
+### Fixed
+- **The ? cheat sheet can no longer be destroyed by a panel re-render.**
+  Forensics: the sheet's click wiring was always correct (verified with a
+  scripted click inside a REAL VS Code webview — it opens, Esc closes,
+  re-click reopens), but the panel re-renders its whole page on doctor,
+  busy, celebration and visibility events — and those re-renders cluster
+  right after the panel opens, exactly when a user first clicks ?. A
+  click landing during the page swap was swallowed; an open sheet was
+  wiped the instant the new page arrived. The fix, both sides:
+  - **The sheet survives re-renders**: its open state is persisted in
+    the webview's saved state (merged with the section toggles, never
+    wiping them) and every fresh page re-opens the sheet on boot, then
+    re-syncs the host.
+  - **The host stops swapping the page while you read**: while the sheet
+    reports open, the panel DEFERS full re-renders (doctor/busy/
+    celebration updates) and delivers them the moment the sheet closes.
+    The liveness watchdog's retry/fallback recovery still bypasses this
+    gate — recovery must always win.
+- Verified three ways: a new `cheat-sheet-tests.js` contract suite, a
+  real-Chromium behavioral harness (open → simulated re-render → sheet
+  still open → Esc → re-render → stays closed, with the host sync
+  messages asserted), and a scripted click inside a live VS Code
+  webview driven over CDP.
+
 ## 1.5.7 — 2026-09-28
 
 The celebrations get their right home, per user feedback: the full-screen

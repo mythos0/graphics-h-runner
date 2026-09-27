@@ -569,9 +569,23 @@ function buildPanelHtml(opts) {
     applyLabState();
 
     /* graphics.h cheat sheet: opens from the ? button, searchable,
-       Esc / backdrop / × closes it. No host messages needed. */
+       Esc / backdrop / × closes it. The open state is persisted and
+       reported to the host (v1.5.8) so re-renders never destroy it. */
     var cheatOv = document.getElementById('cheat-overlay');
     var helpBtn = document.getElementById('help-btn');
+    /* v1.5.8: the sheet's open state is part of the persisted webview
+       state (merged, never wiping the section toggles) AND reported to
+       the host — while it is open the host DEFERS full re-renders, so a
+       doctor/busy/celebration update can no longer swap the page out
+       from under the reading user (the "? click does nothing" report:
+       the sheet opened and was instantly destroyed by a re-render). */
+    function cheatStateOpen() {
+      try { return !!(vscode.getState() && vscode.getState().cheatOpen); } catch (e) { return false; }
+    }
+    function setCheatState(open) {
+      try { var st = vscode.getState() || {}; st.cheatOpen = !!open; vscode.setState(st); } catch (e) {}
+      try { vscode.postMessage({ type: 'cheat', open: !!open }); } catch (e) {}
+    }
     function filterCheat(raw) {
       var qv = String(raw || '').toLowerCase();
       var fns = document.querySelectorAll('.cheat-fn');
@@ -601,11 +615,13 @@ function buildPanelHtml(opts) {
       if (q) { q.value = ''; filterCheat(''); }
       var body = document.getElementById('cheat-body');
       if (body) { body.scrollTop = 0; }
+      setCheatState(true);
     }
     function closeCheat() {
       if (!cheatOv) { return; }
       cheatOv.classList.remove('open');
       if (helpBtn) { helpBtn.setAttribute('aria-expanded', 'false'); }
+      setCheatState(false);
     }
     if (helpBtn) { helpBtn.addEventListener('click', function (ev) { ev.stopPropagation(); openCheat(); }); }
     var cheatClose = document.getElementById('cheat-close');
@@ -616,6 +632,12 @@ function buildPanelHtml(opts) {
     document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') { closeCheat(); } });
     var cheatQ = document.getElementById('cheat-q');
     if (cheatQ) { cheatQ.addEventListener('input', function () { filterCheat(cheatQ.value); }); }
+    /* v1.5.8: a fresh page (re-render, retry, reload) reopens the sheet
+       from the persisted state — the sheet survives every re-render */
+    if (cheatStateOpen()) { openCheat(); }
+    /* always re-sync the host on boot so a stale in-flight report from
+       the previous page can never park re-renders forever */
+    try { vscode.postMessage({ type: 'cheat', open: cheatStateOpen() }); } catch (e) {}
     document.addEventListener('click', function (ev) {
       var el = ev.target;
       while (el && el !== document.body) {
