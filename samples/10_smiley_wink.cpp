@@ -10,7 +10,7 @@ int main ( )
 {
     initwindow(640, 480);
 
-    /* v1.5.3: runs until YOU quit (press a key). The automated test
+    /* v1.5.3: runs until YOU quit (ESC or Q). The automated test
      * battery sets BGI_AUTOEXIT_MS so runs still finish by themselves
      * there; real users never set it. */
     long autoexitMs = 0;
@@ -20,7 +20,8 @@ int main ( )
     int blinkFrame = -1;          /* frame counter of the current wink */
     long tick = 0;
 
-    while (!kbhit() && (autoexitMs <= 0 || time(NULL) - start < autoexitMs / 1000)) {
+    while (autoexitMs <= 0 || time(NULL) - start < autoexitMs / 1000) {
+        if (kbhit()) { int quitKey = getch(); if (quitKey == 27 || quitKey == 'q' || quitKey == 'Q') break; }
         cleardevice();
         setbkcolor(BLACK);
 
@@ -73,7 +74,7 @@ int main ( )
 
         setcolor(WHITE);
         settextstyle(DEFAULT_FONT, HORIZ_DIR, 1);
-        outtextxy(190, 455, (char*)"graphics.h smiley - press any key to exit");
+        outtextxy(190, 455, (char*)"graphics.h smiley - press ESC or Q to exit");
 
         delay(30);
         tick++;

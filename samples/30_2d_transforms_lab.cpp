@@ -6,7 +6,7 @@
  *   X = reset to the original shape
  * The original house stays as a dotted gray outline; the transformed
  * copy is solid cyan. The active matrix is printed in the TERMINAL
- * every time. Any key closes the window.
+ * every time. ESC (or Q) closes the window.
  */
 #include <graphics.h>
 #include <cstdlib>
@@ -104,7 +104,7 @@ int main()
     printMat("Translate by (120, -60):", 1, 0, 120, 0, 1, -60);
     drawAll();
 
-    /* v1.5.3: the window stays open until YOU quit (ESC / any key).
+    /* v1.5.3: the window stays open until YOU quit (ESC or Q).
      * The automated test battery sets BGI_AUTOEXIT_MS so runs still
      * finish by themselves there; real users never set it. */
     long autoexitMs = 0;
@@ -114,7 +114,7 @@ int main()
         if (autoexitMs > 0 && (long)(time(NULL) - begun) * 1000 >= autoexitMs) break;
         if (kbhit()) {
             int k = getch();
-            if (k == 27) break;
+            if (k == 27 || k == 'q' || k == 'Q') break;
             if (k == 't' || k == 'T') {
                 for (int i = 0; i < 12; i += 2) { cur[i] += 40; cur[i + 1] -= 20; }
                 printMat("Translate by (40, -20):", 1, 0, 40, 0, 1, -20);

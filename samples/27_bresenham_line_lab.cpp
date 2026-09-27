@@ -5,7 +5,7 @@
  *   - green line   = line() reference
  *   - yellow dots  = the Bresenham points
  * Enter x1 y1 x2 y2 in the TERMINAL (any slope, all octants); EOF-safe
- * demo line; any key closes the window.
+ * demo line; ESC (or Q) closes the window.
  */
 #include <graphics.h>
 #include <ctime>
@@ -83,10 +83,10 @@ int main()
     setcolor(WHITE);
     outtextxy(cx + x1 - 20, cy - y1 - 18, (char*)"(x1,y1)");
     outtextxy(cx + x2 + 6, cy - y2 - 18, (char*)"(x2,y2)");
-    outtextxy(cx - 190, getmaxy() - 26, (char*)"Press any key in this window to close");
+    outtextxy(cx - 190, getmaxy() - 26, (char*)"Press ESC (or Q) in this window to close");
     cout << "Done - " << step + 1 << " Bresenham points, zero floating point." << endl;
 
-    /* v1.5.3: the window stays open until YOU quit (ESC / any key).
+    /* v1.5.3: the window stays open until YOU quit (ESC or Q).
      * The automated test battery sets BGI_AUTOEXIT_MS so runs still
      * finish by themselves there; real users never set it. */
     long autoexitMs = 0;
@@ -94,7 +94,7 @@ int main()
     time_t begun = time(NULL);
     for (;;) {                            /* runs until YOU quit */
         if (autoexitMs > 0 && (long)(time(NULL) - begun) * 1000 >= autoexitMs) break;
-        if (kbhit()) break;
+        if (kbhit()) { int quitKey = getch(); if (quitKey == 27 || quitKey == 'q' || quitKey == 'Q') break; }
         delay(10);
     }
     closegraph();

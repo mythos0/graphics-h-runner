@@ -5,7 +5,7 @@
  *   - dark gray circle = circle() reference
  *   - light cyan dots  = the 8-way mirrored algorithm points
  *   - step table (x, y, d) in the terminal
- * EOF-safe demo radius; any key closes the window.
+ * EOF-safe demo radius; ESC (or Q) closes the window.
  */
 #include <graphics.h>
 #include <ctime>
@@ -92,10 +92,10 @@ int main()
     sprintf(b, "(cx, cy+%d) = north point", r);
     outtextxy(cx + 6, cy - r + 6, b);
     outtextxy(10, 8, (char*)"Bresenham Circle Lab - dark = circle() reference, cyan = algorithm points");
-    outtextxy(cx - 190, getmaxy() - 26, (char*)"Press any key in this window to close");
+    outtextxy(cx - 190, getmaxy() - 26, (char*)"Press ESC (or Q) in this window to close");
     cout << "Done - " << step << " octant steps, 8-way mirrored." << endl;
 
-    /* v1.5.3: the window stays open until YOU quit (ESC / any key).
+    /* v1.5.3: the window stays open until YOU quit (ESC or Q).
      * The automated test battery sets BGI_AUTOEXIT_MS so runs still
      * finish by themselves there; real users never set it. */
     long autoexitMs = 0;
@@ -103,7 +103,7 @@ int main()
     time_t begun = time(NULL);
     for (;;) {                            /* runs until YOU quit */
         if (autoexitMs > 0 && (long)(time(NULL) - begun) * 1000 >= autoexitMs) break;
-        if (kbhit()) break;
+        if (kbhit()) { int quitKey = getch(); if (quitKey == 27 || quitKey == 'q' || quitKey == 'Q') break; }
         delay(10);
     }
     closegraph();

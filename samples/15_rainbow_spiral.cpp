@@ -14,7 +14,7 @@ int main ( )
     cleardevice();
 
     int cx = 320, cy = 240;
-    /* v1.5.3: runs until YOU quit (press a key). The automated test
+    /* v1.5.3: runs until YOU quit (ESC or Q). The automated test
      * battery sets BGI_AUTOEXIT_MS so runs still finish by themselves
      * there; real users never set it. */
     long autoexitMs = 0;
@@ -26,7 +26,8 @@ int main ( )
      * and SDL_bgi) */
     int cols[6] = {RED, LIGHTRED, YELLOW, GREEN, CYAN, MAGENTA};
 
-    while (!kbhit() && (autoexitMs <= 0 || time(NULL) - start < autoexitMs / 1000)) {
+    while (autoexitMs <= 0 || time(NULL) - start < autoexitMs / 1000) {
+        if (kbhit()) { int quitKey = getch(); if (quitKey == 27 || quitKey == 'q' || quitKey == 'Q') break; }
         /* draw one ring of the spiral per frame (persistent canvas) */
         for (int k = 0; k < 40; k++) {
             double t = (tick * 40 + k) * 0.045;
@@ -41,7 +42,7 @@ int main ( )
 
         settextstyle(DEFAULT_FONT, HORIZ_DIR, 1);
         setcolor(WHITE);
-        outtextxy(200, 460, (char*)"graphics.h rainbow spiral - any key exits");
+        outtextxy(200, 460, (char*)"graphics.h rainbow spiral - ESC or Q exits");
         setcolor(CYAN);
         bar(cx - 1, cy - 1, cx + 1, cy + 1);
 

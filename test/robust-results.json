@@ -7,16 +7,16 @@
         "nonblack": 0.2277,
         "unique_colors": 7
       },
-      "secs": "8.3"
+      "secs": "8.9"
     },
     "rfx02_gravity_bounce.cpp": {
       "ok": true,
       "exit": 0,
       "analysis": {
-        "nonblack": 0.0326,
+        "nonblack": 0.0327,
         "unique_colors": 6
       },
-      "secs": "9.0"
+      "secs": "9.2"
     },
     "rfx03_conio_menu.cpp": {
       "ok": true,
@@ -25,7 +25,7 @@
         "nonblack": 0.0552,
         "unique_colors": 10
       },
-      "secs": "9.8"
+      "secs": "10.2"
     },
     "rfx04_julia_morph.cpp": {
       "ok": true,
@@ -34,7 +34,7 @@
         "nonblack": 0.2493,
         "unique_colors": 23
       },
-      "secs": "8.1"
+      "secs": "8.6"
     },
     "rfx05_image_ops.cpp": {
       "ok": true,
@@ -43,7 +43,7 @@
         "nonblack": 0.0104,
         "unique_colors": 6
       },
-      "secs": "7.6"
+      "secs": "8.0"
     },
     "rfx06_viewport_clip.cpp": {
       "ok": true,
@@ -52,7 +52,7 @@
         "nonblack": 0.0129,
         "unique_colors": 4
       },
-      "secs": "6.8"
+      "secs": "7.1"
     },
     "rfx07_text_matrix.cpp": {
       "ok": true,
@@ -61,7 +61,7 @@
         "nonblack": 0.0108,
         "unique_colors": 12
       },
-      "secs": "7.9"
+      "secs": "8.1"
     },
     "rfx08_fill_stress.cpp": {
       "ok": true,
@@ -70,7 +70,7 @@
         "nonblack": 0.5737,
         "unique_colors": 9
       },
-      "secs": "8.3"
+      "secs": "8.1"
     },
     "rfx09_stress_prims.cpp": {
       "ok": true,
@@ -79,7 +79,7 @@
         "nonblack": 0.4946,
         "unique_colors": 16
       },
-      "secs": "6.8"
+      "secs": "7.2"
     },
     "rfx10_key_echo.cpp": {
       "ok": true,
@@ -88,7 +88,7 @@
         "nonblack": 0.0091,
         "unique_colors": 5
       },
-      "secs": "10.7"
+      "secs": "11.0"
     }
   },
   "B": {

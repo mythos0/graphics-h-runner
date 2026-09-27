@@ -4,7 +4,7 @@
  * plots the line pixel by pixel in the graphics window. Y grows upward
  * from the window centre, like in math class. Headless-friendly: with
  * stdin closed or empty, a demo line is drawn instead.
- * The window closes when you press a key.
+ * The window closes when you press ESC (or Q).
  */
 #include <graphics.h>
 #include <ctime>
@@ -68,13 +68,13 @@ int main ( )
         y += yInc;
     }
 
-    outtextxy(cx - 190, getmaxy() - 30, (char*)"Press any key in this window to close");
+    outtextxy(cx - 190, getmaxy() - 30, (char*)"Press ESC (or Q) in this window to close");
     cout << "Done - line drawn with " << steps + 1 << " points." << endl;
-    cout << "Press any key in the graphics window to close..." << endl;
+    cout << "Press ESC (or Q) in the graphics window to close..." << endl;
 
     /* waits for a key — the window stays open until then.
        (the automated battery sets BGI_AUTOEXIT_MS to end runs itself) */
-    /* v1.5.3: the window stays open until YOU quit (ESC / any key).
+    /* v1.5.3: the window stays open until YOU quit (ESC or Q).
      * The automated test battery sets BGI_AUTOEXIT_MS so runs still
      * finish by themselves there; real users never set it. */
     long autoexitMs = 0;
@@ -82,7 +82,7 @@ int main ( )
     time_t begun = time(NULL);
     for (;;) {                            /* runs until YOU quit */
         if (autoexitMs > 0 && (long)(time(NULL) - begun) * 1000 >= autoexitMs) break;
-        if (kbhit()) break;
+        if (kbhit()) { int quitKey = getch(); if (quitKey == 27 || quitKey == 'q' || quitKey == 'Q') break; }
         delay(10);
     }
     closegraph();

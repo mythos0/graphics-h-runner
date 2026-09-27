@@ -56,7 +56,7 @@ import {
 } from './instrument';
 import { parseCompilerOutput, capCompilerDiagnostics } from './diagnostics';
 import { auditWindowsExe, buildAuditMessage } from './depsAudit';
-import { writePauseWrapper, buildPosixPauseLaunch } from './runwrap';
+import { cmdRunLine, posixRunLine } from './runwrap';
 import { makeGlobalWindows } from './globalize';
 
 const OUTPUT_CHANNEL_NAME = 'graphics.h Runner';
@@ -69,8 +69,11 @@ let doctorCache: DoctorResult | undefined;
 let doctorRunning: Promise<DoctorResult> | undefined;
 let panel: GhPanelProvider | undefined;
 let catalog: LoadedProgram[] = [];
-let lastRunChild: import('child_process').ChildProcess | null = null;
-let lastRunTerminal: vscode.Terminal | undefined;
+/* v1.5.4: ONE persistent runner terminal — created once, reused for
+ * every run. The shell is its root process and never exits, so the
+ * terminal and its output survive every program exit; a new run just
+ * types into it again. Cleared only when the user closes it. */
+let runnerTerminal: vscode.Terminal | undefined;
 let storageDir: string | undefined; /* globalStorage — real files for folder-less windows */
 let diagnostics: vscode.DiagnosticCollection | undefined;
 /* live run feedback for the status bar: idle -> compiling -> running -> idle */
@@ -542,7 +545,7 @@ async function compileSource(sourceFile: string): Promise<CompileResult> {
    * program runs used to flip the status bar to "idle" even though the
    * runner terminal — and the window — were still up (Ctrl+Alt+S kept
    * working, but the visible state lied). */
-  const stillRunning = !!lastRunTerminal && !lastRunTerminal.exitStatus;
+  const stillRunning = !!runnerTerminal && !runnerTerminal.exitStatus;
   setRunState(stillRunning ? 'running' : 'idle');
   addExtensionBreadcrumb('compile', result, { file: path.basename(sourceFile) });
   if (result === 'ok') {
@@ -686,132 +689,111 @@ async function runBinary(sourceFile: string): Promise<void> {
     /* stat trouble — run what we have rather than blocking the student */
   }
 
-  /* v1.5.3: EVERY program — graphics or plain — runs through the pause
-   * wrapper. Students confirmed on real machines that when a program ended,
-   * its terminal closed too and all printf/cout output was lost (and on
-   * setups where VS Code closes terminals when the root process exits, even
-   * a graphics run's terminal vanished the moment the window closed). The
-   * wrapper keeps the terminal open with the full output until the user
-   * presses a key. */
+  /* v1.5.4: every program runs in the ONE persistent runner terminal. The
+   * shell is the terminal's root process and never exits, so the terminal
+   * and all printf/cout output survive every program exit — and the same
+   * terminal is reused for the next run (the v1.5.1/v1.5.3 pause wrappers
+   * ran as the root process, so answering their "Press any key" prompt
+   * closed the whole terminal, output and all). */
 
   /* Always run inside the integrated terminal: the graphics window opens as
    * usual, AND the terminal gives the program a real console — cin/scanf/getch
    * input works and printf/cout output is visible. The old detached launch had
    * no stdio at all, so interactive programs could neither read input nor show
    * output. */
-  runInTerminal(bin);
+  void runInTerminal(bin);
 }
 
-function runInTerminal(bin: string): void {
-  /* Run the compiled program inside the integrated terminal so it has a real
-   * console (cin/scanf/getch read input, printf/cout output is visible) while
-   * the graphics window opens as usual. v1.4.5 pinned Windows terminals to a
-   * bare 'cmd.exe' shellPath that VS Code could not resolve on some machines;
-   * the generated .cmd wrapper (a generated .cmd run via the ABSOLUTE ComSpec
-   * path — one plain-path argument, no shell-quoting minefield — or
-   * /bin/bash -c on POSIX) avoids that class of problem entirely.
-   * v1.5.1 wrapped plain console programs (they print and exit within
-   * milliseconds); v1.5.3 wraps GRAPHICS programs too, so when the program
-   * ends the terminal stays open with all output instead of dying with the
-   * root process. The env now carries the COMPILER's
-   * bin dir (not just the program's folder) so even a non-static exe finds
-   * its runtime DLLs. */
+/** Promise-based sleep (pacing between Ctrl+C and the run line). */
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Absolute cmd.exe path (the persistent Windows runner shell). */
+function comSpecPath(): string {
+  return (
+    process.env.ComSpec ||
+    path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'cmd.exe')
+  );
+}
+
+/** The persistent runner terminal: reused while alive, recreated if the user
+ * closed it (adopting a live namesake first). Created ONCE, used ALWAYS —
+ * "the same terminal every time". */
+function ensureRunnerTerminal(cwd: string): vscode.Terminal {
+  if (runnerTerminal && runnerTerminal.exitStatus === undefined) {
+    return runnerTerminal;
+  }
+  const existing = vscode.window.terminals.find(
+    (t) => t.name === TERMINAL_NAME && t.exitStatus === undefined
+  );
+  if (existing) {
+    runnerTerminal = existing;
+    return existing;
+  }
+  const windows = currentPlatform() === 'windows';
+  runnerTerminal = vscode.window.createTerminal({
+    name: TERMINAL_NAME,
+    shellPath: windows ? comSpecPath() : '/bin/bash',
+    cwd,
+    env: compilerEnv(getConfig().compilerPath, [cwd])
+  });
+  return runnerTerminal;
+}
+
+async function runInTerminal(bin: string): Promise<void> {
+  /* v1.5.4: ONE persistent terminal, reused for every run ("use the same
+   * terminal always"). The program is started by TYPING its command line
+   * into the live shell (sendText); the shell is the root process and never
+   * exits, so the terminal and all program output stay open. The graphics
+   * window opens as usual AND the program has a real console — cin/scanf/
+   * getch work, printf/cout is visible. Ctrl+C (the Stop command) kills the
+   * program and lands back at the prompt of the very same terminal. The
+   * terminal env carries the COMPILER's bin dir so even a non-static exe
+   * finds its runtime DLLs. */
   const abs = path.resolve(bin);
   const platform = currentPlatform();
-  const compiler = getConfig().compilerPath;
-  /* v1.5.3: the runner terminal is named after the program — with several
-   * terminals open, students can tell which one hosts which program. */
-  const termName = TERMINAL_NAME + ' — ' + path.basename(abs).replace(/\.exe$/i, '');
+  const term = ensureRunnerTerminal(path.dirname(abs));
 
-  /* One runner terminal at a time: disposing the previous one also stops the
-   * program it was hosting, so a new Run cleanly replaces the old run. */
-  const previous = lastRunTerminal;
-  lastRunTerminal = undefined;
-  try {
-    if (previous) {
-      previous.dispose();
-    }
-  } catch {
-    /* terminal was already closed */
+  /* If the previous program is still alive, stop it first (Ctrl+C) so the
+   * new command line is not swallowed by the running program's stdin. When
+   * the previous run already ended this is a harmless empty prompt line. */
+  if (runState === 'running') {
+    term.sendText('\x03');
+    await delay(350);
   }
 
-  let term: vscode.Terminal;
-  let how: string;
-  if (platform === 'windows') {
-    const wrap = writePauseWrapper(abs);
-    if (wrap.fallback) {
-      term = vscode.window.createTerminal({
-        name: termName,
-        shellPath: abs,
-        cwd: path.dirname(abs),
-        env: compilerEnv(compiler, [path.dirname(abs)])
-      });
-      how = 'as terminal process (wrapper unavailable)';
-      addExtensionBreadcrumb('run', 'terminal-direct', { file: path.basename(abs) });
-    } else {
-      term = vscode.window.createTerminal({
-        name: termName,
-        shellPath: wrap.shellPath,
-        shellArgs: wrap.shellArgs,
-        cwd: path.dirname(abs),
-        env: compilerEnv(compiler, [path.dirname(abs)])
-      });
-      how = 'console wrapper (output stays visible)';
-      addExtensionBreadcrumb('run', 'terminal-console-wrapper', { file: path.basename(abs) });
-    }
-  } else {
-    const wrap = buildPosixPauseLaunch(abs);
-    term = vscode.window.createTerminal({
-      name: termName,
-      shellPath: wrap.shellPath,
-      shellArgs: wrap.shellArgs,
-      cwd: path.dirname(abs),
-      env: compilerEnv(compiler, [path.dirname(abs)])
-    });
-    how = 'console wrapper (output stays visible)';
-    addExtensionBreadcrumb('run', 'terminal-console-wrapper', { file: path.basename(abs) });
-  }
+  const line = platform === 'windows' ? cmdRunLine(abs) : posixRunLine(abs);
+  term.sendText(line + '\r');
   term.show(false); /* focus the terminal so prompts can be answered at once */
-  log('[run] ' + abs + ' (' + how + ')');
-  lastRunTerminal = term;
+  log('[run] ' + abs + ' (persistent ' + (platform === 'windows' ? 'cmd' : 'bash') +
+    ' terminal — command typed into the live shell)');
+  addExtensionBreadcrumb('run', 'terminal-persistent', {
+    file: path.basename(abs),
+    shell: platform === 'windows' ? 'cmd' : 'bash'
+  });
   setRunState('running');
 }
 
-/** Kill the most recently launched graphics program (Stop command). */
+/** Stop the most recently started program (Stop command): Ctrl+C typed into
+ * the persistent runner terminal. The terminal itself is NOT closed — it
+ * keeps all output and is immediately ready for the next run ("use the same
+ * terminal always"); closing it is the user's choice. */
 async function stopRunningProgram(): Promise<void> {
-  const child = lastRunChild;
-  const term = lastRunTerminal;
-  lastRunChild = null;
-  lastRunTerminal = undefined;
-  setRunState('idle');
-
-  if (child && child.pid && child.exitCode === null) {
-    try {
-      if (currentPlatform() === 'windows') {
-        /* /T = whole tree, /F = force — works for detached GUI exes */
-        await new Promise<void>((resolve) => {
-          const killer = spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true });
-          killer.on('close', () => resolve());
-          killer.on('error', () => resolve());
-        });
-      } else {
-        child.kill('SIGKILL');
-      }
-      log('[stop] killed running program (pid ' + child.pid + ')');
-      vscode.window.showInformationMessage('Stopped the running graphics program.');
-      return;
-    } catch (e) {
-      log('[stop] kill failed: ' + String(e));
-    }
-  }
-
-  if (term && !term.exitStatus) {
-    term.dispose(); /* closes the shell and with it the running binary */
-    log('[stop] disposed runner terminal');
+  const term = runnerTerminal;
+  if (runState === 'running' && term && term.exitStatus === undefined) {
+    /* The pty raises SIGINT (POSIX) / delivers CTRL_C_EVENT (Windows) to the
+     * running console program, which dies and returns control to the shell
+     * prompt. The exe is a console-subsystem binary and the graphics window
+     * belongs to the same process, so the window closes with it. The exe is
+     * a direct command (not a batch file), so Windows never shows the
+     * "Terminate batch job (Y/N)?" prompt. */
+    term.sendText('\x03');
+    setRunState('idle');
+    log('[stop] sent Ctrl+C to the persistent runner terminal');
     vscode.window.showInformationMessage('Stopped the running graphics program.');
     return;
   }
-
   vscode.window.showInformationMessage('No graphics.h program is currently running.');
 }
 
@@ -1433,8 +1415,10 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
 
     vscode.window.onDidCloseTerminal((t) => {
-      if (t === lastRunTerminal) {
-        lastRunTerminal = undefined;
+      if (t === runnerTerminal) {
+        /* the user closed the persistent terminal — the next Run
+         * creates a fresh one with the same name */
+        runnerTerminal = undefined;
         setRunState('idle');
       }
     })

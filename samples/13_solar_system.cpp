@@ -12,7 +12,7 @@ int main ( )
     initwindow(640, 480);
     setbkcolor(BLACK);
 
-    /* v1.5.3: runs until YOU quit (press a key). The automated test
+    /* v1.5.3: runs until YOU quit (ESC or Q). The automated test
      * battery sets BGI_AUTOEXIT_MS so runs still finish by themselves
      * there; real users never set it. */
     long autoexitMs = 0;
@@ -28,7 +28,8 @@ int main ( )
         stars[i][1] = (i * 157) % 480;
     }
 
-    while (!kbhit() && (autoexitMs <= 0 || time(NULL) - start < autoexitMs / 1000)) {
+    while (autoexitMs <= 0 || time(NULL) - start < autoexitMs / 1000) {
+        if (kbhit()) { int quitKey = getch(); if (quitKey == 27 || quitKey == 'q' || quitKey == 'Q') break; }
         cleardevice();
 
         for (int i = 0; i < 40; i++) {
@@ -36,7 +37,7 @@ int main ( )
         }
 
         settextstyle(DEFAULT_FONT, HORIZ_DIR, 1);
-        outtextxy(200, 460, (char*)"graphics.h solar system - any key exits");
+        outtextxy(200, 460, (char*)"graphics.h solar system - ESC or Q exits");
 
         /* orbit rings */
         setcolor(DARKGRAY);

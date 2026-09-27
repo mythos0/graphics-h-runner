@@ -22,9 +22,8 @@ const {
 } = require(path.join(ROOT, 'out', 'globalize'));
 const {
   shQuote,
-  buildPauseCmdScript,
-  writePauseWrapper,
-  buildPosixPauseLaunch,
+  cmdRunLine,
+  posixRunLine,
   universalCommandDoc
 } = require(path.join(ROOT, 'out', 'runwrap'));
 
@@ -142,36 +141,22 @@ function makeFakeWorld(brokenProbe) {
   });
 
   /* ---------------------------------------------------------------- */
-  section('B. run wrappers');
-  await t('buildPauseCmdScript: quoted exe + exit code + pause', () => {
-    const s = buildPauseCmdScript('C:\\my dir\\student.exe');
-    assert.ok(s.startsWith('@echo off'));
-    assert.ok(s.includes('"C:\\my dir\\student.exe"'));
-    assert.ok(s.includes('%ERRORLEVEL%'));
-    assert.ok(s.includes('pause >nul'));
+  section('B. persistent-terminal run lines');
+  await t('cmdRunLine: quoted exe + static finished marker, no %VAR% traps', () => {
+    const line = cmdRunLine('C:\\my dir\\student.exe');
+    assert.strictEqual(line, '"C:\\my dir\\student.exe" & echo [program finished]');
+    assert.ok(!line.includes('%'), 'no percent expansion on an interactive line');
   });
-  await t('writePauseWrapper: writes <exe>.run.cmd next to the exe', () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bgi-wrap-'));
-    try {
-      const exe = path.join(dir, 'student.exe');
-      fs.writeFileSync(exe, 'dummy');
-      const w = writePauseWrapper(exe);
-      assert.ok(w.wrapperFile, 'wrapper path returned');
-      assert.ok(fs.existsSync(w.wrapperFile), 'wrapper file written');
-      assert.strictEqual(w.wrapperFile, path.join(dir, 'student.run.cmd'));
-      assert.ok(w.shellArgs.includes(w.wrapperFile));
-      assert.ok(/cmd\.exe$/i.test(w.shellPath), 'absolute ComSpec shell');
-    } finally {
-      fs.rmSync(dir, { recursive: true, force: true });
-    }
+  await t('posixRunLine: quoted binary + exit code capture', () => {
+    const line = posixRunLine('/home/st/my prog');
+    assert.ok(line.startsWith("'/home/st/my prog'"), 'quoted path');
+    assert.ok(line.includes('$s'), 'exit code capture');
+    assert.ok(line.includes('[program finished with exit code $s]'), 'marker');
+    assert.ok(!line.includes('read '), 'no pause needed in a persistent shell');
   });
-  await t('buildPosixPauseLaunch: quoted binary + exit code + read', () => {
-    const w = buildPosixPauseLaunch('/home/st/my prog');
-    assert.strictEqual(w.shellPath, '/bin/bash');
-    const script = w.shellArgs[1];
-    assert.ok(script.includes("'/home/st/my prog'"), 'quoted path');
-    assert.ok(script.includes('$s'), 'exit code capture');
-    assert.ok(script.includes('read -r'), 'holds the window open');
+  await t('run lines end with a single command (sendText appends CR)', () => {
+    assert.ok(!cmdRunLine('x.exe').includes('\n'));
+    assert.ok(!posixRunLine('/x').includes('\n'));
   });
 
   /* ---------------------------------------------------------------- */

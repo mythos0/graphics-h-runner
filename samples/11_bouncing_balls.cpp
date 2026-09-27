@@ -23,7 +23,7 @@ int main ( )
         c[i]  = colors[i];
     }
 
-    /* v1.5.3: runs until YOU quit (press a key). The automated test
+    /* v1.5.3: runs until YOU quit (ESC or Q). The automated test
      * battery sets BGI_AUTOEXIT_MS so runs still finish by themselves
      * there; real users never set it. */
     long autoexitMs = 0;
@@ -31,7 +31,8 @@ int main ( )
     time_t start = time(NULL);
     int maxx = getmaxx(), maxy = getmaxy();
 
-    while (!kbhit() && (autoexitMs <= 0 || time(NULL) - start < autoexitMs / 1000)) {
+    while (autoexitMs <= 0 || time(NULL) - start < autoexitMs / 1000) {
+        if (kbhit()) { int quitKey = getch(); if (quitKey == 27 || quitKey == 'q' || quitKey == 'Q') break; }
         /* trailing effect: dark translucent-ish overlay */
         setfillstyle(SOLID_FILL, BLACK);
         bar(0, 0, maxx, maxy);
@@ -40,7 +41,7 @@ int main ( )
         rectangle(2, 2, maxx - 3, maxy - 3);
         setcolor(WHITE);
         settextstyle(DEFAULT_FONT, HORIZ_DIR, 1);
-        outtextxy(12, 8, (char*)"graphics.h bouncing balls - press any key to exit");
+        outtextxy(12, 8, (char*)"graphics.h bouncing balls - press ESC or Q to exit");
 
         for (int i = 0; i < N; i++) {
             /* ghost trail */

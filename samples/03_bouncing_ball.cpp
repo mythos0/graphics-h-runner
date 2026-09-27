@@ -16,20 +16,21 @@ int main ( )
     /* the ball */
     int x = 120, y = 120, dx = 6, dy = 5, r = 26;
 
-    /* v1.5.3: runs until YOU quit (press a key). The automated test
+    /* v1.5.3: runs until YOU quit (ESC or Q). The automated test
      * battery sets BGI_AUTOEXIT_MS so runs still finish by themselves
      * there; real users never set it. */
     long autoexitMs = 0;
     { const char* ae = getenv("BGI_AUTOEXIT_MS"); if (ae) autoexitMs = atol(ae); }
     time_t start = time(NULL);
-    while (!kbhit() && (autoexitMs <= 0 || time(NULL) - start < autoexitMs / 1000)) {
+    while (autoexitMs <= 0 || time(NULL) - start < autoexitMs / 1000) {
+        if (kbhit()) { int quitKey = getch(); if (quitKey == 27 || quitKey == 'q' || quitKey == 'Q') break; }
         cleardevice();
 
         /* court frame + title (redrawn every frame) */
         setcolor(WHITE);
         rectangle(4, top, maxx - 5, maxy - 5);
         settextstyle(DEFAULT_FONT, HORIZ_DIR, 1);
-        outtextxy(10, 6, (char*)"graphics.h bouncing ball - press any key to exit");
+        outtextxy(10, 6, (char*)"graphics.h bouncing ball - press ESC or Q to exit");
 
         /* ghost trails behind the ball */
         setcolor(DARKGRAY);

@@ -1,7 +1,7 @@
 /* 29_midpoint_ellipse_lab.cpp — Midpoint Ellipse Lab on a coordinate
  * grid: region 1 (dx < dy) then region 2, four-way symmetry, decision
  * variables printed for the first steps of each region. Type the two
- * RADII in the TERMINAL (rx ry); EOF-safe demo values; any key or
+ * RADII in the TERMINAL (rx ry); EOF-safe demo values; ESC/Q or
  * stays open until you quit.
  *   - dark gray ellipse = ellipse() reference
  *   - yellow dots       = the midpoint algorithm points
@@ -98,10 +98,10 @@ int main()
     outtextxy(cx + (int)rx - 40, cy + 8, (char*)"(cx+rx, cy)");
     outtextxy(cx + 6, cy - (int)ry - 6, (char*)"(cx, cy+ry)");
     outtextxy(10, 8, (char*)"Midpoint Ellipse Lab - dark = ellipse() reference, yellow = algorithm points");
-    outtextxy(cx - 190, getmaxy() - 26, (char*)"Press any key in this window to close");
+    outtextxy(cx - 190, getmaxy() - 26, (char*)"Press ESC (or Q) in this window to close");
     cout << "Done - " << step << " region-1 + " << r2 << " region-2 steps, 4-way mirrored." << endl;
 
-    /* v1.5.3: the window stays open until YOU quit (ESC / any key).
+    /* v1.5.3: the window stays open until YOU quit (ESC or Q).
      * The automated test battery sets BGI_AUTOEXIT_MS so runs still
      * finish by themselves there; real users never set it. */
     long autoexitMs = 0;
@@ -109,7 +109,7 @@ int main()
     time_t begun = time(NULL);
     for (;;) {                            /* runs until YOU quit */
         if (autoexitMs > 0 && (long)(time(NULL) - begun) * 1000 >= autoexitMs) break;
-        if (kbhit()) break;
+        if (kbhit()) { int quitKey = getch(); if (quitKey == 27 || quitKey == 'q' || quitKey == 'Q') break; }
         delay(10);
     }
     closegraph();

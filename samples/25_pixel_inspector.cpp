@@ -121,7 +121,7 @@ int main()
     int mx = -1, my = -1, pinx = -1, piny = -1;
     bool cross = true, redraw = true, pinned = false;
 
-    /* v1.5.3: the window stays open until YOU quit (ESC / any key).
+    /* v1.5.3: the window stays open until YOU quit (ESC or Q).
      * The automated test battery sets BGI_AUTOEXIT_MS so runs still
      * finish by themselves there; real users never set it. */
     long autoexitMs = 0;
@@ -131,7 +131,7 @@ int main()
         if (autoexitMs > 0 && (long)(time(NULL) - begun) * 1000 >= autoexitMs) break;
         if (kbhit()) {
             int k = getch();
-            if (k == 27) break;
+            if (k == 27 || k == 'q' || k == 'Q') break;
             if (k == 'c' || k == 'C') { cross = !cross; redraw = true; }
         }
         if (ismouseclick(WM_MOUSEMOVE)) {

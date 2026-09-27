@@ -4,7 +4,7 @@
  *   - green line   = line() reference (what the library draws)
  *   - yellow dots  = the points YOUR DDA loop generates
  *   - step table (dx, dy, steps, increments, every point) in the terminal
- * EOF-safe demo line when no input arrives; any key closes it.
+ * EOF-safe demo line when no input arrives; ESC (or Q) closes it.
  */
 #include <graphics.h>
 #include <ctime>
@@ -90,10 +90,10 @@ int main()
     setcolor(WHITE);
     outtextxy(cx + x1 - 20, cy - y1 - 18, (char*)"(x1,y1)");
     outtextxy(cx + x2 + 6, cy - y2 - 18, (char*)"(x2,y2)");
-    outtextxy(cx - 190, getmaxy() - 26, (char*)"Press any key in this window to close");
+    outtextxy(cx - 190, getmaxy() - 26, (char*)"Press ESC (or Q) in this window to close");
     cout << "Done - " << steps + 1 << " DDA points over the line() reference." << endl;
 
-    /* v1.5.3: the window stays open until YOU quit (ESC / any key).
+    /* v1.5.3: the window stays open until YOU quit (ESC or Q).
      * The automated test battery sets BGI_AUTOEXIT_MS so runs still
      * finish by themselves there; real users never set it. */
     long autoexitMs = 0;
@@ -101,7 +101,7 @@ int main()
     time_t begun = time(NULL);
     for (;;) {                            /* runs until YOU quit */
         if (autoexitMs > 0 && (long)(time(NULL) - begun) * 1000 >= autoexitMs) break;
-        if (kbhit()) break;
+        if (kbhit()) { int quitKey = getch(); if (quitKey == 27 || quitKey == 'q' || quitKey == 'Q') break; }
         delay(10);
     }
     closegraph();

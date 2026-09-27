@@ -24,7 +24,7 @@ int main ( )
     long tick = 0;
     int colors[6] = {RED, YELLOW, GREEN, CYAN, MAGENTA, WHITE};
 
-    /* v1.5.3: runs until YOU quit (press a key). The automated test
+    /* v1.5.3: runs until YOU quit (ESC or Q). The automated test
      * battery sets BGI_AUTOEXIT_MS so runs still finish by themselves
      * there; real users never set it. */
     long autoexitMs = 0;
@@ -38,7 +38,8 @@ int main ( )
      * right after cleardevice() races with SDL_bgi's surface flip and can
      * crash the window. Filled-shape calls like bar() are safe every frame. */
 
-    while (!kbhit() && (autoexitMs <= 0 || time(NULL) - start < autoexitMs / 1000)) {
+    while (autoexitMs <= 0 || time(NULL) - start < autoexitMs / 1000) {
+        if (kbhit()) { int quitKey = getch(); if (quitKey == 27 || quitKey == 'q' || quitKey == 'Q') break; }
         cleardevice();
         /* static stars (same pattern every frame, drawn crash-safely) */
         for (int i = 0; i < 40; i++) {
@@ -62,7 +63,7 @@ int main ( )
         setcolor(LIGHTGRAY);
         line(0, ground, maxx, ground);
         settextstyle(DEFAULT_FONT, HORIZ_DIR, 1);
-        outtextxy(12, 8, (char*)"graphics.h fireworks - press any key to exit");
+        outtextxy(12, 8, (char*)"graphics.h fireworks - press ESC or Q to exit");
 
         /* launch a new rocket every ~40 ticks */
         if (!rocketFlying && tick % 40 == 0) {

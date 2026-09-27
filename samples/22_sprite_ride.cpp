@@ -4,7 +4,7 @@
  * opaque primitive redraws, which is the portable pattern on WinBGIM and
  * SDL_bgi alike (background "restore" bitmaps copied from the initial
  * transparent surface do not erase on SDL_bgi). Runs until you quit;
- * any key quits.
+ * ESC or Q quits.
  */
 #include <graphics.h>
 #include <cstdlib>
@@ -59,13 +59,14 @@ int main ( )
 
     int x = 40, y = my / 2 - SH / 2;
     int dx = 5, dy = 3;
-    /* v1.5.3: runs until YOU quit (press a key). The automated test
+    /* v1.5.3: runs until YOU quit (ESC or Q). The automated test
      * battery sets BGI_AUTOEXIT_MS so runs still finish by themselves
      * there; real users never set it. */
     long autoexitMs = 0;
     { const char* ae = getenv("BGI_AUTOEXIT_MS"); if (ae) autoexitMs = atol(ae); }
     time_t start = time(NULL);
-    while (!kbhit() && (autoexitMs <= 0 || time(NULL) - start < autoexitMs / 1000)) {
+    while (autoexitMs <= 0 || time(NULL) - start < autoexitMs / 1000) {
+        if (kbhit()) { int quitKey = getch(); if (quitKey == 27 || quitKey == 'q' || quitKey == 'Q') break; }
         /* erase: cleardevice() fills with OPAQUE background black, which
          * erases properly on every BGI implementation */
         cleardevice();

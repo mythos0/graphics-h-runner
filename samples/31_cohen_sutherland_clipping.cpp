@@ -108,7 +108,7 @@ int main()
     }
     drawScene(lines);
 
-    /* v1.5.3: the window stays open until YOU quit (ESC / any key).
+    /* v1.5.3: the window stays open until YOU quit (ESC or Q).
      * The automated test battery sets BGI_AUTOEXIT_MS so runs still
      * finish by themselves there; real users never set it. */
     long autoexitMs = 0;
@@ -118,7 +118,7 @@ int main()
         if (autoexitMs > 0 && (long)(time(NULL) - begun) * 1000 >= autoexitMs) break;
         if (kbhit()) {
             int k = getch();
-            if (k == 27) break;
+            if (k == 27 || k == 'q' || k == 'Q') break;
             if (k == 'r' || k == 'R') {
                 seed = (unsigned long)time(0) + 7;
                 for (int i = 0; i < 12; i++) {

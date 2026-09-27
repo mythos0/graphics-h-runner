@@ -1,6 +1,6 @@
 /* 18_starfield.cpp — fly through a starfield at warp speed. Stars
  * streak outward from the center; a message appears at the end.
- * Runs until you press a key.
+ * Runs until you press ESC or Q.
  */
 #include <graphics.h>
 #include <cstdlib>
@@ -25,7 +25,7 @@ int main ( )
         sv[i] = 0.6 + (rand() % 20) / 12.0;
     }
 
-    /* v1.5.3: runs until YOU quit (press a key). The automated test
+    /* v1.5.3: runs until YOU quit (ESC or Q). The automated test
      * battery sets BGI_AUTOEXIT_MS so runs still finish by themselves
      * there; real users never set it. */
     long autoexitMs = 0;
@@ -33,13 +33,14 @@ int main ( )
     time_t start = time(NULL);
     long tick = 0;
 
-    while (!kbhit() && (autoexitMs <= 0 || time(NULL) - start < autoexitMs / 1000)) {
+    while (autoexitMs <= 0 || time(NULL) - start < autoexitMs / 1000) {
+        if (kbhit()) { int quitKey = getch(); if (quitKey == 27 || quitKey == 'q' || quitKey == 'Q') break; }
         setfillstyle(SOLID_FILL, BLACK);
         bar(0, 0, 640, 480);
 
         settextstyle(DEFAULT_FONT, HORIZ_DIR, 1);
         setcolor(DARKGRAY);
-        outtextxy(220, 460, (char*)"graphics.h starfield - any key exits");
+        outtextxy(220, 460, (char*)"graphics.h starfield - ESC or Q exits");
 
         for (int i = 0; i < NSTARS; i++) {
             int x1 = cx + (int)(sr[i] * cos(sa[i]));

@@ -1,5 +1,35 @@
 # ChangeLog
 
+## 1.5.4 — 2026-09-27
+
+Stability release driven by two stubborn student reports: programs still
+"quit on their own", and the terminal died right after "Press any key to
+close this window . . .".
+
+### Fixed
+- **Programs quit ONLY when YOU quit them**: v1.5.3 still exited every
+  sample on ANY keypress — a stray keystroke in the terminal (or keys
+  typed while the program was compiling, sitting in the console buffer)
+  killed the running program instantly, which looked exactly like an
+  auto-quit. All 31 samples now ignore random keys entirely; only ESC
+  (or Q) quits, as printed on each window. Verified with synthetic-key
+  probes: x/z/c/Enter/Space no longer stop anything; ESC and Q do.
+- **The terminal never closes itself again**: the v1.5.1/1.5.3 pause
+  wrapper ("Press any key to close this window . . .") was the terminal's
+  ROOT process, so answering it ended the wrapper and VS Code closed the
+  whole terminal — output and all. That wrapper is gone entirely.
+
+### Changed
+- **One persistent terminal for everything**: all programs now run in a
+  single "graphics.h Runner" terminal that is created once and REUSED for
+  every run — the program is started by typing its command line into the
+  live shell, so the shell never exits and the terminal (with all output
+  from every run) stays open until YOU close it. Stop (Ctrl+Alt+S) sends
+  Ctrl+C to the program and lands back at the prompt of the same
+  terminal — the same terminal is immediately ready for the next run.
+- The "Press any key" pause is gone — the returning prompt IS the visible
+  "program finished" signal, and every printf/cout line stays above it.
+
 ## 1.5.3 — 2026-09-27
 
 UX release driven by real student sessions: programs used to vanish on their
