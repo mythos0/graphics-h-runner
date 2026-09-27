@@ -19,6 +19,11 @@ import * as path from 'path';
 import { buildPanelHtml, buildFallbackPanelHtml, PanelStatus } from './panelHtml';
 import { COMMAND_META, LoadedProgram } from './programs';
 import { WebviewHealth, WebviewEvent } from './webviewHealth';
+import { CELEBRATION_DURATIONS_MS } from './celebrate';
+
+/** v1.5.6: the kinds that play INSIDE the activity panel (full panel
+ *  screen). The error overlay + fireworks keep the full-screen tab. */
+type PanelCelebrationKind = 'confetti' | 'schoolpride';
 
 /** Structural subset of doctor.ts's DoctorResult (keeps this module light). */
 export interface ViewDoctorStatus {
@@ -52,6 +57,11 @@ export class GhPanelProvider implements vscode.WebviewViewProvider {
   private fallbackActive = false;
   private fireworksRunning = false;
   private firstOpenNotified = false;
+  /* v1.5.6: the celebration currently scheduled for this panel. Delivery
+   * is baked into the next render (see activeCelebration) — every
+   * re-render while it is active replays the REMAINING time, so busy
+   * updates and visibility changes never lose the show. */
+  private celebration: { kind: PanelCelebrationKind; endsAt: number } | null = null;
 
   constructor(
     private readonly extensionRoot: string,
@@ -102,6 +112,33 @@ export class GhPanelProvider implements vscode.WebviewViewProvider {
     }
     this.fireworksRunning = running;
     this.postState();
+  }
+
+  /**
+   * v1.5.6: play a timed celebration across the FULL activity panel —
+   * success confetti and the School Pride welcome live here now, not in
+   * the full-screen tab (which keeps only the error overlay + fireworks).
+   * Delivery = the next full re-render bakes the effect into the page
+   * (window.__GHR_CELEBRATE__ in panelHtml.ts + media/celebrate-panel.js);
+   * the canvas is pointer-events:none so the panel stays clickable.
+   */
+  playCelebration(kind: PanelCelebrationKind): void {
+    this.celebration = { kind, endsAt: Date.now() + CELEBRATION_DURATIONS_MS[kind] };
+    this.postState();
+  }
+
+  /** The active celebration for the renderer, with its remaining ms. */
+  private activeCelebration(): { kind: PanelCelebrationKind; durationMs: number } | undefined {
+    if (!this.celebration) {
+      return undefined;
+    }
+    const remaining = this.celebration.endsAt - Date.now();
+    if (remaining < 400) {
+      /* effectively over — drop it instead of replaying a stub */
+      this.celebration = null;
+      return undefined;
+    }
+    return { kind: this.celebration.kind, durationMs: remaining };
   }
 
   resolveWebviewView(view: vscode.WebviewView): void {
@@ -251,6 +288,9 @@ export class GhPanelProvider implements vscode.WebviewViewProvider {
     const logoUri = this.view.webview
       .asWebviewUri(vscode.Uri.file(path.join(this.extensionRoot, 'media', 'diu-logo.png')))
       .toString();
+    /* v1.5.6: in-panel celebration media (confetti lib + controller) */
+    const mediaUri = (file: string): string =>
+      this.view!.webview.asWebviewUri(vscode.Uri.file(path.join(this.extensionRoot, 'media', file))).toString();
     return buildPanelHtml({
       logoUri,
       programs: this.programs.map((p) => ({
@@ -267,7 +307,10 @@ export class GhPanelProvider implements vscode.WebviewViewProvider {
       version: this.version,
       nonce,
       cspSource: this.view.webview.cspSource,
-      fireworksRunning: this.fireworksRunning
+      fireworksRunning: this.fireworksRunning,
+      celebration: this.activeCelebration(),
+      confettiJsUri: mediaUri('confetti.browser.js'),
+      celebratePanelJsUri: mediaUri('celebrate-panel.js')
     });
   }
 

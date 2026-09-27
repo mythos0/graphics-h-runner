@@ -85,8 +85,9 @@ let diagnostics: vscode.DiagnosticCollection | undefined;
 let runState: 'idle' | 'compiling' | 'running' = 'idle';
 /* which back-end the last successful build used ('none' = plain console C++) */
 let lastBuildLibrary: BgiLibrary | 'none' = 'none';
-/* v1.5.5: the celebration overlay (confetti / error / school pride /
- * Fireworks Simulator) — exactly one panel, driven by the commands below */
+/* v1.5.6: the FULL-SCREEN celebration overlay — now only the error page
+ * and the Fireworks Simulator live here. Success confetti + School Pride
+ * play INSIDE the activity panel instead (panel.playCelebration). */
 let celebrator: Celebrator | undefined;
 /* School Pride fires once per session: the first time the activity-bar
  * panel opens after a fresh desktop / window start. */
@@ -146,13 +147,26 @@ function celebrationsEnabled(): boolean {
     .get<boolean>('enabled', true);
 }
 
-/** Fire a timed celebration; a celebration must never break a compile. */
+/**
+ * v1.5.6 routing — WHERE each celebration plays:
+ *   confetti / schoolpride -> INSIDE the activity panel only (the full
+ *     panel screen; no editor tab opens — panel.playCelebration bakes the
+ *     effect into the next panel render, media/celebrate-panel.js plays it);
+ *   error -> the FULL-SCREEN overlay tab (giant ✗ + big compiler error
+ *     headers + red-ember rain), unchanged from the v1.5.6 design;
+ *   fireworks -> the FULL-SCREEN overlay tab (command path shows it
+ *     directly through the celebrator).
+ */
 function celebrate(kind: 'confetti' | 'error' | 'schoolpride', errorLines?: string[]): void {
-  if (!celebrator || !celebrationsEnabled()) {
+  if (!celebrationsEnabled()) {
     return;
   }
   try {
-    celebrator.show(kind, undefined, errorLines ? { errorLines } : undefined);
+    if (kind === 'confetti' || kind === 'schoolpride') {
+      panel?.playCelebration(kind);
+    } else {
+      celebrator?.show(kind, undefined, errorLines ? { errorLines } : undefined);
+    }
   } catch {
     /* ignore — the compile result matters more than the party */
   }
@@ -635,7 +649,7 @@ async function compileSource(sourceFile: string): Promise<CompileResult> {
   setRunState(stillRunning ? 'running' : 'idle');
   addExtensionBreadcrumb('compile', result, { file: path.basename(sourceFile) });
   if (result === 'ok') {
-    celebrate('confetti'); /* v1.5.5: every successful compilation */
+    celebrate('confetti'); /* v1.5.6: success confetti rains over the activity panel */
     diagnostics?.delete(vscode.Uri.file(sourceFile));
     if (currentPlatform() === 'windows') {
       auditExeAfterBuild(binaryPathFor(sourceFile, currentPlatform()));
@@ -1320,7 +1334,8 @@ export function activate(context: vscode.ExtensionContext): void {
     void handlePanelClick(msg);
   }, {
     onPanelFirstOpen: () => {
-      /* v1.5.5 School Pride — once per session, first panel open */
+      /* School Pride — once per session, first panel open; v1.5.6: it now
+       * fires across the panel itself, not a full-screen tab */
       if (!schoolPrideDone) {
         schoolPrideDone = true;
         celebrate('schoolpride');

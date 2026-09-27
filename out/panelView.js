@@ -54,6 +54,7 @@ const path = __importStar(require("path"));
 const panelHtml_1 = require("./panelHtml");
 const programs_1 = require("./programs");
 const webviewHealth_1 = require("./webviewHealth");
+const celebrate_1 = require("./celebrate");
 class GhPanelProvider {
     constructor(extensionRoot, version, programs, onClick, hooks = {}) {
         this.extensionRoot = extensionRoot;
@@ -66,6 +67,11 @@ class GhPanelProvider {
         this.fallbackActive = false;
         this.fireworksRunning = false;
         this.firstOpenNotified = false;
+        /* v1.5.6: the celebration currently scheduled for this panel. Delivery
+         * is baked into the next render (see activeCelebration) — every
+         * re-render while it is active replays the REMAINING time, so busy
+         * updates and visibility changes never lose the show. */
+        this.celebration = null;
     }
     setDoctorResult(res) {
         this.doctorStatus = res;
@@ -103,6 +109,31 @@ class GhPanelProvider {
         }
         this.fireworksRunning = running;
         this.postState();
+    }
+    /**
+     * v1.5.6: play a timed celebration across the FULL activity panel —
+     * success confetti and the School Pride welcome live here now, not in
+     * the full-screen tab (which keeps only the error overlay + fireworks).
+     * Delivery = the next full re-render bakes the effect into the page
+     * (window.__GHR_CELEBRATE__ in panelHtml.ts + media/celebrate-panel.js);
+     * the canvas is pointer-events:none so the panel stays clickable.
+     */
+    playCelebration(kind) {
+        this.celebration = { kind, endsAt: Date.now() + celebrate_1.CELEBRATION_DURATIONS_MS[kind] };
+        this.postState();
+    }
+    /** The active celebration for the renderer, with its remaining ms. */
+    activeCelebration() {
+        if (!this.celebration) {
+            return undefined;
+        }
+        const remaining = this.celebration.endsAt - Date.now();
+        if (remaining < 400) {
+            /* effectively over — drop it instead of replaying a stub */
+            this.celebration = null;
+            return undefined;
+        }
+        return { kind: this.celebration.kind, durationMs: remaining };
     }
     resolveWebviewView(view) {
         this.view = view;
@@ -238,6 +269,8 @@ class GhPanelProvider {
         const logoUri = this.view.webview
             .asWebviewUri(vscode.Uri.file(path.join(this.extensionRoot, 'media', 'diu-logo.png')))
             .toString();
+        /* v1.5.6: in-panel celebration media (confetti lib + controller) */
+        const mediaUri = (file) => this.view.webview.asWebviewUri(vscode.Uri.file(path.join(this.extensionRoot, 'media', file))).toString();
         return (0, panelHtml_1.buildPanelHtml)({
             logoUri,
             programs: this.programs.map((p) => ({
@@ -254,7 +287,10 @@ class GhPanelProvider {
             version: this.version,
             nonce,
             cspSource: this.view.webview.cspSource,
-            fireworksRunning: this.fireworksRunning
+            fireworksRunning: this.fireworksRunning,
+            celebration: this.activeCelebration(),
+            confettiJsUri: mediaUri('confetti.browser.js'),
+            celebratePanelJsUri: mediaUri('celebrate-panel.js')
         });
     }
     renderFallbackHtml() {

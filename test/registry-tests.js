@@ -48,8 +48,8 @@ const INTERNAL = new Set(['setContext']); /* workbench-internal, not ours to reg
 
 console.log('registry-tests — command graph consistency\n');
 
-check('version is 1.5.6', () => {
-  assert.strictEqual(pkg.version, '1.5.6');
+check('version is 1.5.7', () => {
+  assert.strictEqual(pkg.version, '1.5.7');
 });
 
 check('every panel action button is a contributed command', () => {
@@ -121,6 +121,7 @@ check('bundled media manifest matches what the bundle loads at runtime', () => {
   for (const rel of [
     'media/confetti.browser.js',
     'media/celebrate.js',
+    'media/celebrate-panel.js',
     'media/fireworks/fireworks.css',
     'media/fireworks/fscreen.js',
     'media/fireworks/MyMath.js',

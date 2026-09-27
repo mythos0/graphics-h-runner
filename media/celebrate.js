@@ -8,6 +8,12 @@
  * (media/confetti.browser.js — catdad/canvas-confetti v1.9.4, ISC) is
  * loaded before this script.
  *
+ * v1.5.6 ROUTING: only the ERROR overlay still opens the full-screen tab
+ * (fireworks has its own page in the same tab). Success confetti and the
+ * School Pride welcome moved INSIDE the activity panel — they are played
+ * by media/celebrate-panel.js there. The confetti/schoolpride branches
+ * below stay for the overlay API and the contract tests.
+ *
  * Effects:
  *   confetti    — the canvas-confetti README "Realistic Look" staged
  *                 burst (plus one later wave for the full-screen feel).

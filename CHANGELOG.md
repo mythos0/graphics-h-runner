@@ -1,5 +1,38 @@
 # ChangeLog
 
+## 1.5.7 — 2026-09-28
+
+The celebrations get their right home, per user feedback: the full-screen
+overlay TAB is reserved for the things that deserve to interrupt you —
+errors and fireworks — while the happy stuff moves INSIDE the
+graphics.h activity-bar panel, over its full screen.
+
+### Changed
+- **Celebrations surface split** (the full-screen new tab no longer opens
+  for happy moments):
+  - **Success confetti** and the **School Pride first-open show** now rain
+    across the **full activity-panel screen only** — no editor tab opens,
+    the panel stays fully clickable (the canvas is click-through), and
+    the show replays safely across the panel's busy/doctor re-renders
+    (every re-render bakes the remaining show time).
+  - **The compile-error overlay and the Fireworks Simulator keep their
+    full-screen new tab, unchanged** — a giant shaking red ✗ with big
+    compiler error headers for failures, and the festive simulator on
+    demand.
+- New in-panel renderer `media/celebrate-panel.js`: its own fixed
+  full-panel canvas rendered on the MAIN thread
+  (`confetti.create(canvas, { useWorker: false })`), so the panel's strict
+  CSP needs no blob:-Worker and no Worker-hiding dance; the canvas
+  removes itself after the show. `confetti.browser.js` (vendored) and
+  `celebrate.js` are untouched engines — only the routing changed:
+  `celebrate()` now dispatches confetti/schoolpride to the panel and
+  error/fireworks to the overlay host.
+- README + settings description updated to describe where each
+  celebration lives. Browser-verified in real Chromium under Xvfb: both
+  panel shows paint real particles, clicks pass through the canvas, and
+  the canvas is removed after the show.
+
+
 ## 1.5.6 — 2026-09-27
 
 The "works on ANY PC" release, built from a real user's Full Setup log:

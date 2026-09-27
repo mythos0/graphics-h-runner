@@ -47,6 +47,14 @@ export interface PanelHtmlOptions {
   fireworksRunning?: boolean;
   /** Webview URI of media/diu-logo.png — right side of the footer text. */
   logoUri?: string;
+  /** v1.5.6: an in-panel celebration to bake into the page — confetti /
+   *  School Pride play across the FULL activity panel (no new tab). */
+  celebration?: { kind: 'confetti' | 'schoolpride'; durationMs: number };
+  /** v1.5.6: Webview URIs of media/confetti.browser.js and
+   *  media/celebrate-panel.js — when both are present the boot block is
+   *  emitted; otherwise the page stays celebration-free (pure builder). */
+  confettiJsUri?: string;
+  celebratePanelJsUri?: string;
 }
 
 function esc(s: string): string {
@@ -56,6 +64,36 @@ function esc(s: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+/** JSON safe for embedding in a <script> block (no </script>, <, U+2028…).
+ *  Same discipline as celebrate.ts — the celebration config is built
+ *  internally, but the escaping is contract-tested anyway. */
+function jsonForScript(value: unknown): string {
+  return JSON.stringify(value)
+    .replace(/</g, '\\u003c')
+    .replace(/>/g, '\\u003e')
+    .replace(/&/g, '\\u0026')
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029');
+}
+
+/** v1.5.6: the in-panel celebration boot block — config + the confetti
+ *  library + the controller, all nonce'd. The config is baked only when a
+ *  celebration is active; the library + controller load whenever the host
+ *  passes the media URIs (they no-op without a config). */
+function celebrationBoot(opts: PanelHtmlOptions): string {
+  const parts: string[] = [];
+  if (opts.celebration) {
+    parts.push(
+      `<script nonce="${esc(opts.nonce)}">window.__GHR_CELEBRATE__ = ${jsonForScript(opts.celebration)};</script>`
+    );
+  }
+  if (opts.confettiJsUri && opts.celebratePanelJsUri) {
+    parts.push(`<script nonce="${esc(opts.nonce)}" src="${esc(opts.confettiJsUri)}"></script>`);
+    parts.push(`<script nonce="${esc(opts.nonce)}" src="${esc(opts.celebratePanelJsUri)}"></script>`);
+  }
+  return parts.join('\n');
 }
 
 function statusPill(status: PanelStatus): string {
@@ -153,7 +191,7 @@ export function buildPanelHtml(opts: PanelHtmlOptions): string {
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${cspSource} https: data:; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${cspSource} https: data:; style-src 'unsafe-inline'; script-src 'nonce-${nonce}' ${cspSource};">
 <title>graphics.h Runner</title>
 <style>
   :root {
@@ -428,9 +466,9 @@ export function buildPanelHtml(opts: PanelHtmlOptions): string {
         </div>
         <div class="cheat-cat">
           <h4>Celebrations</h4>
-          <div class="cheat-fn"><code>\ud83c\udf89 Confetti on success</code><span>Every successful compilation ends with a full-screen confetti burst (canvas-confetti). Click anywhere or press Esc to dismiss it early.</span></div>
+          <div class="cheat-fn"><code>\ud83c\udf89 Confetti on success</code><span>Every successful compilation rains a confetti burst over THIS panel (canvas-confetti, Realistic Look) — no extra tab opens, and the panel stays clickable while the particles fall.</span></div>
           <div class="cheat-fn"><code>\u274c Error overlay</code><span>When a compile stops on errors, a full-screen error overlay shows a giant shaking \u2717 and the compiler\u2019s first error messages in big type \u2014 click or press Esc to dismiss.</span></div>
-          <div class="cheat-fn"><code>\ud83c\udf92 School Pride</code><span>The first time the graphics.h panel opens in a session, a 5-second School Pride show greets you (once per session).</span></div>
+          <div class="cheat-fn"><code>\ud83c\udf92 School Pride</code><span>The first time the graphics.h panel opens in a session, a 5-second School Pride show fires across this panel (once per session).</span></div>
           <div class="cheat-fn"><code>\ud83c\udf86 Fireworks Simulator</code><span>The festive action button launches a full-screen fireworks show — click it again (or Esc, or the red Stop button) to stop.</span></div>
         </div>
         
@@ -657,6 +695,7 @@ export function buildPanelHtml(opts: PanelHtmlOptions): string {
     });
   })();
 </script>
+${celebrationBoot(opts)}
 </body>
 </html>`;
 }

@@ -312,5 +312,96 @@ check('controller implements all three confetti presets + dismissal + schedule',
   new Function(src); /* syntax check */
 });
 
+/* ---------- v1.5.6 IN-PANEL celebrations (confetti + school pride) ---------- */
+/* Routing contract (user requirement): success confetti and the School
+ * Pride first-open show play INSIDE the activity panel (full panel
+ * screen, no editor tab); the full-screen tab keeps ONLY the error
+ * overlay and the Fireworks Simulator. */
+
+const PANEL = 'https://*.vscode-cdn.net';
+const { buildPanelHtml } = require(path.join(ROOT, 'out', 'panelHtml'));
+const panelJsPath = path.join(ROOT, 'media', 'celebrate-panel.js');
+
+function panelHtml(celebration) {
+  return buildPanelHtml({
+    programs: [],
+    commands: [],
+    status: { state: 'ready', library: 'SDL_bgi', compilerOk: true, platform: 'linux', busy: false, busyLabel: null },
+    version: '1.5.6',
+    nonce: 'pnl123',
+    cspSource: PANEL,
+    logoUri: PANEL + '/media/diu-logo.png',
+    celebration,
+    confettiJsUri: PANEL + '/media/confetti.browser.js',
+    celebratePanelJsUri: PANEL + '/media/celebrate-panel.js'
+  });
+}
+
+check('panel page bakes the celebration config + loads lib before controller (nonce everywhere)', () => {
+  for (const kind of ['confetti', 'schoolpride']) {
+    const h = panelHtml({ kind, durationMs: CELEBRATION_DURATIONS_MS[kind] });
+    assert.ok(h.includes(`script-src 'nonce-pnl123' ${PANEL};`),
+      'panel CSP must now allow the bundled media scripts (nonce + cspSource)');
+    const cfgAt = h.indexOf('window.__GHR_CELEBRATE__');
+    const libAt = h.indexOf('confetti.browser.js');
+    const ctlAt = h.indexOf('celebrate-panel.js');
+    assert.ok(cfgAt > -1 && libAt > -1 && ctlAt > -1, kind + ': boot block missing');
+    assert.ok(cfgAt < libAt && libAt < ctlAt, kind + ': order must be config -> lib -> controller');
+    /* every emitted script tag carries the nonce */
+    const block = h.slice(cfgAt - 40, h.indexOf('</body>'));
+    const tags = block.match(/<script[^>]*>/g) || [];
+    assert.ok(tags.length === 3, kind + ': expected 3 celebrate scripts, got ' + tags.length);
+    for (const t of tags) {
+      assert.ok(t.includes('nonce="pnl123"'), kind + ': script without nonce: ' + t);
+    }
+    const payload = JSON.parse(h.match(/window\.__GHR_CELEBRATE__ = ([^;]+);/)[1]
+      .replace(/\\u003c/g, '<').replace(/\\u003e/g, '>').replace(/\\u0026/g, '&'));
+    assert.strictEqual(payload.kind, kind, kind + ': wrong baked kind');
+    assert.strictEqual(payload.durationMs, CELEBRATION_DURATIONS_MS[kind], kind + ': wrong baked duration');
+  }
+});
+
+check('panel page WITHOUT an active celebration stays clean (no config, controller no-ops)', () => {
+  const h = panelHtml(undefined);
+  assert.ok(!h.includes('__GHR_CELEBRATE__'), 'config must not be baked without a celebration');
+  /* library + controller still load (they no-op), CSP already allows them */
+  assert.ok(h.includes('confetti.browser.js') && h.includes('celebrate-panel.js'),
+    'media scripts missing from the plain panel page');
+});
+
+check('celebrate-panel.js contract: no vscode API, click-through canvas, main-thread rendering', () => {
+  const raw = fs.readFileSync(panelJsPath, 'utf8');
+  /* strip comments so the header's "does NOT call acquireVsCodeApi()"
+   * documentation cannot trip the code assertions */
+  const src = raw.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+  assert.ok(!src.includes('acquireVsCodeApi'), 'panel controller must NOT acquire the vscode API (the panel page owns it)');
+  assert.ok(!src.includes('postMessage'), 'panel controller must not talk back to the host');
+  assert.ok(src.includes('confetti.create('), 'must render through confetti.create on its own canvas');
+  assert.ok(/useWorker:\s*false/.test(src), 'must force the main-thread renderer (no blob: Worker under the panel CSP)');
+  assert.ok(src.includes('pointer-events:none'), 'the canvas must be click-through so the panel stays usable');
+  assert.ok(src.includes("'confetti'") && src.includes("'schoolpride'"), 'both in-panel kinds missing');
+  assert.ok(!/['"]snow['"]/.test(src), 'snow must not return');
+  assert.ok(src.includes('requestAnimationFrame'), 'school pride must be frame-driven');
+  assert.ok(src.includes('setTimeout(finish'), 'canvas must be removed after the show');
+  assert.ok(!/[^.\w](eval\(|new Function\()/.test(src), 'panel controller must not eval');
+  new Function(raw); /* syntax check */
+});
+
+check('routing: extension sends confetti/schoolpride to the PANEL, error/fireworks to the tab', () => {
+  const extSrc = fs.readFileSync(path.join(ROOT, 'src', 'extension.ts'), 'utf8');
+  const route = extSrc.match(/function celebrate\([\s\S]*?\n\}/);
+  assert.ok(route, 'celebrate() router not found');
+  assert.ok(/kind === 'confetti' \|\| kind === 'schoolpride'[\s\S]*?playCelebration/.test(route[0]),
+    'confetti/schoolpride must route to panel.playCelebration');
+  assert.ok(/celebrator\?\.show\(kind/.test(route[0]), 'the remaining kinds must still use the overlay');
+  /* the overlay API itself is untouched: error + fireworks pages still exist */
+  const overlay = fs.readFileSync(media.celebrateJs, 'utf8');
+  assert.ok(overlay.includes("'error'"), 'error overlay controller must stay');
+  const fw = buildFireworksHtml({
+    nonce: 'x', cspSource: CSP, cssUri: 'a', fscreenJsUri: 'b', myMathJsUri: 'c', stageJsUri: 'd', scriptJsUri: 'e'
+  });
+  assert.ok(fw.includes('ghr-stop'), 'fireworks page must stay');
+});
+
 console.log(failures === 0 ? '\nCELEBRATE TESTS ALL PASS' : `\n${failures} FAILURES`);
 process.exit(failures === 0 ? 0 : 1);

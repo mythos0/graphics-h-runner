@@ -1,24 +1,30 @@
 /**
  * celebrate.ts — full-screen celebration overlays (v1.5.6), PURE builders.
  *
- * A dedicated WebviewPanel takes over the editor area (the closest thing
- * VS Code offers to "full VS Code screen") and plays a canvas effect:
+ * v1.5.6 ROUTING — the user split the celebrations by SURFACE:
  *
- *   confetti     — canvas-confetti "Realistic Look" burst on every
- *                  successful compilation (vendored: catdad/canvas-confetti
- *                  v1.9.4, ISC license — media/confetti.browser.js).
+ *   FULL-SCREEN TAB (this module + celebrateHost.ts, unchanged):
  *   error        — a relatable COMPILE-ERROR overlay when a build stops on
  *                  errors: a giant shaking ✗, the actual compiler error
- *                  headers in big type, and a red-ember rain. Replaces the
- *                  old snowfall (v1.5.5) that looked like weather, not like
- *                  a failure.
- *   schoolpride  — canvas-confetti "School Pride" side cannons for 5 s,
- *                  fired once per session the first time the activity-bar
- *                  panel opens (every fresh desktop / window start).
+ *                  headers in big type, and a red-ember rain (replaces the
+ *                  v1.5.5 snowfall that looked like weather, not failure).
  *   fireworks    — the full Fireworks Simulator show (vendored verbatim:
  *                  media/fireworks/* — MIT, (c) 2023 Troy, simulation
  *                  originally by Caleb Miller / cmiller.tech). Stays open
  *                  until the user stops it.
+ *
+ *   INSIDE THE ACTIVITY PANEL ONLY (panelHtml.ts + media/celebrate-panel.js,
+ *   delivered by GhPanelProvider.playCelebration — no editor tab opens):
+ *   confetti     — canvas-confetti "Realistic Look" burst on every
+ *                  successful compilation (vendored: catdad/canvas-confetti
+ *                  v1.9.4, ISC license — media/confetti.browser.js).
+ *   schoolpride  — canvas-confetti "School Pride" side cannons for 5 s,
+ *                  fired once per session the first time the activity-bar
+ *                  panel opens (every fresh desktop / window start).
+ *
+ * The confetti/schoolpride page builders below REMAIN for the overlay API
+ * (and are contract-tested), but extension.ts no longer routes those kinds
+ * to the overlay — celebrate() sends them to the panel instead.
  *
  * This module has NO vscode import so celebrate-tests.js can assert CSP
  * safety, payloads and durations in plain node. The VS Code side of the
