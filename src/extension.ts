@@ -62,6 +62,17 @@ import {
 import { parseCompilerOutput, capCompilerDiagnostics, looksLikeBgiLinkFailure, pickErrorHeaders } from './diagnostics';
 import { auditWindowsExe, buildAuditMessage } from './depsAudit';
 import { cmdRunLine, posixRunLine } from './runwrap';
+import {
+  NativeToolchain,
+  codeRunnerExecutor,
+  buildTaskJson,
+  buildLaunchJson,
+  mergeConfigDoc,
+  mergeSettingsDoc,
+  hasDefaultBuildTask,
+  TASK_LABEL,
+  LAUNCH_CONFIG_NAME
+} from './nativeRun';
 import { makeGlobalWindows } from './globalize';
 import { Celebrator } from './celebrateHost';
 import type { CelebrationKind } from './celebrate';
@@ -354,6 +365,172 @@ function compilerEnv(compiler: string, extraDirs: string[] = []): NodeJS.Process
   return env;
 }
 
+/* ---------------- v1.5.12 native VS Code run (F5 / Ctrl+Alt+N / Ctrl+Shift+B) ---------------- */
+
+/** The Code Runner extension that owns Ctrl+Alt+N. */
+const CODE_RUNNER_ID = 'formulahendry.code-runner';
+
+/**
+ * Write the NATIVE VS Code run surfaces so a plain C++ run — F5, Code
+ * Runner's Ctrl+Alt+N, Ctrl+Shift+B — behaves exactly like Ctrl+Alt+R.
+ *
+ *  - launch.json  -> the extension's own `graphics-h` debug type (compiles
+ *                    through resolvePlan — the same engine — no external
+ *                    debugger extension needed; VS Code offers to install
+ *                    nothing, it is built in)
+ *  - tasks.json   -> default build task with the same flags ($gcc matcher ->
+ *                    Problems panel), unless the user already has their own
+ *                    default build task
+ *  - settings     -> code-runner.executorMap.cpp + terminal mode (input
+ *                    works) + C_Cpp.default.compilerPath for IntelliSense
+ *
+ * Workspace files go to the first workspace folder's .vscode/; without an
+ * open folder the Code Runner / C_Cpp settings fall back to the user
+ * (global) scope so single-file users keep Ctrl+Alt+N working, and the
+ * caller explains how to get the F5 config later.
+ *
+ * Every write is MERGE-safe: existing user entries are kept, ours replaces
+ * only an entry with our own name/label (idempotent re-runs), and an
+ * unparseable file is backed up before it is rebuilt.
+ */
+async function applyNativeRunIntegration(summary?: string[]): Promise<void> {
+  const platform = currentPlatform();
+  const cfg = getConfig();
+  const info: NativeToolchain = {
+    platform,
+    compilerPath: cfg.compilerPath,
+    includePaths: cfg.extraIncludePaths,
+    libPaths: cfg.extraLibPaths,
+    extraArgs: cfg.extraCompilerArgs,
+    staticLinkWindows: cfg.staticLinkWindows,
+    linuxLibrary: cfg.linuxLibrary
+  };
+  const folder = vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0
+    ? vscode.workspace.workspaceFolders[0]
+    : undefined;
+
+  /* 1+2. Code Runner (Ctrl+Alt+N) + IntelliSense settings.
+   *    Written directly into .vscode/settings.json (JSONC-merged) — the
+   *    Settings API REFUSES keys owned by an extension that is not loaded
+   *    ("code-runner.executorMap.cpp is not a registered configuration"),
+   *    which is exactly the state of a user who has not installed Code
+   *    Runner yet. Direct file writes are inert until the owner exists. */
+  const executor = codeRunnerExecutor(info);
+  if (folder) {
+    const dotVscode = path.join(folder.uri.fsPath, '.vscode');
+    fs.mkdirSync(dotVscode, { recursive: true });
+    const settingsPath = path.join(dotVscode, 'settings.json');
+    const existing = fs.existsSync(settingsPath) ? fs.readFileSync(settingsPath, 'utf8') : undefined;
+    const wantRunInTerminal = vscode.workspace.getConfiguration('code-runner').get<boolean>('runInTerminal', false) !== true;
+    const wantSave = vscode.workspace.getConfiguration('code-runner').get<boolean>('saveFileBeforeRun', false) !== true;
+    const wantCwd = vscode.workspace.getConfiguration('code-runner').get<boolean>('fileDirectoryAsCwd', true) !== true;
+    const settingsMerged = mergeSettingsDoc(existing, {
+      'code-runner.executorMap': { cpp: executor },
+      ...(wantRunInTerminal ? { 'code-runner.runInTerminal': true } : {}),
+      ...(wantSave ? { 'code-runner.saveFileBeforeRun': true } : {}),
+      ...(wantCwd ? { 'code-runner.fileDirectoryAsCwd': true } : {}),
+      'C_Cpp.default.compilerPath': cfg.compilerPath
+    });
+    if (settingsMerged.needsBackup) {
+      fs.writeFileSync(path.join(dotVscode, 'settings.json.graphics-h-backup'), existing as string);
+    }
+    if (settingsMerged.text !== existing) {
+      fs.writeFileSync(settingsPath, settingsMerged.text);
+    }
+  } else {
+    /* no folder open: best-effort write of the Code Runner map into the
+     * USER settings so single-file Ctrl+Alt+N still works */
+    try {
+      const cr = vscode.workspace.getConfiguration('code-runner');
+      const currentMap = cr.get<Record<string, string>>('executorMap') || {};
+      if (currentMap['cpp'] !== executor) {
+        await cr.update('executorMap.cpp', executor, vscode.ConfigurationTarget.Global);
+      }
+      if (cr.get<boolean>('runInTerminal', false) !== true) {
+        await cr.update('runInTerminal', true, vscode.ConfigurationTarget.Global);
+      }
+      if (cr.get<boolean>('saveFileBeforeRun', false) !== true) {
+        await cr.update('saveFileBeforeRun', true, vscode.ConfigurationTarget.Global);
+      }
+      if (cr.get<boolean>('fileDirectoryAsCwd', true) !== true) {
+        await cr.update('fileDirectoryAsCwd', true, vscode.ConfigurationTarget.Global);
+      }
+      await vscode.workspace.getConfiguration('C_Cpp.default').update('compilerPath', cfg.compilerPath, vscode.ConfigurationTarget.Global);
+    } catch (e) {
+      log('[native-run] global settings write skipped: ' + String(e));
+      if (summary) {
+        summary.push('NATIVE RUN: user-level settings write was refused (settings file is write-protected or invalid) — open your code folder and run "Enable native VS Code run" there.');
+      }
+    }
+  }
+
+  /* 3. .vscode/launch.json + tasks.json (need a folder to live in). */
+  let launchNote = '';
+  if (folder) {
+    const dotVscode = path.join(folder.uri.fsPath, '.vscode');
+    fs.mkdirSync(dotVscode, { recursive: true });
+
+    const launchPath = path.join(dotVscode, 'launch.json');
+    const launchExisting = fs.existsSync(launchPath) ? fs.readFileSync(launchPath, 'utf8') : undefined;
+    const launchMerged = mergeConfigDoc(
+      launchExisting,
+      buildLaunchJson(),
+      'configurations',
+      'name',
+      LAUNCH_CONFIG_NAME,
+      { prepend: true } /* F5 defaults to the FIRST entry — ours */
+    );
+    if (launchMerged.needsBackup) {
+      fs.writeFileSync(path.join(dotVscode, 'launch.json.graphics-h-backup'), launchExisting as string);
+    }
+    if (launchMerged.needsBackup || launchMerged.created || launchMerged.text !== launchExisting) {
+      fs.writeFileSync(launchPath, launchMerged.text);
+    }
+
+    const tasksPath = path.join(dotVscode, 'tasks.json');
+    const tasksExisting = fs.existsSync(tasksPath) ? fs.readFileSync(tasksPath, 'utf8') : undefined;
+    const stealDefault = !hasDefaultBuildTask(tasksExisting);
+    const tasksMerged = mergeConfigDoc(
+      tasksExisting,
+      buildTaskJson(info, stealDefault),
+      'tasks',
+      'label',
+      TASK_LABEL,
+      { prepend: false }
+    );
+    if (tasksMerged.needsBackup) {
+      fs.writeFileSync(path.join(dotVscode, 'tasks.json.graphics-h-backup'), tasksExisting as string);
+    }
+    if (tasksMerged.needsBackup || tasksMerged.created || tasksMerged.text !== tasksExisting) {
+      fs.writeFileSync(tasksPath, tasksMerged.text);
+    }
+    launchNote = stealDefault
+      ? ''
+      : ' Your existing default build task was left in place — our task is available as "graphics.h: build active file".';
+  } else {
+    launchNote = ' F5/Ctrl+Shift+B configs are written per-folder — open your code folder and run "Enable native VS Code run" once.';
+  }
+
+  /* 4. Tell the user what changed, exactly once per line, and report. */
+  const hasCodeRunner = Boolean(vscode.extensions.getExtension(CODE_RUNNER_ID));
+  if (summary) {
+    summary.push('NATIVE RUN: F5 now compiles & runs the open .cpp with the graphics.h engine (no extra debugger extension needed).' + (folder ? '' : launchNote));
+    summary.push(
+      hasCodeRunner
+        ? 'NATIVE RUN: Ctrl+Alt+N (Code Runner) compiles with the same graphics.h flags and runs in the terminal with input.'
+        : 'NATIVE RUN: Ctrl+Alt+N needs the free "Code Runner" extension — install it once and Run Code works with this setup.'
+    );
+    if (folder) {
+      summary.push('NATIVE RUN: Ctrl+Shift+B builds the open file with the same flags; compiler errors appear in the Problems panel.' + launchNote);
+    }
+  }
+  addExtensionBreadcrumb('setup.native-run', 'configured', {
+    scope: folder ? 'workspace' : 'global',
+    codeRunner: hasCodeRunner ? 'yes' : 'no'
+  });
+  log('[native-run] executorMap.cpp = ' + executor);
+}
+
 async function runFullSetup(context: vscode.ExtensionContext): Promise<void> {
   const platform = currentPlatform();
   const storageRoot = context.globalStorageUri.fsPath;
@@ -591,6 +768,22 @@ async function runFullSetup(context: vscode.ExtensionContext): Promise<void> {
               ? `VERIFIED: graphics.h is ready (library: ${res.bestLibrary}). Press Ctrl+Alt+R inside a graphics.h program to run it.`
               : 'NOT READY YET — finish the ACTION NEEDED items above, then re-run Full Setup.'
           );
+          /* v1.5.12 THE native-run integration: the toolchain is proven —
+           * wire F5 / Code Runner (Ctrl+Alt+N) / Ctrl+Shift+B to the very
+           * same compiler + flags so a "normal VS Code cpp run" works too. */
+          if (res.graphicsReady) {
+            progress.report({ message: 'Wiring F5 / Code Runner / Ctrl+Shift+B to the same toolchain…' });
+            try {
+              await applyNativeRunIntegration(summary);
+            } catch (e) {
+              log('[native-run] error: ' + String(e));
+              summary.push('NATIVE RUN: configuring F5 / Code Runner failed (non-fatal): ' + String(e));
+              captureExtensionWarning('native run config failed', {
+                platform: platform,
+                detail: scrubText(String(e)).slice(0, 180)
+              });
+            }
+          }
           addExtensionBreadcrumb('setup.verify', res.graphicsReady ? 'ready' : 'not ready', {
             compilerOk: String(res.compilerCheck.ok),
             bestLibrary: String(res.bestLibrary || '')
@@ -638,7 +831,7 @@ async function runFullSetup(context: vscode.ExtensionContext): Promise<void> {
     }
   } else if (summary.some((s) => s.startsWith('VERIFIED: graphics.h is ready'))) {
     vscode.window.showInformationMessage(
-      'Everything is set up! Open a .cpp file that includes <graphics.h> and press Ctrl+Alt+R.'
+      'Everything is set up! Open a .cpp file that includes <graphics.h> and press Ctrl+Alt+R — F5 and Code Runner (Ctrl+Alt+N) now run with the same setup.'
     );
   } else {
     vscode.window.showWarningMessage('Complete Setup finished with problems — see the graphics.h Runner output.');
@@ -1361,6 +1554,47 @@ async function openExamplesFolder(context: vscode.ExtensionContext): Promise<voi
   }
 }
 
+/**
+ * v1.5.12 standalone entry: "graphics.h: Enable native VS Code run (F5,
+ * Ctrl+Alt+N, Ctrl+Shift+B)" — the same wiring Complete Setup performs,
+ * runnable any time (new folder, changed settings, single-file users).
+ */
+async function nativeRunSetup(): Promise<void> {
+  const summary: string[] = [];
+  try {
+    await vscode.window.withProgress(
+      { location: vscode.ProgressLocation.Notification, title: 'graphics.h: enabling native VS Code run…', cancellable: false },
+      async () => {
+        await applyNativeRunIntegration(summary);
+      }
+    );
+  } catch (e) {
+    log('[native-run] error: ' + String(e));
+    captureExtensionWarning('native run config failed', {
+      command: 'nativeRunSetup',
+      detail: scrubText(String(e)).slice(0, 180)
+    });
+    vscode.window.showErrorMessage('Could not enable native VS Code run: ' + String(e));
+    return;
+  }
+  log('=== Native VS Code run summary ===');
+  summary.forEach((s) => log('- ' + s));
+  addExtensionBreadcrumb('native-run', 'finished', { lines: String(summary.length) });
+
+  const hasCodeRunner = Boolean(vscode.extensions.getExtension(CODE_RUNNER_ID));
+  const buttons: string[] = hasCodeRunner ? ['Show Output'] : ['Install Code Runner', 'Show Output'];
+  const pick = await vscode.window.showInformationMessage(
+    'Native VS Code run is on: F5, Code Runner (Ctrl+Alt+N) and Ctrl+Shift+B now compile with the graphics.h setup.',
+    ...buttons
+  );
+  if (pick === 'Show Output') {
+    showOutput(true);
+  } else if (pick === 'Install Code Runner') {
+    /* opens the Extensions view with the exact id pre-filled — one click installs */
+    void vscode.commands.executeCommand('workbench.extensions.search', CODE_RUNNER_ID);
+  }
+}
+
 /** Copy the exact compiler command line for the active file to the clipboard. */
 async function copyCompileCommand(): Promise<void> {
   const file = await getTargetSourceFile();
@@ -1712,6 +1946,13 @@ export function activate(context: vscode.ExtensionContext): void {
       'graphics-h-runner.copyCompileCommand',
       trackedCommand('copyCompileCommand', () => {
         void copyCompileCommand();
+      })
+    ),
+
+    vscode.commands.registerCommand(
+      'graphics-h-runner.nativeRunSetup',
+      trackedCommand('nativeRunSetup', () => {
+        void nativeRunSetup();
       })
     ),
 

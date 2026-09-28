@@ -40,7 +40,8 @@ exports.run = async function () {
     'graphics-h-runner.reloadPanel',
     'graphics-h-runner.cheatSheet',
     'graphics-h-runner.fireworks',
-    'graphics-h-runner.stopFireworks'
+    'graphics-h-runner.stopFireworks',
+    'graphics-h-runner.nativeRunSetup'
   ]) {
     assert.ok(cmds.includes(id), 'command not registered: ' + id);
   }
@@ -177,5 +178,13 @@ exports.run = async function () {
   await new Promise((r) => setTimeout(r, 300));
   console.log('activation-tests: fireworks toggle OK — start, toggle-stop and idempotent Stop all clean');
 
-  console.log('activation-tests: extension active, 14 commands present (incl. the v1.5.9 cheatSheet view-title action), panel focused, doctor ran, all run paths + fallback + celebrations PASS');
+  /* 10. v1.5.12 NATIVE VS CODE RUN — the full workspace-folder flow (launch.json
+   * + tasks.json + settings.json written by nativeRunSetup, the real graphics-h
+   * debug session started FROM the written launch.json, idempotent re-run) has
+   * its OWN dedicated e2e: test/e2e-native-run.js + native-run-host-tests.js.
+   * It opens a real folder from process start (adding the first folder to an
+   * empty window would reload the host mid-test — impossible here). */
+  console.log('activation-tests: native VS Code run covered by the dedicated e2e-native-run harness');
+
+  console.log('activation-tests: extension active, 15 commands present (incl. the v1.5.12 nativeRunSetup wiring), panel focused, doctor ran, all run paths + fallback + celebrations PASS');
 };

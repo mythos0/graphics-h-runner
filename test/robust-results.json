@@ -25,7 +25,7 @@
         "nonblack": 0.0552,
         "unique_colors": 10
       },
-      "secs": "8.3"
+      "secs": "8.4"
     },
     "rfx04_julia_morph.cpp": {
       "ok": true,
@@ -43,16 +43,16 @@
         "nonblack": 0.0104,
         "unique_colors": 6
       },
-      "secs": "6.1"
+      "secs": "6.2"
     },
     "rfx06_viewport_clip.cpp": {
       "ok": true,
       "exit": 0,
       "analysis": {
-        "nonblack": 0.013,
+        "nonblack": 0.0129,
         "unique_colors": 4
       },
-      "secs": "5.4"
+      "secs": "5.3"
     },
     "rfx07_text_matrix.cpp": {
       "ok": true,
@@ -79,16 +79,16 @@
         "nonblack": 0.4946,
         "unique_colors": 16
       },
-      "secs": "5.2"
+      "secs": "5.3"
     },
     "rfx10_key_echo.cpp": {
       "ok": true,
       "exit": 0,
       "analysis": {
-        "nonblack": 0.0089,
+        "nonblack": 0.0091,
         "unique_colors": 5
       },
-      "secs": "9.3"
+      "secs": "9.4"
     }
   },
   "B": {

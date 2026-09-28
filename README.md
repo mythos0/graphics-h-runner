@@ -40,11 +40,12 @@ Press **`Ctrl+Alt+R`** → compiled with the right linker flags → graphics win
 
 | Feature | What it does |
 |---|---|
-| **⚡ Complete graphics.h Run Setup** | One command bootstraps **everything** — including the C++ compiler itself on Windows (winget auto-install, or a sha256-verified direct download fallback; per-user, **no admin rights**) — then installs WinBGIM/SDL_bgi automatically (download → patch → build → install → paths wired into settings) and re-verifies the whole toolchain live. System packages that need a password are handed to the terminal as copy-paste commands. |
+| **⚡ Complete graphics.h Run Setup** | One command bootstraps **everything** — including the C++ compiler itself on Windows (winget auto-install, or a sha256-verified direct download fallback; per-user, **no admin rights**) — then installs WinBGIM/SDL_bgi automatically (download → patch → build → install → paths wired into settings), re-verifies the whole toolchain live, and **wires the native VS Code run options to the same toolchain** (F5, Code Runner's Ctrl+Alt+N, Ctrl+Shift+B — see below). System packages that need a password are handed to the terminal as copy-paste commands. |
+| **🌐 Native VS Code run (F5 / Ctrl+Alt+N / Ctrl+Shift+B)** | After Complete Run Setup, a **normal VS Code C++ run** uses the graphics.h toolchain: `.vscode/launch.json` makes **F5** compile & run the open file through the built-in `graphics-h` debug adapter (zero extra extensions), `code-runner.executorMap.cpp` makes **Ctrl+Alt+N** (Code Runner) compile with the same flags **and run in the terminal with input**, a default **Ctrl+Shift+B** build task routes errors into the Problems panel, and `C_Cpp.default.compilerPath` aligns IntelliSense. Everything is written merge-safe (JSONC-tolerant, idempotent, never destroys your own configs). |
 | **🎨 Modern webpage-style panel (Activity Bar)** | The graphics.h icon opens a styled dashboard, not a plain tree: a live **Ready / Not ready / Checking** pill with the **version chip beside it**, a one-click **Complete Run Setup** fix while anything is missing, an action grid that **stays put**, and **31 emoji program cards** across two collapsible sections — **Example Programs** and the new **Computer Graphics Lab** — that **scroll inside their own containers** — each with **▶ Run** (open + compile + launch in one click) and **Open** buttons, and the **DIU badge on the footer's right side**. Responsive for narrow sidebars; identical look in light & dark themes. |
 | **🩺 Setup Doctor** | Probes your compiler and *every* candidate graphics library by actually compiling a `graphics.h` probe. Reports exactly what is missing with per-OS fixes, and offers **Fix automatically**. |
 | **🔍 graphics.h auto-detect** | When `#include <graphics.h>` is present, BGI linker flags are applied automatically. Files without it still compile as plain C++. |
-| **▶️ Compile & Run — 4 ways** | `Ctrl+Alt+R` (compile & run), `Ctrl+Alt+B` (compile), the editor **▶ run-button dropdown** (right beside the C/C++ "Run C++ File" entry), and **F5 → "Run graphics.h program"** via a built-in run-only debug adapter. |
+| **▶️ Compile & Run — 6 ways** | `Ctrl+Alt+R` (compile & run), `Ctrl+Alt+B` (compile), the editor **▶ run-button dropdown** (right beside the C/C++ "Run C++ File" entry), **F5 → "Run graphics.h program"** via a built-in run-only debug adapter, **Ctrl+Alt+N** (Code Runner — configured by Complete Setup), and **Ctrl+Shift+B** (default build task with the same flags). |
 | **🧰 Per-OS linker recipes** | Windows (WinBGIM): `-lbgi -lgdi32 -lcomdlg32 -luuid -loleaut32 -lole32` + static linking. Linux (SDL_bgi): `-lSDL_bgi -lSDL2 -lm`, or libgraph: `-lgraph`. macOS: SDL_bgi via Homebrew SDL2. Custom library prefixes get matching `-Wl,-rpath` automatically. |
 | **📊 Status bar indicator** | `✓ graphics.h` / `⚠ graphics.h` / `? graphics.h` at a glance, switching to **Compiling…** and **click-to-STOP while a program runs**. Click runs the Setup Doctor when idle. |
 | **🐛 Compiler errors in the Problems panel** | g++/gcc output is parsed into clickable file:line diagnostics with inline squiggles — compile errors are visible where you edit, not only in the output. |
@@ -91,7 +92,8 @@ code --install-extension graphics-h-runner-*.vsix
    - **macOS** — `xcode-select` / `brew install sdl2` guidance, then the same automatic
      user-prefix SDL_bgi build.
 3. When it says **VERIFIED: graphics.h is ready**, open any `.cpp` with `<graphics.h>` and press
-   `Ctrl+Alt+R`.
+   `Ctrl+Alt+R` — or use **F5**, **Ctrl+Alt+N** (Code Runner) or **Ctrl+Shift+B**: the setup has wired
+   them all to the same toolchain (run `graphics.h: Enable native VS Code run` again any time you open a new folder).
 
 ## Commands & keybindings
 
@@ -103,6 +105,7 @@ code --install-extension graphics-h-runner-*.vsix
 | `graphics.h: Stop Running Program` | `Ctrl+Alt+S` | Kill the last launched graphics window |
 | `graphics.h: Setup Doctor` | — | Probe compiler + libraries, offer fixes |
 | `graphics.h: Complete graphics.h Run Setup` | — | The 0 → running bootstrap (compiler included) |
+| `graphics.h: Enable native VS Code run (F5, Ctrl+Alt+N, Ctrl+Shift+B)` | — | Wire the standard VS Code run paths to the same toolchain (also runs automatically inside Complete Setup) |
 | `graphics.h: Copy Compile Command` | — | Copy the exact compiler command line for the active file |
 | `graphics.h: Open Examples Folder` | — | Copy all 31 examples into the workspace and reveal them |
 | `graphics.h: Open Example Program` | — | Open any bundled sample as `filename.cpp` (panel) |

@@ -1,5 +1,68 @@
 # ChangeLog
 
+## 1.5.12 — 2026-09-28
+
+Major update — the native VS Code run integration. Complete Run Setup now
+modifies the **main VS Code run options** so a normal C++ run behaves exactly
+like the extension's own Ctrl+Alt+R: **F5** and **Code Runner's Ctrl+Alt+N**
+compile with the same compiler, the same graphics.h flags and the same
+auto-detect logic, without touching our buttons.
+
+### Added
+- **F5 runs through the graphics.h engine.** Complete Run Setup (and a new
+  `graphics.h: Enable native VS Code run (F5, Ctrl+Alt+N, Ctrl+Shift+B)`
+  command) writes `.vscode/launch.json` with the extension's own `graphics-h`
+  debug type as the first (default) configuration. Pressing F5 on any `.cpp`
+  compiles it through the exact `resolvePlan` pipeline used by Ctrl+Alt+R —
+  graphics.h auto-detect, the right `-l` list, static linking on Windows —
+  with **zero external debugger extensions** required.
+- **Ctrl+Alt+N (Code Runner) works with the same toolchain.** The setup
+  writes `code-runner.executorMap.cpp` with the identical compile + link
+  command and switches Code Runner to **run-in-terminal** (so `cin`/`scanf`
+  /`getch` input works exactly like the extension's runner terminal),
+  `saveFileBeforeRun` and `fileDirectoryAsCwd` included. Plain C++ files
+  without `graphics.h` run through the same template — the graphics libraries
+  are harmless when unused. When Code Runner is not installed, the summary
+  says so and the standalone command offers a one-click install path.
+- **Ctrl+Shift+B builds with the same flags.** `.vscode/tasks.json` gains a
+  `graphics.h: build active file` default build task with the full flag set
+  and the `$gcc` problemMatcher, so compiler errors land in the Problems
+  panel. If the user already has their own default build task, ours is
+  registered without stealing the default.
+- **IntelliSense alignment.** `C_Cpp.default.compilerPath` is pointed at the
+  very same g++ the extension validated, so the C/C++ extension (when
+  installed) squiggle-checks against the real toolchain.
+
+### Fixed
+- **Merge-safe writes — user content can never be lost.** Every artifact
+  (`launch.json`, `tasks.json`, `settings.json`) is parsed as tolerant JSONC
+  and merged: existing configurations/tasks/settings survive, only entries
+  with our own name/label are replaced (idempotent re-runs never duplicate),
+  and an unparseable file is backed up (`*.graphics-h-backup`) before it is
+  rebuilt. Settings keys owned by extensions that are not installed (the
+  Settings API refuses those with "not a registered configuration") are
+  written directly into `.vscode/settings.json` — inert until the owner
+  exists, exactly what the user would have typed.
+- The Complete Setup success message and summary now report the native-run
+  wiring ("NATIVE RUN: …" lines), and a failure there is a classified,
+  non-fatal Sentry warning (`native run config failed`) instead of a crash.
+
+### Tests
+- New `test/native-run-tests.js` (25 checks): JSONC tolerance, executor
+  templates (Windows quoting/-static/WinBGIm list, Linux rpath/SDL list), a
+  lib-drift guard against `buildArgs`, tasks/launch/settings merge semantics,
+  and a **REAL compile+run** of the generated executor string on the sandbox
+  toolchain — both a graphics.h program and a plain C++ program.
+- New real-host e2e `test/e2e-native-run.js` + `test/native-run-host-tests.js`:
+  a real VS Code with a real folder open — verifies every written `.vscode`
+  artifact, starts a REAL debug session **from the written launch.json**
+  (the exact F5 path: compiled + launched + terminated), and proves
+  idempotency and user-content preservation across re-runs.
+- Full battery green: registry, pc-states 61, globalize 22, setup-download 21,
+  deps-audit 14, diagnostics, health, tree-model, celebrate, cheat-dom,
+  cheat-sheet, smoke-view, view-tests, robust battery, win-header 31/31;
+  run-tests **31/31** on real SDL_bgi; `e2e-activation` PASS (15 commands).
+
 ## 1.5.11 — 2026-09-28
 
 Sentry triage release: both unresolved production issues fixed at the root —
