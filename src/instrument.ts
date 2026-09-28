@@ -62,7 +62,7 @@ function telemetryAllowed(): boolean {
 }
 
 /** Replace user-identifying path segments with `~` (works on both separators). */
-function scrubText(value: string): string {
+export function scrubText(value: string): string {
   let out = String(value);
   try {
     const home = os.homedir();

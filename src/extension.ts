@@ -18,7 +18,8 @@ import * as path from 'path';
 import {
   currentPlatform,
   isCppSourceFile,
-  binaryPathFor
+  binaryPathFor,
+  Platform
 } from './toolchain';
 import { detectGraphicsInclude } from './detect';
 import { buildCompilePlan, CompilePlan, LinuxLibrary, BgiLibrary } from './buildArgs';
@@ -33,7 +34,8 @@ import {
   discoverGppWindows,
   verifyCompilerRun,
   compilerArchitecture,
-  bgiLinkProbe
+  bgiLinkProbe,
+  describeBgiProbeFailure
 } from './setup';
 import { loadProgramCatalog, LoadedProgram, resolveProgramTarget } from './programs';
 import { GhPanelProvider, PanelClick } from './panelView';
@@ -54,7 +56,8 @@ import {
   captureExtensionWarning,
   setRuntimeTags,
   setTelemetryContext,
-  flushTelemetry
+  flushTelemetry,
+  scrubText
 } from './instrument';
 import { parseCompilerOutput, capCompilerDiagnostics, looksLikeBgiLinkFailure, pickErrorHeaders } from './diagnostics';
 import { auditWindowsExe, buildAuditMessage } from './depsAudit';
@@ -125,8 +128,38 @@ function getConfig(): ExtensionConfig {
   };
 }
 
+/**
+ * v1.5.11: the output channel can be disposed UNDER us — VS Code closes it on
+ * window reload, extension update or extension-host shutdown while a pending
+ * async continuation (setup flow, compile watcher, timer) still wants to
+ * write. appendLine/show then THROW "Channel has been closed", and inside an
+ * async function that throw surfaces as an UNHANDLED PROMISE REJECTION
+ * (Sentry GRAPHICS-H-RUNNER-G). Every channel access now goes through these
+ * guarded helpers: after the first closed-channel error the channel is
+ * considered gone for the rest of the session and writes become no-ops.
+ */
+let outputClosed = false;
+
 function log(line: string): void {
-  output.appendLine(line);
+  if (outputClosed) {
+    return;
+  }
+  try {
+    output.appendLine(line);
+  } catch {
+    outputClosed = true; /* host shutdown / reload — nowhere left to log */
+  }
+}
+
+function showOutput(preserveFocus = true): void {
+  if (outputClosed) {
+    return;
+  }
+  try {
+    output.show(preserveFocus);
+  } catch {
+    outputClosed = true;
+  }
 }
 
 /** Wrap a command handler with a breadcrumb so Sentry issues carry user context. */
@@ -218,6 +251,65 @@ async function findWorkingGpp(opts: { requireBgiCapable?: boolean } = {}): Promi
     }
   }
   return scored[0];
+}
+
+/**
+ * v1.5.11: run the REAL compile+link probe right after the WinBGIm download
+ * and classify the failure. This is where a corrupt libbgi.a (truncated or
+ * HTML error page that slipped through, or a later AV quarantine) and a
+ * 32-bit compiler get caught AT THE STEP THAT CAUSED THEM — in v1.5.10 both
+ * surfaced only as a blind "make-global probe failed" warning after the
+ * user had already retried a dozen times (Sentry GRAPHICS-H-RUNNER-F).
+ */
+async function verifyWinbgimInstall(
+  platform: Platform,
+  storageRoot: string,
+  includeDir: string,
+  libDir: string,
+  summary: string[]
+): Promise<void> {
+  if (platform !== 'windows') {
+    return; /* SDL_bgi platforms verify themselves at the final verify step */
+  }
+  const cfg = getConfig();
+  const compiler = cfg.compilerPath || 'g++';
+  let link = await bgiLinkProbe({ compiler, includeDir, libDir, platform });
+  if (link.ok) {
+    addExtensionBreadcrumb('setup.step', 'winbgim link probe ok');
+    return;
+  }
+  const arch = await compilerArchitecture(compiler);
+  const verdict = describeBgiProbeFailure(link.detail, arch);
+  log('[setup] winbgim link probe FAILED (' + arch + '): ' + link.detail.slice(0, 200));
+  addExtensionBreadcrumb('setup.step', 'winbgim link probe failed', { arch: String(arch) });
+
+  if (link.undefinedRefs && arch === 'x86_64') {
+    /* A 64-bit compiler that cannot link the archive means the library
+     * itself is bad — re-download it once (a fresh fetch clears transient
+     * bad copies; AV interference gets a second, immediate chance to
+     * betray itself in the capture below). */
+    try {
+      summary.push('The graphics library failed to link with the 64-bit compiler — re-downloading it once…');
+      const res2 = await installWinbgimWindows(storageRoot);
+      const link2 = await bgiLinkProbe({ compiler, includeDir: res2.includeDir, libDir: res2.libDir, platform });
+      if (link2.ok) {
+        summary.push('WinBGIM re-downloaded and verified: it links correctly now.');
+        addExtensionBreadcrumb('setup.step', 'winbgim re-download ok');
+        return;
+      }
+      link = link2;
+      log('[setup] still failing after re-download: ' + link2.detail.slice(0, 200));
+    } catch (e) {
+      log('[setup] WinBGIM re-download error: ' + String(e));
+    }
+  }
+  captureExtensionWarning('winbgim link probe failed', {
+    platform,
+    arch: String(arch),
+    undefinedRefs: String(Boolean(link.undefinedRefs)),
+    detail: scrubText(link.detail).slice(0, 180)
+  });
+  summary.push('WARNING: ' + verdict);
 }
 
 /**
@@ -349,7 +441,7 @@ async function runFullSetup(context: vscode.ExtensionContext): Promise<void> {
             );
             addExtensionBreadcrumb('setup.step', 'install-sdl_bgi ok');
           } catch (e) {
-            output.appendLine('[setup] SDL_bgi install error: ' + String(e));
+            log('[setup] SDL_bgi install error: ' + String(e));
             summary.push('SDL_bgi auto-install FAILED: ' + String(e));
             captureExtensionError(e, { setup_step: 'install-sdl_bgi', platform: platform });
           }
@@ -397,12 +489,12 @@ async function runFullSetup(context: vscode.ExtensionContext): Promise<void> {
               const dl = await installCompilerWindowsDirect(storageRoot, (p) =>
                 progress.report({ message: p.message.slice(0, 110) })
               );
-              dl.log.forEach((l) => output.appendLine('[setup] ' + l));
+              dl.log.forEach((l) => log('[setup] ' + l));
               await setCompilerPathSetting(dl.gppPath);
               summary.push(`Compiler downloaded, verified (sha256) and installed automatically: ${dl.gppPath}`);
               addExtensionBreadcrumb('setup.step', 'install-compiler-download ok');
             } catch (e) {
-              output.appendLine('[setup] direct download error: ' + String(e));
+              log('[setup] direct download error: ' + String(e));
               summary.push('Direct compiler download FAILED: ' + String(e));
               captureExtensionError(e, { setup_step: 'install-compiler-download', platform: platform });
             }
@@ -414,8 +506,10 @@ async function runFullSetup(context: vscode.ExtensionContext): Promise<void> {
             await addPathsToSetting('extraLibPaths', [res.libDir]);
             summary.push('WinBGIM (graphics.h / winbgim.h / libbgi.a) installed into the extension folder.');
             addExtensionBreadcrumb('setup.step', 'install-winbgim ok');
+            res.log.forEach((l) => log('[setup] ' + l));
+            await verifyWinbgimInstall(platform, storageRoot, res.includeDir, res.libDir, summary);
           } catch (e) {
-            output.appendLine('[setup] WinBGIM install error: ' + String(e));
+            log('[setup] WinBGIM install error: ' + String(e));
             summary.push('WinBGIM auto-install FAILED: ' + String(e));
             captureExtensionError(e, { setup_step: 'install-winbgim', platform: platform });
           }
@@ -452,7 +546,17 @@ async function runFullSetup(context: vscode.ExtensionContext): Promise<void> {
                 addExtensionBreadcrumb('setup.step', 'make-global ok');
               } else {
                 summary.push('Global setup could NOT make plain "g++ ..." resolve graphics.h (details in the output). The extension keeps working via its own settings.');
-                captureExtensionWarning('make-global probe failed', { platform: platform });
+                /* v1.5.11: the warning used to carry NOTHING but the platform —
+                 * 15 events across two users told us exactly that. Attach the
+                 * compiler architecture and the probe's own stderr tail (both
+                 * scrubbed) so the root cause arrives with the event. */
+                const gArch = await compilerArchitecture(fresh.compilerPath || 'g++');
+                const probeLine = [...res.log].reverse().find((l) => /^(probe|copy into|could not locate|compiler location check)/.test(l)) || '';
+                captureExtensionWarning('make-global probe failed', {
+                  platform: platform,
+                  arch: String(gArch),
+                  detail: scrubText(probeLine).slice(0, 180)
+                });
               }
               if (res.pathChanged) {
                 summary.push('PATH: the compiler folder was added to your user PATH — new terminals (and VS Code after a restart) can call g++ directly.');
@@ -460,7 +564,7 @@ async function runFullSetup(context: vscode.ExtensionContext): Promise<void> {
                 summary.push('PATH update failed (non-fatal): add the compiler bin folder to PATH manually — details in the output.');
               }
             } catch (e) {
-              output.appendLine('[global] error: ' + String(e));
+              log('[global] error: ' + String(e));
               summary.push('Global setup FAILED: ' + String(e));
               captureExtensionError(e, { setup_step: 'make-global', platform: platform });
             }
@@ -491,15 +595,33 @@ async function runFullSetup(context: vscode.ExtensionContext): Promise<void> {
             compilerOk: String(res.compilerCheck.ok),
             bestLibrary: String(res.bestLibrary || '')
           });
+          if (!res.graphicsReady) {
+            /* v1.5.11: a failed verify used to be INVISIBLE to error reporting
+             * (only a breadcrumb) — the Win-26200 machine failed the verify 12
+             * times and produced ZERO events, so the root cause never reached
+             * us. Capture it now with the failing checks + compiler arch. */
+            const failing = res.libraryChecks
+              .filter((c) => !c.ok)
+              .map((c) => `${c.name}: ${String(c.detail || '').split(/\r?\n/)[0]}`)
+              .join(' | ');
+            const vArch = await compilerArchitecture(fresh.compilerPath || 'g++');
+            captureExtensionWarning('setup verify not ready', {
+              platform: platform,
+              arch: String(vArch),
+              compilerOk: String(res.compilerCheck.ok),
+              detail: scrubText(failing).slice(0, 180)
+            });
+            log('[setup] verify NOT ready: ' + (failing || '(no detail)'));
+          }
         }
       }
     }
   );
 
   panel?.setBusy(false);
-  output.show(true);
-  output.appendLine('=== Complete Setup summary ===');
-  summary.forEach((s) => output.appendLine('- ' + s));
+  showOutput(true);
+  log('=== Complete Setup summary ===');
+  summary.forEach((s) => log('- ' + s));
   addExtensionBreadcrumb('setup', 'full setup finished', { steps: String(summary.length) });
 
   const needsAction = summary.some((s) => s.startsWith('ACTION NEEDED'));
@@ -512,7 +634,7 @@ async function runFullSetup(context: vscode.ExtensionContext): Promise<void> {
     if (pick === 'Open Terminal') {
       vscode.window.createTerminal('graphics.h Setup').show();
     } else if (pick === 'Show Output') {
-      output.show(true);
+      showOutput(true);
     }
   } else if (summary.some((s) => s.startsWith('VERIFIED: graphics.h is ready'))) {
     vscode.window.showInformationMessage(
@@ -693,7 +815,7 @@ async function compileSource(sourceFile: string): Promise<CompileResult> {
           if (pick === 'Complete Run Setup (recommended)') {
             vscode.commands.executeCommand('graphics-h-runner.setupEverything');
           } else if (pick === 'Show Output') {
-            output.show(true);
+            showOutput(true);
           }
         });
     }
@@ -766,7 +888,7 @@ function auditExeAfterBuild(exePath: string): void {
       )
       .then((pick) => {
         if (pick === 'Show Output') {
-          output.show(true);
+          showOutput(true);
         }
       });
   } catch {
@@ -989,7 +1111,7 @@ function showCompileFailure(sourceFile: string): void {
     )
     .then((pick) => {
       if (pick === 'Show Output') {
-        output.show(true);
+        showOutput(true);
       } else if (pick === 'Setup Doctor') {
         vscode.commands.executeCommand('graphics-h-runner.doctor');
       }
@@ -1011,7 +1133,7 @@ function showNoCompilerHelp(): void {
       } else if (pick === 'Run Setup Doctor') {
         vscode.commands.executeCommand('graphics-h-runner.doctor');
       } else if (pick === 'Show Output') {
-        output.show(true);
+        showOutput(true);
       }
     });
 }
@@ -1122,7 +1244,7 @@ async function runDoctor(verbose: boolean): Promise<DoctorResult> {
         )
         .then((pick) => {
           if (pick === 'Show Output') {
-            output.show(true);
+            showOutput(true);
           }
         });
     } else {
@@ -1132,7 +1254,7 @@ async function runDoctor(verbose: boolean): Promise<DoctorResult> {
         ...picks
       );
       if (pick === 'Show Output') {
-        output.show(true);
+        showOutput(true);
       } else if (pick === 'Fix automatically') {
         vscode.commands.executeCommand('graphics-h-runner.setupEverything');
       }
@@ -1250,7 +1372,7 @@ async function copyCompileCommand(): Promise<void> {
     await vscode.env.clipboard.writeText(plan.commandLine);
     void vscode.window.showInformationMessage('Compile command copied to the clipboard.', 'Show Output').then((pick) => {
       if (pick === 'Show Output') {
-        output.show(true);
+        showOutput(true);
       }
     });
     log('[copy] ' + plan.commandLine);
@@ -1298,6 +1420,10 @@ async function handlePanelClick(msg: PanelClick): Promise<void> {
 export function activate(context: vscode.ExtensionContext): void {
   output = vscode.window.createOutputChannel(OUTPUT_CHANNEL_NAME);
   context.subscriptions.push(output);
+  /* v1.5.11: when VS Code disposes the channel (reload/update/shutdown) the
+   * guarded log()/showOutput() helpers must stop writing immediately — see
+   * the "Channel has been closed" fix for GRAPHICS-H-RUNNER-G. */
+  context.subscriptions.push({ dispose: () => { outputClosed = true; } });
 
   /* compile errors -> Problems panel: clickable file:line entries + squiggles */
   diagnostics = vscode.languages.createDiagnosticCollection('graphics.h Runner');

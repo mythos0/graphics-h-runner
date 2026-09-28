@@ -53,6 +53,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.scrubText = scrubText;
 exports.initTelemetry = initTelemetry;
 exports.isTelemetryActive = isTelemetryActive;
 exports.setTelemetryContext = setTelemetryContext;

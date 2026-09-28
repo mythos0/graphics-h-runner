@@ -49,7 +49,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.BGI_LINK_PROBE_SOURCE = exports.WINLIBS_FALLBACK = exports.WINGET_COMPILER_PACKAGE_ID = exports.WINBGIM_SOURCES = exports.SDL_BGI_TARBALL_URLS = void 0;
+exports.LIBBGI_MIN_BYTES = exports.BGI_LINK_PROBE_SOURCE = exports.WINLIBS_FALLBACK = exports.WINGET_COMPILER_PACKAGE_ID = exports.WINBGIM_SOURCES = exports.SDL_BGI_TARBALL_URLS = void 0;
 exports.wingetInstallCompilerArgs = wingetInstallCompilerArgs;
 exports.detectLinuxPackageFamily = detectLinuxPackageFamily;
 exports.planSetup = planSetup;
@@ -63,6 +63,8 @@ exports.compilerArchitecture = compilerArchitecture;
 exports.bgiLinkProbe = bgiLinkProbe;
 exports.installCompilerWindowsDirect = installCompilerWindowsDirect;
 exports.installWinbgimWindows = installWinbgimWindows;
+exports.validateWinbgimArtifact = validateWinbgimArtifact;
+exports.describeBgiProbeFailure = describeBgiProbeFailure;
 exports.patchSdlBgiSources = patchSdlBgiSources;
 exports.patchInstalledHeaderConstChar = patchInstalledHeaderConstChar;
 exports.installSdlBgiUserPrefix = installSdlBgiUserPrefix;
@@ -681,17 +683,30 @@ async function installCompilerWindowsDirect(storageRoot, onProgress) {
  * The extension then adds includeDir/libDir to its settings — no copying
  * into MinGW folders and no administrator rights required.
  */
-async function installWinbgimWindows(storageRoot) {
+async function installWinbgimWindows(storageRoot, fetchBuf) {
     const includeDir = path.join(storageRoot, 'winbgim', 'include');
     const libDir = path.join(storageRoot, 'winbgim', 'lib');
     fs.mkdirSync(includeDir, { recursive: true });
     fs.mkdirSync(libDir, { recursive: true });
     const log = [];
-    const fetchFirst = async (urls) => {
+    const fetchOne = fetchBuf || ((url) => downloadToBuffer(url));
+    /* v1.5.11: a download that returns HTTP 200 is NOT automatically a valid
+     * artifact — raw.githubusercontent can serve an error page, corporate
+     * proxies/AV can truncate or mangle binaries. Writing such bytes as
+     * libbgi.a used to log "install-winbgim ok" and then fail EVERY later
+     * probe with "undefined reference" (Sentry GRAPHICS-H-RUNNER-F, 15
+     * events). Every artifact is now validated before it lands on disk. */
+    const fetchFirst = async (kind, urls) => {
         let lastErr = null;
         for (const url of urls) {
             try {
-                const buf = await downloadToBuffer(url);
+                const buf = await fetchOne(url);
+                const verdict = validateWinbgimArtifact(kind, buf);
+                if (!verdict.ok) {
+                    log.push(`rejected ${url}: ${verdict.why}`);
+                    lastErr = new Error(verdict.why);
+                    continue;
+                }
                 log.push(`downloaded ${url} (${buf.length} bytes)`);
                 return buf;
             }
@@ -702,10 +717,72 @@ async function installWinbgimWindows(storageRoot) {
         }
         throw lastErr ?? new Error('all sources failed');
     };
-    fs.writeFileSync(path.join(includeDir, 'graphics.h'), await fetchFirst(exports.WINBGIM_SOURCES.graphicsH));
-    fs.writeFileSync(path.join(includeDir, 'winbgim.h'), await fetchFirst(exports.WINBGIM_SOURCES.winbgimH));
-    fs.writeFileSync(path.join(libDir, 'libbgi.a'), await fetchFirst(exports.WINBGIM_SOURCES.libbgiA));
+    fs.writeFileSync(path.join(includeDir, 'graphics.h'), await fetchFirst('header', exports.WINBGIM_SOURCES.graphicsH));
+    fs.writeFileSync(path.join(includeDir, 'winbgim.h'), await fetchFirst('header', exports.WINBGIM_SOURCES.winbgimH));
+    fs.writeFileSync(path.join(libDir, 'libbgi.a'), await fetchFirst('library', exports.WINBGIM_SOURCES.libbgiA));
     return { includeDir, libDir, log };
+}
+/** Minimum plausible size for the WinBGIm64 archive (real one is ~0.2-0.5 MB). */
+exports.LIBBGI_MIN_BYTES = 50000;
+/**
+ * v1.5.11: sanity-check a downloaded WinBGIm artifact BEFORE it reaches disk.
+ * 'library' = libbgi.a — must be an `ar` archive (`!<arch>` magic) of a
+ * plausible size. 'header' = graphics.h / winbgim.h — must be C++ text that
+ * actually declares graphics functions, never an HTML error page.
+ */
+function validateWinbgimArtifact(kind, buf) {
+    if (!buf || buf.length === 0) {
+        return { ok: false, why: 'download was empty' };
+    }
+    if (kind === 'library') {
+        if (buf.length < exports.LIBBGI_MIN_BYTES) {
+            return {
+                ok: false,
+                why: `libbgi.a is only ${buf.length} bytes (a real archive is ~0.1-0.5 MB) — truncated, rate-limited or intercepted by security software`
+            };
+        }
+        const magic = buf.subarray(0, 8).toString('latin1');
+        if (!magic.startsWith('!<arch>')) {
+            const head = buf.subarray(0, 24).toString('latin1').replace(/[^\x20-\x7e]/g, '.');
+            return {
+                ok: false,
+                why: `libbgi.a is not an ar archive (starts with "${head}") — the server returned an error page instead of the binary`
+            };
+        }
+        return { ok: true, why: '' };
+    }
+    const text = buf.toString('utf8');
+    if (/^\s*</.test(text) || /<html[\s>]/i.test(text.slice(0, 400))) {
+        return { ok: false, why: 'header looks like an HTML page, not C++ source' };
+    }
+    if (buf.length < 1000) {
+        return { ok: false, why: `header is implausibly small (${buf.length} bytes)` };
+    }
+    if (!/(initgraph|initwindow|circle\s*\()/.test(text)) {
+        return { ok: false, why: 'header does not declare any graphics functions' };
+    }
+    return { ok: true, why: '' };
+}
+/**
+ * v1.5.11: turn a failed BGI link probe + compiler architecture into ONE
+ * precise diagnosis for the summary dialog, the output channel and the
+ * Sentry capture — so the next "make-global probe failed" class issue
+ * arrives WITH its root cause instead of 12 blind retries.
+ */
+function describeBgiProbeFailure(detail, arch) {
+    const undefinedRefs = /undefined reference to [`']?(circle|line|initwindow|initgraph|cleardevice|closegraph)/i.test(detail || '');
+    if (undefinedRefs && arch !== 'x86_64') {
+        return 'the graphics library cannot be linked by this compiler — it targets a 32-bit toolchain (' +
+            (arch || 'unknown') + '). Install a 64-bit MinGW-w64 g++ (WinLibs) and re-run Full Setup.';
+    }
+    if (undefinedRefs) {
+        return 'the compiler is 64-bit but the graphics library still fails to link — the downloaded libbgi.a is probably corrupt or was quarantined by security software; re-run Full Setup to re-download it.';
+    }
+    if (/graphics\.h[:\s]|No such file/i.test(detail || '')) {
+        return 'the compiler cannot find graphics.h — the WinBGIM include folder did not reach the build; re-run Full Setup.';
+    }
+    const tail = (detail || '').trim().split(/\r?\n/).slice(-1)[0].slice(0, 160);
+    return tail ? 'probe failed: ' + tail : 'probe failed for an unknown reason';
 }
 /**
  * The known fixes for the SDL_bgi mirror, identical to the set validated by

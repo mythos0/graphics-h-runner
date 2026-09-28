@@ -1,5 +1,56 @@
 # ChangeLog
 
+## 1.5.11 — 2026-09-28
+
+Sentry triage release: both unresolved production issues fixed at the root —
+the blind "make-global probe failed" warning (GRAPHICS-H-RUNNER-F, 15 events
+across two users on Windows) and the "Channel has been closed" unhandled
+rejection (GRAPHICS-H-RUNNER-G).
+
+### Fixed
+- **Corrupt WinBGIm downloads can no longer poison the setup**
+  (GRAPHICS-H-RUNNER-F). `installWinbgimWindows` used to write ANY bytes that
+  arrived with HTTP 200 — an HTML error page, a truncated transfer, an
+  AV-mangled binary — as `libbgi.a` and log "install-winbgim ok"; every later
+  probe then failed with "undefined reference" while users re-ran Full Setup
+  a dozen times. Every artifact is now validated BEFORE it lands on disk
+  (libbgi.a: `!<arch>` magic + plausible size; headers: real C++ text that
+  declares graphics functions, never HTML) and a rejected download fails the
+  install loudly with the exact reason. One clean automatic re-download runs
+  when a 64-bit compiler still cannot link the fresh archive.
+- **The link probe now runs immediately after the WinBGIm install**, at the
+  step that caused the problem. Failures are classified into actionable
+  advice (32-bit toolchain → install WinLibs MinGW-w64; 64-bit + undefined
+  refs → corrupt library, re-download; missing graphics.h → include paths)
+  and pushed into the setup summary — no more discovering it three steps
+  later as a vague global-setup warning.
+- **"Channel has been closed" crash eliminated** (GRAPHICS-H-RUNNER-G). VS
+  Code disposes the extension's output channel on window reload, extension
+  update or host shutdown while pending async continuations (setup flow,
+  timers) still want to write — `appendLine`/`show` then threw and surfaced
+  as an unhandled promise rejection. All channel access now goes through
+  guarded helpers that no-op after the channel is gone, and the dispose hook
+  arms the guard the moment VS Code closes the channel.
+- **Setup verify failures are now visible to error reporting.** The final
+  "verify" step used to produce only a breadcrumb — the Windows 11 machine
+  that failed it 12 times generated ZERO events. A failed verify now captures
+  a warning with the failing check details and the compiler architecture.
+- **The "make-global probe failed" warning now carries its root cause:**
+  compiler architecture (`-dumpmachine`) plus the probe's own stderr tail,
+  both PII-scrubbed (usernames → `~`), instead of only the platform tag.
+
+### Verified
+- new `setup-download-tests.js` (21 checks): valid/truncated/HTML/empty/
+  garbage artifacts against the validator, corrupt-download installs that
+  must throw without writing a bad `libbgi.a`, the failure classifier's
+  32-bit/corrupt/include-path messages, and PII scrubbing of the new
+  diagnostic extras
+- full battery green: smoke-view, view-tests, pc-states 61, registry,
+  celebrate, health, tree-model, globalize 22, deps-audit 14, robust,
+  win-header 31/31, setup-download 21
+- run-tests 31/31 on real SDL_bgi (Xvfb); real-host e2e PASS (activation,
+  14 commands incl. cheatSheet, run paths, fallback tree, fireworks toggle)
+
 ## 1.5.10 — 2026-09-28
 
 The cheat sheet becomes a pure, detailed graphics.h function reference.

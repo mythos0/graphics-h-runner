@@ -13,7 +13,7 @@
       "ok": true,
       "exit": 0,
       "analysis": {
-        "nonblack": 0.0327,
+        "nonblack": 0.0326,
         "unique_colors": 6
       },
       "secs": "7.5"
@@ -25,7 +25,7 @@
         "nonblack": 0.0552,
         "unique_colors": 10
       },
-      "secs": "8.4"
+      "secs": "8.3"
     },
     "rfx04_julia_morph.cpp": {
       "ok": true,
@@ -49,10 +49,10 @@
       "ok": true,
       "exit": 0,
       "analysis": {
-        "nonblack": 0.0129,
+        "nonblack": 0.013,
         "unique_colors": 4
       },
-      "secs": "5.3"
+      "secs": "5.4"
     },
     "rfx07_text_matrix.cpp": {
       "ok": true,
@@ -112,7 +112,7 @@
   "E": {
     "count": 2,
     "first": {
-      "file": "/home/z/my-project/graphics-h-runner/build/robust/rfx12_broken.cpp",
+      "file": "/home/z/my-project/push-work/clone/build/robust/rfx12_broken.cpp",
       "line": 5,
       "column": 5,
       "severity": "error",
