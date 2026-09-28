@@ -345,8 +345,8 @@ check('cheat sheet: searchable overlay + full data content (? button moved to th
   assert.ok(h.includes('id="cheat-close"'), 'cheat close button missing');
   assert.ok(h.includes('id="cheat-empty"'), 'cheat no-results row missing');
   const fns = (h.match(/class="cheat-fn"/g) || []).length;
-  assert.ok(fns >= 55, 'too few cheat entries: ' + fns);
-  for (const sig of ['initwindow(width, height', 'putpixel(x, y, color)', 'setfillstyle(pattern, color)', 'outtextxy(x, y', 'floodfill(x, y, border)', 'getmouseclick(kind', 'ismouseclick(kind', 'kbhit()', 'putimage(l, t, bitmap, verb)', 'setviewport(l, t, r, b, clip)', 'textheight(&quot;t&quot;)', 'setfillstyle(...) BEFORE bar(...)', 'putpixel is SLOW']) {
+  assert.ok(fns >= 75, 'too few cheat entries: ' + fns);
+  for (const sig of ['initwindow(width, height', 'putpixel(x, y, color)', 'setfillstyle(pattern, color)', 'outtextxy(x, y', 'floodfill(x, y, border)', 'getmouseclick(kind', 'ismouseclick(kind', 'kbhit()', 'getch()', 'COLOR(r, g, b)', 'settextstyle(font, dir, size)', 'swapbuffers()', 'putimage(l, t, bitmap, verb)', 'setviewport(l, t, r, b, clip)', 'textheight(&quot;t&quot;)']) {
     assert.ok(h.includes(sig), 'cheat entry missing: ' + sig);
   }
   assert.ok(h.includes('filterCheat'), 'cheat search filter not wired');

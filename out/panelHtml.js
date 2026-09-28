@@ -129,134 +129,236 @@ function programCards(programs) {
 }
 const CHEAT_SECTIONS = [
     {
-        title: 'The screen coordinate system',
-        entries: [
-            {
-                sig: '(0,0) = the TOP-LEFT corner',
-                desc: '+x grows right, +y grows DOWN. getmaxx()/getmaxy() are the last drawable pixels. The Coordinate Viewer lab program shows this live.'
-            }
-        ]
-    },
-    {
-        title: 'Run it here',
-        entries: [
-            {
-                sig: 'Ctrl+Alt+R  (or F5)',
-                desc: 'Compile & run the open .cpp — the compiler and graphics library are installed automatically on first run.'
-            },
-            {
-                sig: 'ESC or Q (in the window)',
-                desc: 'Programs run until YOU quit them — the graphics window and the terminal (with all output) stay open. Random keystrokes never stop a program. Ctrl+Alt+S force-stops.'
-            },
-            {
-                sig: 'Ctrl+Alt+B',
-                desc: 'Compile only; compiler errors land in the Problems panel.'
-            },
-            {
-                sig: 'Ctrl+Alt+S',
-                desc: 'Stop the running graphics program (Ctrl+C) — the runner terminal stays open with all output, ready for the next run.'
-            }
-        ]
-    },
-    {
-        title: 'Celebrations',
-        entries: [
-            {
-                sig: '\ud83c\udf89 Confetti on success',
-                desc: 'Every successful compilation rains a confetti burst over THIS panel (canvas-confetti, Realistic Look) — no extra tab opens, and the panel stays clickable while the particles fall.'
-            },
-            {
-                sig: '\u274c Error overlay',
-                desc: 'When a compile stops on errors, a full-screen error overlay shows a giant shaking \u2717 and the compiler\u2019s first error messages in big type \u2014 click or press Esc to dismiss.'
-            },
-            {
-                sig: '\ud83c\udf92 School Pride',
-                desc: 'The first time the graphics.h panel opens in a session, a 5-second School Pride show fires across this panel (once per session).'
-            },
-            {
-                sig: '\ud83c\udf86 Fireworks Simulator',
-                desc: 'The festive action button launches a full-screen fireworks show — click it again (or Esc, or the red Stop button) to stop.'
-            }
-        ]
-    },
-    {
         title: 'Setup & lifecycle',
         entries: [
             {
                 sig: 'initwindow(width, height, "title")',
-                desc: 'WinBGIM: open a graphics window (title optional; also 2 args on SDL_bgi).'
+                desc: 'Opens the graphics window, width × height PIXELS (title optional; the plain 2-arg form works everywhere). Call it once at the top of main() — nothing can be drawn before it.'
             },
             {
                 sig: 'initgraph(&gd, &gm, "path")',
-                desc: 'Classic Turbo C++ style startup; detectgraph() picks a driver.'
-            },
-            { sig: 'closegraph()', desc: 'Close the window and shut the graphics system down.' },
-            { sig: 'cleardevice()', desc: 'Erase the whole window (fill with the background color).' },
-            { sig: 'getmaxx() / getmaxy()', desc: 'Last drawable pixel in x / y.' },
-            { sig: 'delay(ms)', desc: 'Pause milliseconds — the heartbeat of every animation loop.' }
-        ]
-    },
-    {
-        title: 'Lines & shapes',
-        entries: [
-            { sig: 'putpixel(x, y, color)', desc: 'Color exactly one pixel (see getpixel below).' },
-            { sig: 'line(x1, y1, x2, y2)', desc: 'Straight line between two points.' },
-            {
-                sig: 'lineto(x, y) / linerel(dx, dy)',
-                desc: 'Line from the current position (absolute / relative).'
+                desc: 'Classic Turbo C++ startup: int gd = DETECT, gm; initgraph(&gd, &gm, ""); auto-picks the driver and mode. Use it when your lab demands textbook-identical code.'
             },
             {
-                sig: 'moveto(x, y) / moverel(dx, dy)',
-                desc: 'Move the current position without drawing.'
-            },
-            { sig: 'rectangle(left, top, right, bottom)', desc: 'Outline rectangle.' },
-            { sig: 'bar(left, top, right, bottom)', desc: 'Filled bar in the current fill style (no outline).' },
-            {
-                sig: 'bar3d(l, t, r, b, depth, topflag)',
-                desc: '3-D bar; topflag=1 draws the top face.'
-            },
-            { sig: 'circle(x, y, radius)', desc: 'Circle outline.' },
-            {
-                sig: 'arc(x, y, start, end, radius)',
-                desc: "Arc; angles in degrees, 0° at 3 o'clock, counter-clockwise."
+                sig: 'detectgraph(&gd, &gm)',
+                desc: 'Reports which driver and mode the system would choose WITHOUT entering graphics mode — a safe pre-flight check before initgraph.'
             },
             {
-                sig: 'ellipse(x, y, start, end, xrad, yrad)',
-                desc: 'Elliptical arc; 0..360 for the full outline.'
+                sig: 'closegraph()',
+                desc: 'Shuts the graphics system down, frees its memory and closes the window. Put it after the final getch() so the drawing stays visible until a key is pressed.'
             },
-            { sig: 'fillellipse(x, y, xrad, yrad)', desc: 'Filled ellipse.' },
-            { sig: 'pieslice(x, y, start, end, radius)', desc: 'Filled circular wedge.' },
-            { sig: 'sector(x, y, start, end, xrad, yrad)', desc: 'Filled elliptical wedge.' },
             {
-                sig: 'drawpoly(n, pts) / fillpoly(n, pts)',
-                desc: 'Polygon outline / filled; pts is int[2n], repeat the first point to close.'
+                sig: 'cleardevice()',
+                desc: 'Erases the entire screen by filling it with the current background color and homes the current position to (0,0) — frame one of every animation loop.'
+            },
+            {
+                sig: 'getmaxx() / getmaxy()',
+                desc: 'Last drawable pixel column / row (one LESS than the window size). Center anything: circle(getmaxx()/2, getmaxy()/2, 50).'
+            },
+            {
+                sig: 'getmaxcolor()',
+                desc: 'Largest valid color index in the current mode — 15 for the standard 16-color BGI palette.'
+            },
+            {
+                sig: 'graphresult()',
+                desc: 'Error code of the last graphics operation; grOk (0) means success. Check it right after initgraph — non-zero here means nothing else will draw.'
+            },
+            {
+                sig: 'grapherrormsg(code)',
+                desc: 'Human-readable text for a graphresult() code — print it to see WHY graphics failed to start.'
+            },
+            {
+                sig: 'graphdefaults()',
+                desc: 'Factory reset for graphics state: viewport, current position, palette, colors, line, fill and text styles all return to their defaults.'
+            },
+            {
+                sig: 'getgraphmode() / setgraphmode(mode)',
+                desc: 'Reads or switches the active graphics mode after startup.'
+            },
+            {
+                sig: 'restorecrtmode()',
+                desc: 'Flips the screen back to text mode temporarily (menus, printf screens) while keeping the graphics state; setgraphmode() brings the drawing back.'
+            },
+            {
+                sig: 'getdrivername()',
+                desc: 'Name of the running driver — prints SDL_bgi or WinBGI so you always know WHICH implementation is on screen.'
             }
         ]
     },
     {
-        title: 'Colors & filling',
+        title: 'Coordinates & current position',
         entries: [
             {
-                sig: 'BLACK=0 BLUE GREEN CYAN RED MAGENTA BROWN LIGHTGRAY DARKGRAY LIGHTBLUE LIGHTGREEN LIGHTCYAN LIGHTRED LIGHTMAGENTA YELLOW WHITE=15',
-                desc: 'The 16 standard color constants (0..15) shared by every BGI implementation.'
-            },
-            { sig: 'setcolor(c) / setbkcolor(c)', desc: 'Current drawing color / background color.' },
-            {
-                sig: 'setfillstyle(pattern, color)',
-                desc: 'Fill used by bar, fillpoly, pieslice, floodfill…'
+                sig: 'moveto(x, y)',
+                desc: 'Moves the current position (CP) to (x,y) WITHOUT drawing; later lineto(), linerel() and outtext() start from there.'
             },
             {
-                sig: 'floodfill(x, y, border)',
-                desc: 'Flood-fill the region around (x,y) until the border color is met.'
+                sig: 'moverel(dx, dy)',
+                desc: 'Slides the CP relative to where it is now: positive dx goes RIGHT, positive dy goes DOWN.'
+            },
+            {
+                sig: 'getx() / gety()',
+                desc: 'X and Y of the current position (viewport-relative) — read them to continue a path from where the last line ended.'
+            },
+            {
+                sig: 'getaspectratio(&xasp, &yasp)',
+                desc: 'Pixel aspect ratio the driver uses to keep circles round on non-square pixels.'
+            },
+            {
+                sig: 'setaspectratio(xasp, yasp)',
+                desc: 'Overrides that correction — deliberately stretch (or repair) everything drawn afterwards.'
+            }
+        ]
+    },
+    {
+        title: 'Pixels & lines',
+        entries: [
+            {
+                sig: 'putpixel(x, y, color)',
+                desc: 'Paints ONE pixel in the given color — perfect for dots, stars and plotting algorithms (DDA, Bresenham). For big areas prefer bar/fillpoly: per-pixel loops are slow.'
             },
             {
                 sig: 'getpixel(x, y)',
-                desc: 'Color value of one pixel — the heart of a Pixel Inspector.'
+                desc: 'Returns the color INDEX of the pixel at (x,y) — how you READ the screen back (pixel inspectors, flood-fill boundary checks).'
             },
-            { sig: 'COLOR(r, g, b)', desc: '24-bit color macro (WinBGIM / SDL_bgi extension).' },
             {
-                sig: 'SOLID_FILL LINE_FILL SLASH_FILL BKSLASH_FILL HATCH_FILL XHATCH_FILL INTERLEAVE_FILL WIDE_DOT_FILL CLOSE_DOT_FILL EMPTY_FILL',
-                desc: 'setfillstyle() pattern constants.'
+                sig: 'line(x1, y1, x2, y2)',
+                desc: 'Straight line between two absolute points in the current color, style and thickness. Does NOT move the current position.'
+            },
+            {
+                sig: 'lineto(x, y)',
+                desc: 'Draws from the CP to (x,y) and leaves the CP there — chain several lineto() calls to trace a polyline.'
+            },
+            {
+                sig: 'linerel(dx, dy)',
+                desc: 'Same, but the endpoint is relative to the CP: linerel(40, 0) extends the line 40px to the right.'
+            },
+            {
+                sig: 'setlinestyle(style, pattern, thickness)',
+                desc: 'style: SOLID_LINE, DOTTED_LINE, CENTER_LINE, DASHED_LINE or USERBIT_LINE with your own 16-bit pattern. thickness: NORM_WIDTH (1) or THICK_WIDTH (3).'
+            },
+            {
+                sig: 'getlinesettings(&info)',
+                desc: 'Reads the current style/pattern/thickness into a linesettingstype — save it, draw dashed helpers, restore it.'
+            },
+            {
+                sig: 'setwritemode(COPY_PUT / XOR_PUT)',
+                desc: 'How lines blend with what is beneath. XOR_PUT draws the same line twice to ERASE it — the classic rubber-band preview while dragging.'
+            }
+        ]
+    },
+    {
+        title: 'Shapes & curves',
+        entries: [
+            {
+                sig: 'rectangle(l, t, r, b)',
+                desc: 'Outline rectangle between corner (left,top) and corner (right,bottom), in the current color and line style.'
+            },
+            {
+                sig: 'circle(x, y, radius)',
+                desc: 'Circle outline centred at (x,y), radius in pixels — no angles needed, the full 360 degrees is drawn.'
+            },
+            {
+                sig: 'arc(x, y, start, end, radius)',
+                desc: 'Circular arc from start to end DEGREES. Angles run COUNTERCLOCKWISE with 0 degrees at 3 o’clock, so 0..90 sweeps the UPPER-RIGHT quarter.'
+            },
+            {
+                sig: 'pieslice(x, y, start, end, radius)',
+                desc: 'Filled pie wedge: the arc plus both radii, filled with the current fill settings — the building block of pie charts.'
+            },
+            {
+                sig: 'sector(x, y, start, end, xrad, yrad)',
+                desc: 'pieslice for ELLIPSES: same angles, separate x and y radii.'
+            },
+            {
+                sig: 'ellipse(x, y, start, end, xrad, yrad)',
+                desc: 'Elliptical arc; 0..360 gives the full outline. Pairs with fillellipse() when you want it filled.'
+            },
+            {
+                sig: 'fillellipse(x, y, xrad, yrad)',
+                desc: 'Fully filled ellipse in one call — no angles, uses the current fill style and color.'
+            },
+            {
+                sig: 'drawpoly(n, pts)',
+                desc: 'Polygon OUTLINE from int pts[2n] = {x1,y1,x2,y2, ...}; repeat the first point at the end to close the shape.'
+            },
+            {
+                sig: 'fillpoly(n, pts)',
+                desc: 'Same point array, but the interior is FILLED with the current fill pattern.'
+            },
+            {
+                sig: 'bar(l, t, r, b)',
+                desc: 'Solid filled rectangle in the current fill style/color, NO outline — the workhorse for backgrounds, bars and erasing frames.'
+            },
+            {
+                sig: 'bar3d(l, t, r, b, depth, topflag)',
+                desc: '3-D bar: depth in pixels; topflag 1 draws the top face, 0 skips it so stacked bars can overlap.'
+            },
+            {
+                sig: 'getarccoords(&ac)',
+                desc: 'After arc/pieslice/sector: the center plus both endpoints — use them to label slices or draw radius lines.'
+            }
+        ]
+    },
+    {
+        title: 'Colors',
+        entries: [
+            {
+                sig: 'setcolor(c)',
+                desc: 'Drawing color for every line/shape/text call. 0 BLACK, 1 BLUE, 2 GREEN, 3 CYAN, 4 RED, 5 MAGENTA, 6 BROWN, 7 LIGHTGRAY, 8 DARKGRAY, 9 LIGHTBLUE, 10 LIGHTGREEN, 11 LIGHTCYAN, 12 LIGHTRED, 13 LIGHTMAGENTA, 14 YELLOW, 15 WHITE.'
+            },
+            {
+                sig: 'getcolor()',
+                desc: 'The current drawing color index.'
+            },
+            {
+                sig: 'setbkcolor(c)',
+                desc: 'Background color — takes effect at the NEXT cleardevice(), so set it before you clear.'
+            },
+            {
+                sig: 'getbkcolor()',
+                desc: 'The current background color index.'
+            },
+            {
+                sig: 'COLOR(r, g, b)',
+                desc: 'WinBGIm / SDL_bgi macro for any 24-bit color: setcolor(COLOR(255, 140, 0)). The classic 0..15 constants keep working alongside it.'
+            },
+            {
+                sig: 'setrgbpalette(index, r, g, b)',
+                desc: 'Redefines one palette entry — everything already drawn with that index changes color instantly.'
+            },
+            {
+                sig: 'getpalette(&pal) / getpalettesize()',
+                desc: 'Reads the active palette and how many entries it has.'
+            },
+            {
+                sig: 'setallpalette(&pal)',
+                desc: 'Rewrites several palette entries at once from a palettetype struct.'
+            }
+        ]
+    },
+    {
+        title: 'Filling',
+        entries: [
+            {
+                sig: 'setfillstyle(pattern, color)',
+                desc: 'Sets the fill used by bar, fillpoly, pieslice, sector, fillellipse and floodfill. Patterns: EMPTY_FILL, SOLID_FILL, LINE_FILL, LTSLASH_FILL, SLASH_FILL, BKSLASH_FILL, LTBKSLASH_FILL, HATCH_FILL, XHATCH_FILL, INTERLEAVE_FILL, WIDE_DOT_FILL, CLOSE_DOT_FILL, USER_FILL.'
+            },
+            {
+                sig: 'setfillpattern(pattern, color)',
+                desc: 'Your own 8-byte fill tile (each byte = 8 pixels, e.g. 0xF0, 0xF0...) — set it, then draw with USER_FILL.'
+            },
+            {
+                sig: 'getfillsettings(&info)',
+                desc: 'Reads the current pattern + color into a fillsettingstype — save/restore around special drawing.'
+            },
+            {
+                sig: 'getfillpattern(pattern)',
+                desc: 'Reads the 8-byte custom pattern back out.'
+            },
+            {
+                sig: 'floodfill(x, y, border)',
+                desc: 'Pours the current fill from the point (x,y) OUTWARD, stopping at the border color. (x,y) must be INSIDE the shape and the outline fully closed — one gap and the fill leaks across the whole screen.'
             }
         ]
     },
@@ -265,118 +367,143 @@ const CHEAT_SECTIONS = [
         entries: [
             {
                 sig: 'outtextxy(x, y, "text")',
-                desc: 'Print a string at a pixel position (use a char buffer for numbers).'
+                desc: 'Prints a string anchored at pixel (x,y), honoring the current justification. It takes a char* — sprintf numbers into a buffer first: char buf[16]; sprintf(buf, "%d", n);'
+            },
+            {
+                sig: 'outtext("text")',
+                desc: 'Same drawing, but anchored at the current position — handy right after moveto().'
             },
             {
                 sig: 'settextstyle(font, dir, size)',
-                desc: 'DEFAULT_FONT, TRIPLEX_FONT, SMALL_FONT, SANS_SERIF_FONT, GOTHIC_FONT; HORIZ_DIR / VERT_DIR.'
+                desc: 'font: DEFAULT_FONT (fast 8x8 bitmap), TRIPLEX_FONT, SMALL_FONT, SANS_SERIF_FONT, GOTHIC_FONT (scalable outlines). dir: HORIZ_DIR or VERT_DIR. size: 1..10.'
             },
             {
-                sig: 'settextjustify(h, v)',
-                desc: 'How x,y anchor the string (LEFT_TEXT, CENTER_TEXT, …).'
+                sig: 'settextjustify(horiz, vert)',
+                desc: 'How (x,y) anchors the string: horizontal LEFT_TEXT / CENTER_TEXT / RIGHT_TEXT, vertical BOTTOM_TEXT / CENTER_TEXT / TOP_TEXT. CENTER+CENTER centres labels exactly on the point.'
+            },
+            {
+                sig: 'setusercharsize(multx, divx, multy, divy)',
+                desc: 'Fine scale for stroked fonts — multx/divx 4/1 doubles the width, multy/divy 2/1 the height (bitmap DEFAULT_FONT ignores it).'
             },
             {
                 sig: 'textheight("t") / textwidth("t")',
-                desc: 'Pixel metrics of a string in the current font.'
+                desc: 'Pixel height / width of a string in the CURRENT font and size — use them for line spacing and centered labels instead of guessing constants.'
+            },
+            {
+                sig: 'gettextsettings(&info)',
+                desc: 'Reads font, direction, size and justification into a textsettingstype.'
             }
         ]
     },
     {
-        title: 'Keyboard',
+        title: 'Keyboard input',
         entries: [
             {
                 sig: 'getch()',
-                desc: 'Wait for one key — keep the window open at the end of main().'
+                desc: 'conio.h: waits for ONE keypress and returns its code — also the call that keeps the window open as the last line of main(). Esc returns 27, the classic quit check.'
+            },
+            {
+                sig: 'Arrow keys via getch()',
+                desc: 'Extended keys arrive as TWO codes: first 0 or 224, then 72 UP, 80 DOWN, 75 LEFT, 77 RIGHT. Read twice: int c = getch(); if (c == 0 || c == 224) c = getch();'
             },
             {
                 sig: 'kbhit()',
-                desc: 'True when a key is waiting: the non-blocking poll for animation loops.'
-            },
-            {
-                sig: '0 / 224, then 72 80 75 77',
-                desc: 'Arrow keys send a prefix (0 or 224), then UP=72 DOWN=80 LEFT=75 RIGHT=77.'
-            },
-            {
-                sig: 'getch() == 27',
-                desc: '27 is the Esc key code — the classic "quit on Esc" check; this extension\u2019s samples quit ONLY on Esc or Q.'
+                desc: 'Non-zero while a key is waiting — pair it with getch() inside animation loops so the scene keeps moving until the player presses something.'
             }
         ]
     },
     {
-        title: 'Mouse (WinBGIM / SDL_bgi)',
+        title: 'Mouse (WinBGIm / SDL_bgi)',
         entries: [
-            { sig: 'ismouseclick(kind)', desc: 'True when that mouse event is queued.' },
+            {
+                sig: 'mousex() / mousey()',
+                desc: 'Latest reported pointer position in window coordinates — poll every frame for hover effects and crosshairs.'
+            },
+            {
+                sig: 'ismouseclick(kind)',
+                desc: 'True when an event of that kind is queued: WM_MOUSEMOVE, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDOWN, WM_MBUTTONUP, WM_RBUTTONDOWN, WM_RBUTTONUP, WM_MOUSEWHEEL.'
+            },
             {
                 sig: 'getmouseclick(kind, &x, &y)',
-                desc: 'Pop the event and read the pixel position.'
+                desc: 'Pops the OLDEST event of that kind and writes its pixel position into x/y — drain every event each frame or clicks pile up.'
             },
             {
                 sig: 'clearmouseclick(kind)',
-                desc: 'Drop queued events you do not handle.'
+                desc: 'Throws away queued events of that kind — e.g. ignore clicks that happened while a cutscene was running.'
             },
             {
-                sig: 'WM_MOUSEMOVE WM_LBUTTONDOWN WM_LBUTTONUP WM_RBUTTONDOWN WM_RBUTTONUP',
-                desc: 'The mouse event kinds.'
-            },
-            {
-                sig: 'getpixel(x, y)',
-                desc: 'Pair the mouse position with a color — instant Pixel Inspector.'
+                sig: 'showmousecursor() / hidemousecursor()',
+                desc: 'Shows or hides the pointer over the window — hide it for full-canvas games, always show it again before closegraph().'
             }
         ]
     },
     {
-        title: 'Animation & images',
+        title: 'Images & animation',
         entries: [
             {
                 sig: 'imagesize(l, t, r, b)',
-                desc: 'Bytes needed to snapshot a rectangle.'
+                desc: 'How many BYTES a screen snapshot of that rectangle needs — malloc exactly this before getimage.'
             },
             {
                 sig: 'getimage(l, t, r, b, bitmap)',
-                desc: 'Snapshot a rectangle into a buffer.'
+                desc: 'Copies the screen region into your buffer: void* buf = malloc(imagesize(l,t,r,b)); getimage(l,t,r,b,buf);'
             },
             {
                 sig: 'putimage(l, t, bitmap, verb)',
-                desc: 'Stamp it back: COPY_PUT, XOR_PUT, AND_PUT, OR_PUT, NOT_PUT — the classic sprite trick.'
+                desc: 'Stamps the snapshot back: COPY_PUT, XOR_PUT, OR_PUT, AND_PUT, NOT_PUT. XOR_PUT twice erases it — erase, move, redraw, delay is the classic sprite loop.'
             },
             {
-                sig: 'setactivepage(p) / setvisualpage(p)',
-                desc: 'Double buffering where pages are supported.'
+                sig: 'delay(ms)',
+                desc: 'dos.h: pauses ms milliseconds — the frame pacing call; 15..30ms gives smooth, watchable motion.'
+            },
+            {
+                sig: 'getresizewidth() / getresizeheight()',
+                desc: 'WinBGIm: the window size after the user resized it — compare with getmaxx()/getmaxy() and re-layout your scene.'
+            },
+            {
+                sig: 'clearresizeevent()',
+                desc: 'Discards a pending resize event you decided not to handle.'
+            },
+            {
+                sig: 'swapbuffers()',
+                desc: 'SDL_bgi: presents the frame you drew off-screen (double buffering) — flicker-free animation without erase-then-draw tricks.'
             }
         ]
     },
     {
-        title: 'Viewport',
+        title: 'Viewports & pages',
         entries: [
             {
                 sig: 'setviewport(l, t, r, b, clip)',
-                desc: 'Draw inside a sub-window; coordinates become relative to it.'
-            },
-            { sig: 'clearviewport()', desc: 'Erase only the current viewport.' }
-        ]
-    },
-    {
-        title: 'Common pitfalls',
-        entries: [
-            {
-                sig: 'setfillstyle(...) BEFORE bar(...)',
-                desc: 'Fills are STATE: bar/fillpoly/pieslice paint with the LAST setfillstyle — set the pattern and color before the draw call, not after.'
+                desc: 'Defines a sub-window: all coordinates become RELATIVE to its top-left corner; clip 1 makes drawing outside it impossible.'
             },
             {
-                sig: 'char buf[16]; sprintf(buf, "%d", n); outtextxy(x, y, buf);',
-                desc: 'outtextxy takes a char*, never an int — format numbers into a buffer first (and keep the buffer in scope).'
+                sig: 'clearviewport()',
+                desc: 'Erases ONLY the current viewport and homes its CP to (0,0) — the rest of the screen survives.'
             },
             {
-                sig: 'getch() at the end of main()',
-                desc: 'Without it the window closes the instant the program finishes — no key, no window, no output to check.'
+                sig: 'getviewsettings(&v)',
+                desc: 'Reads the viewport rectangle and clip flag into a viewporttype.'
             },
             {
-                sig: 'cleardevice() → draw → delay(20)',
-                desc: 'The animation loop rhythm: erase, redraw, breathe. Skipping the small delay makes frames flicker or never appear.'
+                sig: 'setactivepage(p)',
+                desc: 'Draws into page p off-screen (where the implementation supports multiple pages / SDL_bgi).'
             },
             {
-                sig: 'putpixel is SLOW',
-                desc: 'Never paint big areas pixel-by-pixel — use bar, fillpoly or putimage. Thousands of putpixel calls per frame will freeze the window.'
+                sig: 'setvisualpage(p)',
+                desc: 'Displays page p — draw on one page, show the other, then swap: smooth double-buffered animation.'
+            },
+            {
+                sig: 'setcurrentwindow(n)',
+                desc: 'WinBGIm multi-window: directs all drawing calls to window n (open more windows with more initwindow calls).'
+            },
+            {
+                sig: 'getcurrentwindow()',
+                desc: 'Index of the window currently receiving drawing calls.'
+            },
+            {
+                sig: 'getactivewindow()',
+                desc: 'Index of the window that currently has keyboard/input focus.'
             }
         ]
     }
@@ -410,7 +537,7 @@ function cheatSheetHtml() {
         sections,
         '        <div id="cheat-empty">No functions match your search.</div>',
         '      </div>',
-        '      <div class="cheat-foot">WinBGIM is the default on Windows; SDL_bgi on Linux/macOS. Press <span class="kbd">Esc</span> to close.</div>',
+        '      <div class="cheat-foot">Press <span class="kbd">Esc</span> to close.</div>',
         '    </div>',
         '  </div>'
     ].join('\n');
@@ -593,7 +720,7 @@ function buildPanelHtml(opts) {
   .cheat-overlay { position:fixed; inset:0; background:rgba(5,8,12,.72);
     display:none; z-index:80; padding:12px; }
   .cheat-overlay.open { display:flex; align-items:flex-start; justify-content:center; }
-  .cheat-sheet { width:100%; max-width:560px; max-height:100%; display:flex; flex-direction:column;
+  .cheat-sheet { width:100%; max-width:640px; max-height:100%; display:flex; flex-direction:column;
     background:#141821; border:1px solid var(--card-line); border-radius:12px;
     box-shadow:0 18px 50px rgba(0,0,0,.55); overflow:hidden; }
   .cheat-head { display:flex; align-items:center; gap:8px; padding:11px 12px;

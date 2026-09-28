@@ -1,5 +1,40 @@
 # ChangeLog
 
+## 1.5.10 — 2026-09-28
+
+The cheat sheet becomes a pure, detailed graphics.h function reference.
+
+### Changed
+- **Only function docs remain — everything else removed** (user request: "keep
+  only detailed doc for easy to learn all functions of graphics.h, remove
+  other things"). The v1.5.9 sheet mixed reference with extension content; the
+  four non-function sections are gone: "The screen coordinate system" blurb,
+  "Run it here" (Ctrl+Alt+R/B/S extension shortcuts), "Celebrations" (panel
+  effects) and "Common pitfalls". The footer's library note is trimmed to just
+  the Esc hint. What remains is **11 sections / 81 entries — every one a real
+  graphics.h function** with a detailed, learning-oriented description:
+  parameter meanings, pixel/degree conventions (angles counterclockwise from 3
+  o'clock), the 16 standard colors, all 13 fill patterns, the 5 BGI fonts,
+  getch() extended-key codes (0/224 + 72/80/75/77), malloc(imagesize(...))
+  sprite patterns, mouse event kinds, and the WinBGIm/SDL_bgi extras (COLOR
+  macro, swapbuffers, multi-window, resize events). Coverage now spans the
+  whole practical BGI surface: setup & lifecycle (13), coordinates (5), pixels
+  & lines (8), shapes & curves (12), colors (8), filling (5), text (7),
+  keyboard (3), mouse (5), images & animation (7), viewports & pages (8).
+  The useful pitfall knowledge was folded into the function docs it belongs to
+  (outtextxy char buffers, getch() to keep the window open, putpixel slowness,
+  floodfill leak warning, state-before-draw fill notes).
+- The reference card is wider (640px) to give the longer descriptions room.
+
+### Verified
+- cheat-dom-tests extended: the parsed overlay must contain ZERO extension
+  content, all 11 section titles + 81 entries verbatim (escaped), spot-checks
+  across every section; smoke-view / cheat-sheet / registry suites updated;
+  real-Chromium browser check re-run (11 categories visible in the scroll
+  area, all 81 entries rendered, search/Esc/× flows pass, mobile layout OK);
+  real-host e2e re-run (the view-title ? command opens the sheet in a live
+  VS Code webview).
+
 ## 1.5.9 — 2026-09-28
 
 The cheat sheet rebuild + a cleaner view title bar.

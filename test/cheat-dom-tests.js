@@ -198,18 +198,18 @@ const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, 
   .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 /* recover the data source from the compiled module: re-render one section
    template and compare against the parsed DOM */
-check('category count matches CHEAT_SECTION_COUNT (12) and entries match CHEAT_ENTRY_COUNT', () => {
-  assert.strictEqual(CHEAT_SECTION_COUNT, 12, 'section count constant drifted');
-  assert.ok(CHEAT_ENTRY_COUNT >= 55, 'entry count too low: ' + CHEAT_ENTRY_COUNT);
+check('category count matches CHEAT_SECTION_COUNT (11) and entries match CHEAT_ENTRY_COUNT', () => {
+  assert.strictEqual(CHEAT_SECTION_COUNT, 11, 'section count constant drifted');
+  assert.strictEqual(CHEAT_ENTRY_COUNT, 81, 'entry count drifted: ' + CHEAT_ENTRY_COUNT);
   assert.strictEqual(cats.length, CHEAT_SECTION_COUNT, 'rendered categories != data sections');
   const fns = (html.match(/class="cheat-fn"/g) || []).length;
   assert.strictEqual(fns, CHEAT_ENTRY_COUNT, 'rendered entries != data entries');
 });
 check('every category title renders verbatim (escaped) under its h4', () => {
   const srcTitles = [
-    'The screen coordinate system', 'Run it here', 'Celebrations', 'Setup & lifecycle',
-    'Lines & shapes', 'Colors & filling', 'Text', 'Keyboard',
-    'Mouse (WinBGIM / SDL_bgi)', 'Animation & images', 'Viewport', 'Common pitfalls'
+    'Setup & lifecycle', 'Coordinates & current position', 'Pixels & lines',
+    'Shapes & curves', 'Colors', 'Filling', 'Text', 'Keyboard input',
+    'Mouse (WinBGIm / SDL_bgi)', 'Images & animation', 'Viewports & pages'
   ];
   assert.deepStrictEqual(srcTitles.length, CHEAT_SECTION_COUNT, 'title list drifted from data');
   cats.forEach((cat, idx) => {
@@ -232,21 +232,45 @@ check('all cheat-fn rows are DIRECT children of their category (no stray nesting
     }
   }
 });
-check('spot-checks: key signatures + the v1.5.9 pitfalls section, escaped correctly', () => {
+check('v1.5.10: the sheet is a PURE function reference — extension content removed', () => {
+  /* scope to the OVERLAY subtree: the panel page itself may legitimately
+     mention shortcuts elsewhere (footer hint), the sheet must not */
+  const grab = (n, out) => { for (const k of n.kids) { if (k.tag === '#text') { out.push(k.text); } else { grab(k, out); } } return out; };
+  const overlayText = grab(overlay, []).join(' ');
+  for (const gone of ['Run it here', 'Celebrations', 'Common pitfalls', 'The screen coordinate system',
+    'Ctrl+Alt+R', 'Confetti on success', 'School Pride']) {
+    assert.ok(!overlayText.includes(gone) && !overlayText.includes(esc(gone)), 'extension content still rendered: ' + gone);
+  }
+  /* every section must be FUNCTION docs: each category has entries and each
+     entry signature looks like a call (no prose-only pseudo entries) */
+  for (const cat of cats) {
+    const h4 = cat.kids.find((k) => k.tag === 'h4');
+    const fns = cat.kids.filter((k) => k.tag === 'div');
+    assert.ok(fns.length >= 3, 'category ' + h4.kids[0].text + ' has too few entries');
+  }
+});
+check('spot-checks: key signatures across all 11 function sections, escaped correctly', () => {
   const flat = cats.map((c) => c.kids.filter((k) => k.tag === 'div')).flat();
   const codeOf = (fn) => fn.kids.find((k) => k.tag === 'code').kids.filter((k) => k.tag === '#text').map((k) => k.text).join('');
   const codes = flat.map(codeOf);
-  for (const want of ['initwindow(width, height, &quot;title&quot;)', 'putpixel(x, y, color)',
-    'setfillstyle(...) BEFORE bar(...)', 'outtextxy takes a char*'.replace('outtextxy', '') && 'char buf[16]; sprintf(buf, &quot;%d&quot;, n); outtextxy(x, y, buf);',
-    'getch() at the end of main()', 'cleardevice() \u2192 draw \u2192 delay(20)', 'putpixel is SLOW',
-    'floodfill(x, y, border)', 'getmouseclick(kind, &amp;x, &amp;y)', 'putimage(l, t, bitmap, verb)',
-    'setviewport(l, t, r, b, clip)', 'textheight(&quot;t&quot;) / textwidth(&quot;t&quot;)',
-    'getch() == 27', '0 / 224, then 72 80 75 77']) {
+  for (const want of ['initwindow(width, height, &quot;title&quot;)', 'initgraph(&amp;gd, &amp;gm, &quot;path&quot;)',
+    'closegraph()', 'getmaxx() / getmaxy()', 'graphresult()', 'getdrivername()',
+    'putpixel(x, y, color)', 'getpixel(x, y)', 'setlinestyle(style, pattern, thickness)',
+    'setwritemode(COPY_PUT / XOR_PUT)', 'rectangle(l, t, r, b)', 'circle(x, y, radius)',
+    'arc(x, y, start, end, radius)', 'pieslice(x, y, start, end, radius)', 'fillpoly(n, pts)',
+    'bar3d(l, t, r, b, depth, topflag)', 'setcolor(c)', 'COLOR(r, g, b)',
+    'setfillstyle(pattern, color)', 'floodfill(x, y, border)', 'outtextxy(x, y, &quot;text&quot;)',
+    'settextstyle(font, dir, size)', 'textheight(&quot;t&quot;) / textwidth(&quot;t&quot;)',
+    'getch()', 'Arrow keys via getch()', 'kbhit()', 'mousex() / mousey()',
+    'ismouseclick(kind)', 'getmouseclick(kind, &amp;x, &amp;y)', 'imagesize(l, t, r, b)',
+    'getimage(l, t, r, b, bitmap)', 'putimage(l, t, bitmap, verb)', 'delay(ms)', 'swapbuffers()',
+    'setviewport(l, t, r, b, clip)', 'setactivepage(p)', 'setcurrentwindow(n)']) {
     assert.ok(codes.includes(want), 'missing entry: ' + want);
   }
   const descs = flat.map((fn) => fn.kids.find((k) => k.tag === 'span').kids.filter((k) => k.tag === '#text').map((k) => k.text).join(''));
-  for (const want of ['Compile &amp; run the open .cpp', 'UP=72 DOWN=80 LEFT=75 RIGHT=77',
-    'Never paint big areas pixel-by-pixel', 'WinBGIM: open a graphics window']) {
+  for (const want of ['72 UP, 80 DOWN, 75 LEFT, 77 RIGHT', 'COUNTERCLOCKWISE with 0 degrees at 3 o\u2019clock',
+    '14 YELLOW, 15 WHITE', 'EMPTY_FILL, SOLID_FILL', 'malloc(imagesize(l,t,r,b))',
+    'grOk (0) means success', 'Esc returns 27']) {
     assert.ok(descs.some((d) => d.includes(want)), 'missing description text: ' + want);
   }
 });
@@ -257,7 +281,10 @@ check('empty-state row + footer text intact', () => {
   assert.ok(elKids[elKids.length - 1] === empty, 'empty-state must be the last body child');
   const foot = sheet.kids.filter((k) => k.tag !== '#text')[3];
   const footText = foot.kids.filter((k) => k.tag === '#text').map((k) => k.text).join('');
-  assert.ok(footText.includes('WinBGIM is the default on Windows; SDL_bgi on Linux/macOS. Press'), 'footer text drifted: ' + JSON.stringify(footText));
+  assert.ok(footText.includes('Press'), 'footer hint drifted: ' + JSON.stringify(footText));
+  /* v1.5.10: the WinBGIM/SDL_bgi library note was removed with the rest of
+     the non-function content */
+  assert.ok(!html.includes('WinBGIM is the default on Windows'), 'library note must be gone from the footer');
 });
 check('escaping discipline: no raw & < > in text runs, no undefined/[object Object]', () => {
   const badAmp = P.textRuns.filter((t) => /&(?!amp;|lt;|gt;|quot;|#39;|nbsp;)/.test(t.text));

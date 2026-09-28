@@ -7,13 +7,13 @@
         "nonblack": 0.2277,
         "unique_colors": 7
       },
-      "secs": "6.9"
+      "secs": "6.8"
     },
     "rfx02_gravity_bounce.cpp": {
       "ok": true,
       "exit": 0,
       "analysis": {
-        "nonblack": 0.0326,
+        "nonblack": 0.0327,
         "unique_colors": 6
       },
       "secs": "7.5"
@@ -25,7 +25,7 @@
         "nonblack": 0.0552,
         "unique_colors": 10
       },
-      "secs": "8.6"
+      "secs": "8.4"
     },
     "rfx04_julia_morph.cpp": {
       "ok": true,
@@ -34,7 +34,7 @@
         "nonblack": 0.2493,
         "unique_colors": 23
       },
-      "secs": "6.7"
+      "secs": "6.8"
     },
     "rfx05_image_ops.cpp": {
       "ok": true,
@@ -79,7 +79,7 @@
         "nonblack": 0.4946,
         "unique_colors": 16
       },
-      "secs": "5.3"
+      "secs": "5.2"
     },
     "rfx10_key_echo.cpp": {
       "ok": true,

@@ -135,8 +135,11 @@ The panel header is icon-free since v1.5.9: the **? cheat-sheet button moved
 to the view title bar** (the icons beside "Graphics.h CPP Program Runner
 One-click setup" — setup, doctor and fireworks simulator — were removed, and
 the single **?** icon in their place opens/toggles the searchable cheat sheet:
-12 sections, ~60 entries — coordinate system, shortcuts, setup, shapes, colors,
-text, keyboard, mouse, animation, viewport and common pitfalls).
+11 sections, 81 entries — a **pure, detailed graphics.h function reference**
+(setup & lifecycle, coordinates, pixels & lines, shapes & curves, colors,
+filling, text, keyboard, mouse, images & animation, viewports & pages — with
+parameter meanings, angle conventions, color/fill/font constants and classic
+usage patterns for every function).
 
 ## Extension settings
 
