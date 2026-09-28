@@ -1,21 +1,21 @@
 <p align="center">
-  <img src="media/diu-logo.png" alt="Dhaka International University — Knowledge is Power" width="300"/>
+  <img src="media/diu-logo.png" alt="Dhaka International University" width="260"/>
 </p>
-<h3 align="center">Powered by Department of CSE, <a href="https://www.diu.ac.bd/">Dhaka International University</a>, Bangladesh</h3>
+<h3 align="center">Developed by the Department of CSE, <a href="https://www.diu.ac.bd/">Dhaka International University</a>, Bangladesh</h3>
 
 ---
 
-# graphics.h Runner. One-click Setup — BGI C++ Graphics Toolkit for VS Code
+# graphics.h Runner — One-Click Setup
 
-[![Version](https://img.shields.io/badge/version-1.4.8-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/github/v/tag/mythos0/graphics-h-runner?label=version&sort=semver)](https://github.com/mythos0/graphics-h-runner/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey.svg)](#per-os-setup)
-[![Tests](https://img.shields.io/badge/sample%20tests-31%2F31%20passing-brightgreen.svg)](#tested--verified)
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey.svg)](#per-os-details)
+[![Tests](https://img.shields.io/badge/sample%20tests-31%2F31%20passing-brightgreen.svg)](#tested-and-verified)
 
-**Compile & run C++ programs that use `graphics.h` (BGI / WinBGIM / SDL_bgi) with one keypress.**
-One command sets up the whole toolchain from zero — compiler guidance, graphics library
-download/build/patch/install — no admin rights needed for the graphics library, no manual
-flag memorizing, ever.
+**Compile and run C++ programs that use `graphics.h` (BGI / WinBGIm / SDL_bgi) in VS Code — with one keypress.**
+A single command prepares the entire toolchain from scratch: the compiler itself, the graphics
+library, the linker flags and the native VS Code run integration. No manual configuration, and no
+administrator rights are required for the graphics library.
 
 ```cpp
 #include <graphics.h>
@@ -32,43 +32,236 @@ int main ( ) {
 }
 ```
 
-Press **`Ctrl+Alt+R`** → compiled with the right linker flags → graphics window opens.
+Press **`Ctrl+Alt+R`** — the file is compiled with the correct linker flags and the graphics
+window opens.
 
----
+![Mandelbrot set rendered with graphics.h Runner](docs/screenshots/07_mandelbrot.png)
 
 ## Features
 
-| Feature | What it does |
+| Feature | Description |
 |---|---|
-| **⚡ Complete graphics.h Run Setup** | One command bootstraps **everything** — including the C++ compiler itself on Windows (winget auto-install, or a sha256-verified direct download fallback; per-user, **no admin rights**) — then installs WinBGIM/SDL_bgi automatically (download → patch → build → install → paths wired into settings), re-verifies the whole toolchain live, and **wires the native VS Code run options to the same toolchain** (F5, Code Runner's Ctrl+Alt+N, Ctrl+Shift+B — see below). System packages that need a password are handed to the terminal as copy-paste commands. |
-| **🌐 Native VS Code run (F5 / Ctrl+Alt+N / Ctrl+Shift+B)** | After Complete Run Setup, a **normal VS Code C++ run** uses the graphics.h toolchain: `.vscode/launch.json` makes **F5** compile & run the open file through the built-in `graphics-h` debug adapter (zero extra extensions), `code-runner.executorMap.cpp` makes **Ctrl+Alt+N** (Code Runner) compile with the same flags **and run in the terminal with input**, a default **Ctrl+Shift+B** build task routes errors into the Problems panel, and `C_Cpp.default.compilerPath` aligns IntelliSense. Everything is written merge-safe (JSONC-tolerant, idempotent, never destroys your own configs). |
-| **🎨 Modern webpage-style panel (Activity Bar)** | The graphics.h icon opens a styled dashboard, not a plain tree: a live **Ready / Not ready / Checking** pill with the **version chip beside it**, a one-click **Complete Run Setup** fix while anything is missing, an action grid that **stays put**, and **31 emoji program cards** across two collapsible sections — **Example Programs** and the new **Computer Graphics Lab** — that **scroll inside their own containers** — each with **▶ Run** (open + compile + launch in one click) and **Open** buttons, and the **DIU badge on the footer's right side**. Responsive for narrow sidebars; identical look in light & dark themes. |
-| **🩺 Setup Doctor** | Probes your compiler and *every* candidate graphics library by actually compiling a `graphics.h` probe. Reports exactly what is missing with per-OS fixes, and offers **Fix automatically**. |
-| **🔍 graphics.h auto-detect** | When `#include <graphics.h>` is present, BGI linker flags are applied automatically. Files without it still compile as plain C++. |
-| **▶️ Compile & Run — 6 ways** | `Ctrl+Alt+R` (compile & run), `Ctrl+Alt+B` (compile), the editor **▶ run-button dropdown** (right beside the C/C++ "Run C++ File" entry), **F5 → "Run graphics.h program"** via a built-in run-only debug adapter, **Ctrl+Alt+N** (Code Runner — configured by Complete Setup), and **Ctrl+Shift+B** (default build task with the same flags). |
-| **🧰 Per-OS linker recipes** | Windows (WinBGIM): `-lbgi -lgdi32 -lcomdlg32 -luuid -loleaut32 -lole32` + static linking. Linux (SDL_bgi): `-lSDL_bgi -lSDL2 -lm`, or libgraph: `-lgraph`. macOS: SDL_bgi via Homebrew SDL2. Custom library prefixes get matching `-Wl,-rpath` automatically. |
-| **📊 Status bar indicator** | `✓ graphics.h` / `⚠ graphics.h` / `? graphics.h` at a glance, switching to **Compiling…** and **click-to-STOP while a program runs**. Click runs the Setup Doctor when idle. |
-| **🐛 Compiler errors in the Problems panel** | g++/gcc output is parsed into clickable file:line diagnostics with inline squiggles — compile errors are visible where you edit, not only in the output. |
-| **🛡️ Messy-settings healing** | Real-world PCs have messy configs. The extension heals them on every run: quoted paths (`"C:\...\g++.exe"`), `%ENV%`/`$VAR` variables, `~`, trailing slashes, **directory-instead-of-exe** paths, missing `.exe` suffixes, stale include/lib dirs from old installs (auto-pruned), and Windows' raw `-4058` spawn failures are all recognized and routed to the one-click fix instead of cryptic errors. |
-| **✂️ Snippets** | `gfxprog`, `gfx-anim`, `gfx-mouse`, `gfx-kbd`, `gfx-text`, `gfx-bar`. |
-| **🎆 Celebrations** | Surface-split shows, all bundled (zero remote requests) and gated by `graphics-h-runner.celebrations.enabled`: **confetti** (canvas-confetti "Realistic Look") rains over the graphics.h panel itself on every successful compilation and a **School Pride** show fires across the panel the first time it opens each session — no extra tab, panel stays clickable; a **full-screen error overlay** (giant shaking ✗ + the first compiler errors in big type) takes the editor area when a compile stops on errors; and a festive **Fireworks Simulator** action button (the [troyxun/fireworks-simulator](https://github.com/troyxun/fireworks-simulator) engine, MIT — by Caleb Miller) takes over the editor area until you stop it from the same button, the red Stop pill, Esc, or the view title bar. |
-| **🧹 Clean exit — uninstall restores your settings** | Before Complete Run Setup changes anything it **snapshots** your original settings, and UNINSTALLING the extension puts them back automatically: the Code Runner executor, the F5 `launch.json`, the build task, the compiler paths — surgically, so your own settings, your own launch configs and your other language executors are never touched. Updates and normal shutdowns do nothing. The `graphics.h: Restore Original Settings` command performs the same undo at any time, and the Setup Doctor shows whether a snapshot is armed. (The Windows "make global" step copies files into the MinGW folders and edits your PATH — that is system state, not a VS Code setting, and is left alone.) |
-| **🎮 31 example programs** | Classic starters, Turbo C++ classics (`bar3d`/`pieslice`/`sector`/`floodfill`/fill-pattern tours, viewport clipping, `getimage`/`putimage` sprites), a **conio.h** keyboard drawing pad (`kbhit`/`getch`), fun ones (Fireworks, Solar System, Aquarium, Helicopter, Warp Starfield) and **DDA Line with terminal input** — all auto-exiting and screenshot-verified. The **Computer Graphics Lab** adds the course classics as runnable labs: **Coordinate Viewer** (grid / axes / origin / labels / snap), **Pixel Inspector** (mouse x/y + color readout, click prints a copy-ready coordinate), **DDA**, **Bresenham** (line + circle), **Midpoint Ellipse**, **2D Transformations** and **Cohen-Sutherland Clipping**. |
+| **Complete Run Setup** | One command bootstraps everything, including the C++ compiler itself on Windows (winget, or a checksum-verified direct download fallback — per-user, no administrator rights). It then installs WinBGIm/SDL_bgi automatically (download, patch, build, install), re-verifies the full toolchain with a live compile, and wires the native VS Code run options to the same toolchain. |
+| **Native VS Code run (F5 / Ctrl+Alt+N / Ctrl+Shift+B)** | After Complete Run Setup, the standard VS Code C++ workflows use the graphics.h toolchain: F5 compiles and runs the open file through the built-in `graphics-h` debug adapter (no extra debugger extensions), Code Runner's Ctrl+Alt+N compiles with the same flags and runs in the terminal with input, Ctrl+Shift+B builds via a default task that routes errors into the Problems panel, and `C_Cpp.default.compilerPath` aligns IntelliSense. All writes are merge-safe and idempotent — your own configurations are preserved. |
+| **Six ways to compile & run** | `Ctrl+Alt+R` (compile & run), `Ctrl+Alt+B` (compile), the editor run-button dropdown, F5, Code Runner's Ctrl+Alt+N, and Ctrl+Shift+B — all described in the table below. |
+| **graphics.h auto-detection** | When `#include <graphics.h>` is present, the BGI linker flags are applied automatically. Files without it compile as plain C++. |
+| **Per-OS linker recipes** | Windows (WinBGIm): `-lbgi -lgdi32 -lcomdlg32 -luuid -loleaut32 -lole32` plus static linking, so the `.exe` runs on any Windows 10/11 PC without extra DLLs. Linux (SDL_bgi): `-lSDL_bgi -lSDL2 -lm`, or libgraph: `-lgraph`. macOS: SDL_bgi via Homebrew SDL2. Custom library prefixes receive a matching `-Wl,-rpath` automatically. |
+| **Terminal input & output** | Compiled programs run in the integrated terminal, so `cin` / `scanf` / `getch()` input and `cout` / `printf` output work as expected alongside the graphics window. One persistent terminal is reused for every run, and `Ctrl+Alt+S` stops the running program. |
+| **Setup Doctor** | Probes the compiler and every candidate graphics library by actually compiling a `graphics.h` program, then reports precisely what is missing with per-OS fixes and an optional automatic repair. |
+| **Compiler errors in the Problems panel** | g++ output is parsed into clickable file:line diagnostics with inline squiggles, so compile errors are visible where you edit. |
+| **Status bar indicator** | `✓ graphics.h` / `⚠ graphics.h` at a glance; switches to *Compiling…* and to a click-to-stop control while a program runs. Clicking it when idle runs the Setup Doctor. |
+| **Messy-settings healing** | Quoted paths, `%ENV%` / `$VAR` / `~` variables, trailing slashes, directory-instead-of-executable paths, missing `.exe` suffixes and stale include/lib directories from old installs are all recognized and corrected or routed to the one-click fix. |
+| **Clean exit** | Before Complete Run Setup changes anything it records your original settings, and **uninstalling the extension restores them automatically** — the Code Runner executor, the F5 launch configuration, the build task and the compiler paths are reverted surgically, leaving your own settings untouched. Updates and normal shutdowns never modify anything. The `graphics.h: Restore Original Settings` command performs the same undo at any time. |
+| **Activity-bar panel** | A dashboard with a live Ready / Not ready status pill, a one-click Complete Run Setup button while anything is missing, the full action grid, and all bundled programs as cards with one-click **Run** and **Open** buttons — responsive, and consistent in light and dark themes. |
+| **Cheat sheet** | A searchable `graphics.h` function reference with 81 entries across 11 sections — parameters, angle and color conventions, fill patterns, fonts, keyboard codes, mouse events and classic usage patterns for every function. |
+| **31 example programs** | Classic starters, Turbo C++ classics (`bar3d`, `pieslice`, `sector`, `floodfill`, fill patterns, viewport clipping, sprite animation), a `conio.h` keyboard drawing pad, demonstration programs (fireworks, solar system, aquarium, helicopter, starfield) with terminal input (DDA line), plus the **Computer Graphics Lab**: Coordinate Viewer, Pixel Inspector, DDA, Bresenham line & circle, Midpoint Ellipse, 2D Transformations and Cohen–Sutherland Clipping. |
+| **Snippets** | `gfxprog`, `gfx-anim`, `gfx-mouse`, `gfx-kbd`, `gfx-text`, `gfx-bar`. |
+| **Celebrations** (optional) | A confetti animation over the panel on every successful compilation and a short show when the panel first opens each session; compile errors produce a full-screen error overlay presenting the first error messages. Includes an optional Fireworks Simulator. Everything is bundled locally (no network requests) and can be disabled with `graphics-h-runner.celebrations.enabled`. |
 
-## Install
+## Installation
 
 **From the VS Code Marketplace (recommended):** search for **"graphics.h Runner"** in the
-Extensions view (`Ctrl+Shift+X`), or from the command line:
+Extensions view (`Ctrl+Shift+X`), or:
 
 ```bash
 code --install-extension mythos0-labs.graphics-h-runner
 ```
 
-**From a GitHub release:** download `graphics-h-runner-1.4.3.vsix` from
-[Releases](../../releases), then in VS Code: `Extensions view → ⋯ → Install from VSIX…`
-(or `code --install-extension graphics-h-runner-1.4.3.vsix`).
+**From a GitHub release:** download `graphics-h-runner-<version>.vsix` from
+[Releases](../../releases), then in VS Code: `Extensions view → ⋯ → Install from VSIX…`.
 
-**From source:**
+## Quick start — from zero to a graphics window
+
+1. Open the Command Palette and run **`graphics.h: Complete graphics.h Run Setup`**.
+2. The setup prepares each platform automatically:
+   - **Windows** — installs MinGW-w64 g++ via `winget` (a checksum-verified WinLibs download is
+     used as a fallback), then downloads `graphics.h`, `winbgim.h` and `libbgi.a` into the
+     extension folder and wires the paths. No administrator rights required.
+   - **Linux** — prints one copy-paste command for the system packages (`build-essential`,
+     `libsdl2-dev`), then automatically downloads, patches, builds and installs SDL_bgi into
+     `~/.graphics-h-runner/` — no `sudo` required for the library — and wires the include/lib
+     paths into the settings.
+   - **macOS** — `xcode-select` and Homebrew SDL2 guidance, then the same automatic user-prefix
+     SDL_bgi build.
+3. When the setup reports **VERIFIED: graphics.h is ready**, open any `.cpp` file that includes
+   `<graphics.h>` and press `Ctrl+Alt+R` — or use F5, Ctrl+Alt+N (Code Runner) or Ctrl+Shift+B.
+   The setup has connected all of them to the same toolchain. If you open a different folder
+   later, run `graphics.h: Enable native VS Code run` once in that folder.
+
+## Compile & run — six ways
+
+| Method | Key | What it does |
+|---|---|---|
+| Compile & Run | `Ctrl+Alt+R` | Compiles with the correct BGI flags and runs the program |
+| Compile | `Ctrl+Alt+B` | Compiles only |
+| Build task | `Ctrl+Shift+B` | Default build task with the same flags; errors appear in the Problems panel |
+| Run and Debug | `F5` | Compiles and launches the active file through the built-in `graphics-h` adapter |
+| Code Runner | `Ctrl+Alt+N` | Compiles and runs in the terminal with the same flags (configured by Complete Run Setup) |
+| Run button dropdown | — | Compile & Run / Compile entries beside the editor's run button |
+
+## Commands
+
+| Command | Description |
+|---|---|
+| `graphics.h: Compile & Run` | Compile (with BGI flags when needed) and run |
+| `graphics.h: Compile` | Compile only |
+| `graphics.h: Run Last Build` | Run the previously built binary (recompiles automatically if the source is newer) |
+| `graphics.h: Stop Running Program` | Stop the running graphics program (`Ctrl+Alt+S`) |
+| `graphics.h: Complete graphics.h Run Setup` | The full bootstrap — compiler, library, verification, native-run wiring |
+| `graphics.h: Enable native VS Code run (F5, Ctrl+Alt+N, Ctrl+Shift+B)` | Connect the standard VS Code run paths to the toolchain for the current workspace |
+| `graphics.h: Restore Original Settings (undo Complete Run Setup)` | Restore every setting the setup changed — also runs automatically on uninstall |
+| `graphics.h: Setup Doctor — Check Environment` | Probe the compiler and graphics libraries, with fixes |
+| `graphics.h: Copy Compile Command` | Copy the exact compiler command line for the active file |
+| `graphics.h: Open Examples Folder` | Copy all 31 examples into the workspace and reveal them |
+| `graphics.h: Open Example Program` | Open any bundled sample in the editor |
+| `graphics.h: Cheat Sheet` | Open the searchable `graphics.h` function reference |
+| `graphics.h: Fireworks Simulator` | Full-screen fireworks simulation (same button or Esc stops it) |
+
+## The graphics.h panel
+
+The **graphics.h Runner** icon in the Activity Bar opens the panel:
+
+1. **Status** — a live Ready / Not ready / Checking pill with the extension version, and a
+   one-click **Complete Run Setup** button while anything is missing.
+2. **Actions** — Compile & Run, Complete Run Setup, Setup Doctor, Compile, Run Last Build,
+   Stop Running Program and Copy Compile Command, always visible.
+3. **Example Programs** — 23 program cards, each with **Run** (open, compile and launch in one
+   click) and **Open** (open the source in the editor) buttons, in a scrollable, collapsible
+   section.
+4. **Computer Graphics Lab** — 8 lab programs covering the classic computer-graphics course
+   algorithms, each printing its algorithm's step table in the terminal.
+5. **Cheat sheet** — the `?` button in the view title bar opens the searchable function
+   reference inside the panel.
+
+## Extension settings
+
+| Setting | Default | Description |
+|---|---|---|
+| `graphics-h-runner.compilerPath` | `g++` | Compiler executable (full path if not on PATH) |
+| `graphics-h-runner.autoDetect` | `true` | Apply BGI flags only when `graphics.h` is detected |
+| `graphics-h-runner.linuxLibrary` | `auto` | `auto` / `sdl_bgi` / `libgraph` |
+| `graphics-h-runner.staticLinkWindows` | `true` | Statically link the C/C++ runtimes on Windows so the `.exe` runs anywhere |
+| `graphics-h-runner.extraIncludePaths` | `[]` | Extra `-I` directories |
+| `graphics-h-runner.extraLibPaths` | `[]` | Extra `-L` directories |
+| `graphics-h-runner.extraCompilerArgs` | `[]` | Extra compiler arguments, e.g. `["-std=c++17", "-Wall"]` |
+| `graphics-h-runner.showStatusBarItem` | `true` | Show the status bar indicator |
+| `graphics-h-runner.celebrations.enabled` | `true` | Confetti on compile success, a first-open show per session, and the full-screen error overlay on compile errors |
+| `graphics-h-runner.restoreSettingsOnUninstall` | `true` | Restore the settings Complete Run Setup changed when the extension is uninstalled |
+
+## Telemetry
+
+This extension collects **crash and error reports** through [Sentry](https://sentry.io) so that
+setup failures on any machine can be diagnosed and fixed without requiring users to collect logs.
+
+- **Consent** — nothing is sent unless VS Code telemetry is enabled (`Settings → Telemetry →
+  Telemetry Level` is not `Off`). Changing that setting enables or disables collection
+  immediately.
+- **Collected** — uncaught exceptions and unhandled rejections from this extension, with stack
+  traces, breadcrumbs (for example "compile failed", "Complete Setup step: install-winbgim") and
+  tags such as OS, CPU architecture, VS Code version and the detected graphics library.
+- **Never collected** — your source code, file contents, compiler output, file names or anything
+  you type. User-identifying path segments are scrubbed from every event before it leaves the
+  machine.
+
+## Tested and verified
+
+Every bundled sample is compiled with the extension's own flag-building code, executed on a
+virtual display and screenshot-verified by an automated pipeline (`test/run-tests.js`; machine-
+readable results in `test/test-results.json`). Current results — **31/31 passing**:
+
+| Sample | Verdict | What it renders |
+|---|---|---|
+| `01_hello_graphics.cpp` | ✅ PASS | basic shapes and text |
+| `02_shapes_showcase.cpp` | ✅ PASS | bars, circles, ellipses, flood fill, 16-color palette |
+| `03_bouncing_ball.cpp` | ✅ PASS | animated ball with trail |
+| `04_moving_car.cpp` | ✅ PASS | scrolling road scene |
+| `05_tricolor_flag.cpp` | ✅ PASS | flag with sun emblem |
+| `06_fractal_tree.cpp` | ✅ PASS | recursive fractal tree |
+| `07_mandelbrot.cpp` | ✅ PASS | full Mandelbrot set (~120k pixels) |
+| `08_mouse_paint.cpp` | ✅ PASS | mouse painting with color cycling |
+| `09_keyboard_paddle.cpp` | ✅ PASS | paddle game with keyboard control |
+| `10_smiley_wink.cpp` | ✅ PASS | animated smiley with blinking eyes |
+| `11_bouncing_balls.cpp` | ✅ PASS | seven balls with ghost trails |
+| `12_fireworks.cpp` | ✅ PASS | shell-based fireworks over a city skyline |
+| `13_solar_system.cpp` | ✅ PASS | orbiting planets, moon and comet |
+| `14_aquarium.cpp` | ✅ PASS | fish, bubbles and swaying seaweed |
+| `15_rainbow_spiral.cpp` | ✅ PASS | growing rainbow spiral |
+| `16_helicopter.cpp` | ✅ PASS | helicopter over a night skyline |
+| `17_sunset.cpp` | ✅ PASS | sunset with rising stars and moon |
+| `18_starfield.cpp` | ✅ PASS | warp-speed starfield |
+| `19_dda_line.cpp` | ✅ PASS | DDA line from terminal input, pixel by pixel |
+| `20_turbo_tour.cpp` | ✅ PASS | `bar3d`, `pieslice`, `sector`, fill patterns |
+| `21_viewport_bounce.cpp` | ✅ PASS | viewport clipping with two panes |
+| `22_sprite_ride.cpp` | ✅ PASS | `getimage`/`putimage` sprite animation |
+| `23_conio_paint.cpp` | ✅ PASS | `conio.h` keyboard drawing pad |
+| `24_coordinate_viewer.cpp` | ✅ PASS | grid, axes, origin and coordinate labels |
+| `25_pixel_inspector.cpp` | ✅ PASS | mouse x/y and color readout |
+| `26_dda_lab.cpp` | ✅ PASS | DDA algorithm with step table |
+| `27_bresenham_line_lab.cpp` | ✅ PASS | all-integer Bresenham line, all octants |
+| `28_bresenham_circle_lab.cpp` | ✅ PASS | midpoint circle with 8-way symmetry |
+| `29_midpoint_ellipse_lab.cpp` | ✅ PASS | midpoint ellipse, region 1 / region 2 |
+| `30_2d_transforms_lab.cpp` | ✅ PASS | translate / rotate / scale with real matrices |
+| `31_cohen_sutherland_clipping.cpp` | ✅ PASS | outcode-based line clipping |
+
+The setup engine is tested end to end as well: fresh SDL_bgi download → patch → build →
+user-prefix install → compile → verified render.
+
+More rendered output: [`docs/screenshots/`](docs/screenshots/)
+
+![Brick-breaker sample](docs/screenshots/09_keyboard_paddle.png)
+
+![Fireworks sample](docs/screenshots/12_fireworks.png)
+
+## Per-OS details
+
+### Windows
+
+1. **Compiler** — Complete Setup installs MinGW-w64 g++ via `winget`
+   (`BrechtSanders.WinLibs.POSIX.UCRT`, per-user, no administrator prompt) and wires it into
+   `graphics-h-runner.compilerPath`. Without winget, it downloads the WinLibs UCRT archive
+   directly (sha256-verified) and extracts it with built-in PowerShell. Manual route:
+   [winlibs.com](https://winlibs.com/). The setup also detects incompatible 32-bit compilers
+   (for example legacy MinGW.org 6.3.0, which cannot link the 64-bit graphics library) and
+   replaces them with a compatible 64-bit toolchain automatically.
+2. **WinBGIm** — downloaded into the extension folder automatically. Manual route: copy
+   `graphics.h` + `winbgim.h` into `<MinGW>\include` and `libbgi.a` into `<MinGW>\lib`.
+3. **Compile command** —
+   `g++ main.cpp -o main.exe -static -lbgi -lgdi32 -lcomdlg32 -luuid -loleaut32 -lole32 -static-libgcc -static-libstdc++`
+   (fully static — the `.exe` runs on any Windows 10/11 machine).
+
+### Linux
+
+1. `sudo apt install build-essential libsdl2-dev` (or the `dnf` / `pacman` equivalents — Complete
+   Setup detects your package manager).
+2. **SDL_bgi** — downloaded, patched, built and installed into `~/.graphics-h-runner/usr/`
+   automatically (no `sudo`). Manual route: build from
+   [sourceforge.net/projects/sdl-bgi](https://sourceforge.net/projects/sdl-bgi/).
+3. **Compile command** — `g++ main.cpp -o main -lSDL_bgi -lSDL2 -lm`
+4. *Tip:* if a self-installed SDL_bgi 3.x shows a black window, set `SDL_BGI_RATE=auto` or call
+   `refresh()` after drawing — Complete Setup's build already includes the fix.
+
+### macOS
+
+1. `xcode-select --install`, then `brew install sdl2`.
+2. **SDL_bgi** — the same automatic user-prefix build as Linux.
+
+## Troubleshooting
+
+- **"could not run g++"** — install a compiler (see per-OS details above) or set
+  `graphics-h-runner.compilerPath` to its full path.
+- **The Doctor reports a failed library probe** — read the printed fix, or choose
+  **Fix automatically**.
+- **Black window on a self-installed SDL_bgi 3.x** — set `SDL_BGI_RATE=auto`, or re-run Complete
+  Setup to install the patched build.
+- **`winget` missing on Windows** — use the WinLibs download that Complete Setup offers.
+- **`undefined reference to 'circle' / 'getmaxx' / …` at link time** — the compiler cannot use
+  the installed graphics library. The bundled WinBGIm is 64-bit; the legacy 32-bit MinGW.org g++
+  silently skips it. Re-run **Complete Run Setup**, which detects the incompatibility and
+  installs a compatible 64-bit compiler automatically.
+- **The full-screen error overlay appears on a failed build** — it shows the first compiler
+  error messages so the failure explains itself; click or press Esc to dismiss it instantly.
+
+## Development
 
 ```bash
 git clone https://github.com/mythos0/graphics-h-runner.git
@@ -78,215 +271,10 @@ npx @vscode/vsce package --no-dependencies
 code --install-extension graphics-h-runner-*.vsix
 ```
 
-## From zero to running (60 seconds)
-
-1. Open the Command Palette → **`graphics.h: Complete graphics.h Run Setup`**.
-2. Watch it work:
-   - **Windows** — installs MinGW-w64 g++ via `winget` (manual WinLibs fallback provided), then
-     downloads `graphics.h`, `winbgim.h`, `libbgi.a` into the extension folder and wires the paths.
-     No copying into MinGW directories, no admin rights.
-   - **Linux** — prints one copy-paste command for the system packages (`build-essential`,
-     `libsdl2-dev` — password prompts work in the terminal), then **automatically** downloads,
-     patches (two known upstream header fixes + screen-presentation fix), builds and installs
-     SDL_bgi into `~/.graphics-h-runner/` — **no sudo needed for the library** — and wires
-     include/lib/rpath into the extension settings.
-   - **macOS** — `xcode-select` / `brew install sdl2` guidance, then the same automatic
-     user-prefix SDL_bgi build.
-3. When it says **VERIFIED: graphics.h is ready**, open any `.cpp` with `<graphics.h>` and press
-   `Ctrl+Alt+R` — or use **F5**, **Ctrl+Alt+N** (Code Runner) or **Ctrl+Shift+B**: the setup has wired
-   them all to the same toolchain (run `graphics.h: Enable native VS Code run` again any time you open a new folder).
-
-## Commands & keybindings
-
-| Command | Key | Description |
-|---|---|---|
-| `graphics.h: Compile & Run` | `Ctrl+Alt+R` | Compile (with BGI flags when needed) and run |
-| `graphics.h: Compile` | `Ctrl+Alt+B` | Compile only |
-| `graphics.h: Run Last Build` | — | Run the previously built binary |
-| `graphics.h: Stop Running Program` | `Ctrl+Alt+S` | Kill the last launched graphics window |
-| `graphics.h: Setup Doctor` | — | Probe compiler + libraries, offer fixes |
-| `graphics.h: Complete graphics.h Run Setup` | — | The 0 → running bootstrap (compiler included) |
-| `graphics.h: Enable native VS Code run (F5, Ctrl+Alt+N, Ctrl+Shift+B)` | — | Wire the standard VS Code run paths to the same toolchain (also runs automatically inside Complete Setup) |
-| `graphics.h: Restore Original Settings (undo Complete Run Setup)` | — | Put every setting the setup changed back exactly as it was before (also runs automatically on uninstall) |
-| `graphics.h: Copy Compile Command` | — | Copy the exact compiler command line for the active file |
-| `graphics.h: Open Examples Folder` | — | Copy all 31 examples into the workspace and reveal them |
-| `graphics.h: Open Example Program` | — | Open any bundled sample as `filename.cpp` (panel) |
-| *F5 / Run and Debug* | `F5` | **Run graphics.h program** — compile & launch the active file |
-
-### The activity-bar panel
-
-The **graphics.h Runner** icon in the Activity Bar opens the modern panel:
-
-1. **Hero + live status** — a Ready / Not ready / Checking pill with the
-   **version chip beside it**; while anything is missing, a one-click
-   **🚀 Complete Run Setup** button appears.
-2. **Actions grid** — Compile & Run, Complete Run Setup, Setup Doctor, Compile,
-   Run Last Build, Stop Running Program, Copy Compile Command. The actions
-   **stay put** while you browse programs.
-3. **Example Programs** — 23 emoji cards (tagged `classic`/`fun`/`math`/`interactive`)
-   in a **collapsed-by-default section**: tap the header to expand, and the list
-   **scrolls inside its own container** like a second tab below the actions
-   (the choice is remembered). **▶ Run** opens the file, compiles and launches
-   the graphics window in one click; **Open** just opens the source as
-   `graphics-h-programs/<name>.cpp`.
-4. **Computer Graphics Lab** — 8 more lab cards in their own section below:
-   Coordinate Viewer, Pixel Inspector, DDA Line, Bresenham Line, Bresenham
-   Circle, Midpoint Ellipse, 2D Transformations and Cohen-Sutherland Clipping
-   (tagged `lab`), each printing its algorithm's step table in the terminal.
-5. **Footer** — the **DIU badge sits on the exact right side** of the
-   Powered-by credit line.
-
-The panel header is icon-free since v1.5.9: the **? cheat-sheet button moved
-to the view title bar** (the icons beside "Graphics.h CPP Program Runner
-One-click setup" — setup, doctor and fireworks simulator — were removed, and
-the single **?** icon in their place opens/toggles the searchable cheat sheet:
-11 sections, 81 entries — a **pure, detailed graphics.h function reference**
-(setup & lifecycle, coordinates, pixels & lines, shapes & curves, colors,
-filling, text, keyboard, mouse, images & animation, viewports & pages — with
-parameter meanings, angle conventions, color/fill/font constants and classic
-usage patterns for every function).
-
-## Extension settings
-
-| Setting | Default | Description |
-|---|---|---|
-| `graphics-h-runner.compilerPath` | `g++` | Compiler executable (full path for MinGW if not on PATH) |
-| `graphics-h-runner.autoDetect` | `true` | Apply BGI flags only when `graphics.h` is detected |
-| `graphics-h-runner.linuxLibrary` | `auto` | `auto` / `sdl_bgi` / `libgraph` |
-| `graphics-h-runner.staticLinkWindows` | `true` | `-static-libgcc -static-libstdc++` on Windows |
-| `graphics-h-runner.extraIncludePaths` | `[]` | Extra `-I` dirs (auto-managed by Full Setup) |
-| `graphics-h-runner.extraLibPaths` | `[]` | Extra `-L` dirs (auto-managed by Full Setup) |
-| `graphics-h-runner.extraCompilerArgs` | `[]` | e.g. `["-std=c++17", "-Wall"]` |
-| `graphics-h-runner.showStatusBarItem` | `true` | Show the BGI status indicator |
-| `graphics-h-runner.celebrations.enabled` | `true` | Confetti over the panel on compile success, 5 s School Pride across the panel on its first open of each session, the full-screen error overlay (giant ✗ + big-font compiler error headers) on compile errors (the Fireworks Simulator button always works) |
-| `graphics-h-runner.restoreSettingsOnUninstall` | `true` | Clean-exit guarantee: the settings Complete Run Setup changes are snapshotted and restored automatically when the extension is uninstalled. Turn off to keep the setup after uninstalling. |
-
-## Telemetry (automatic error collection)
-
-This extension collects **crash and error reports automatically** through
-[Sentry](https://sentry.io) so setup failures on any PC can be found and fixed
-without asking anyone to copy-paste logs. What this means in practice:
-
-- **Consent first** — nothing is ever sent unless VS Code telemetry is enabled
-  (`Settings → Telemetry → Telemetry Level` is not `Off`). Toggling that setting
-  enables or disables collection immediately; there is no separate opt-in.
-- **What is collected** — uncaught exceptions and unhandled rejections, plus
-  context that makes them diagnosable: stack traces, breadcrumbs (e.g. “compile
-  failed”, “Complete Setup step: install-winbgim”), and tags such as OS, CPU
-  architecture, VS Code version and the detected graphics library.
-- **What is never collected** — your source code, file contents, compiler
-  output, file names from outside the breadcrumbs above, or anything you type.
-  User-identifying path segments (`C:\Users\<name>`, `/home/<name>`) are
-  scrubbed from every event before it leaves your machine.
-
-## Tested & verified
-
-Every sample below was compiled with the extension's exact flag-building code
-(`out/buildArgs.js`), executed on a virtual display (Xvfb) and **screenshot-verified** by an
-automated pipeline (`test/run-tests.js`, results in `test/test-results.json`):
-
-| Sample | Verdict | Rendered content |
-|---|---|---|
-| `01_hello_graphics.cpp` | ✅ PASS (clean self-exit, exit 0) | shapes + text |
-| `02_shapes_showcase.cpp` | ✅ PASS | bars, circles, ellipses, flood fill, 16-color palette |
-| `03_bouncing_ball.cpp` | ✅ PASS | animated ball with trail |
-| `04_moving_car.cpp` | ✅ PASS | scrolling road scene |
-| `05_tricolor_flag.cpp` | ✅ PASS | flag with sun emblem (52% coverage) |
-| `06_fractal_tree.cpp` | ✅ PASS | recursive fractal tree |
-| `07_mandelbrot.cpp` | ✅ PASS | full Mandelbrot set, 120k putpixels |
-| `08_mouse_paint.cpp` | ✅ PASS | mouse painting + color cycling |
-| `09_keyboard_paddle.cpp` | ✅ PASS | paddle game with keyboard control |
-| `10_smiley_wink.cpp` | ✅ PASS | bobbing smiley that winks + hearts |
-| `11_bouncing_balls.cpp` | ✅ PASS | 7 colorful balls with ghost trails |
-| `12_fireworks.cpp` | ✅ PASS | rockets + particle bursts over a city |
-| `13_solar_system.cpp` | ✅ PASS | orbiting planets, moon, comet |
-| `14_aquarium.cpp` | ✅ PASS | fish, bubbles, swaying seaweed (63% coverage) |
-| `15_rainbow_spiral.cpp` | ✅ PASS | growing rainbow spiral |
-| `16_helicopter.cpp` | ✅ PASS | heli over night skyline, spinning rotor |
-| `17_sunset.cpp` | ✅ PASS | sun sets, stars + moon rise, lighthouse (60% coverage) |
-| `18_starfield.cpp` | ✅ PASS | warp-speed starfield streaks |
-
-Screenshots: [`docs/screenshots/`](docs/screenshots/) — e.g. the Mandelbrot render:
-
-![Mandelbrot rendered by graphics.h Runner](docs/screenshots/07_mandelbrot.png)
-
-![Brick-breaker sample rendered by graphics.h Runner](docs/screenshots/09_keyboard_paddle.png)
-
-![Fireworks sample rendered by graphics.h Runner](docs/screenshots/12_fireworks.png)
-
-A **frame-tearing bug in the bundled SDL_bgi presentation path** was found by the screenshot
-analyzer during testing (frames captured mid-draw showed bricks without the paddle/ball) and
-fixed in the library build the Setup Engine produces: presentation is now event-driven — one
-full-frame present per `delay()`/`kbhit()`/`getch()` call instead of one per drawing primitive.
-
-The **setup engine** is tested end-to-end as well: fresh SDL_bgi download → patch → build →
-user-prefix install → compile → verified render, plus WinBGIM asset validation
-(`scripts/test_setup_engine.js` in the dev workspace).
-
-## Per-OS setup (what Complete Setup automates)
-
-### Windows
-1. **Compiler — now fully automatic**: Complete Setup runs
-   `winget install -e --id BrechtSanders.WinLibs.POSIX.UCRT` for you (per-user portable install,
-   no admin prompt), then finds the new `g++.exe` and wires it into `graphics-h-runner.compilerPath`.
-   No winget? It downloads the WinLibs UCRT zip directly (sha256-verified) into the extension
-   folder and extracts it with built-in PowerShell — still no admin rights. Missing compiler on
-   run? You get a one-click **"Complete Run Setup"** prompt. Manual route: [winlibs.com](https://winlibs.com/).
-2. **WinBGIM** — Complete Setup downloads it into the extension folder automatically. Manual route:
-   copy `graphics.h` + `winbgim.h` into `<MinGW>\include` and `libbgi.a` into `<MinGW>\lib`.
-3. The extension compiles with:
-   `g++ main.cpp -o main.exe -static -lbgi -lgdi32 -lcomdlg32 -luuid -loleaut32 -lole32 -static-libgcc -static-libstdc++`
-   (fully statically linked — the `.exe` runs on any Windows 10/11 machine, no DLL hunting).
-
-### Linux
-1. `sudo apt install build-essential libsdl2-dev` (or `dnf`/`pacman` equivalents — Complete Setup
-   detects your package manager).
-2. **SDL_bgi** — Complete Setup downloads it, applies the compatibility patches, builds and installs
-   it into `~/.graphics-h-runner/usr/` automatically (no sudo). Manual route: build from
-   [sourceforge.net/projects/sdl-bgi](https://sourceforge.net/projects/sdl-bgi/) with
-   `make && sudo make install`.
-3. The extension compiles with: `g++ main.cpp -o main -lSDL_bgi -lSDL2 -lm`
-4. *Tip:* if your own SDL_bgi 3.x build shows a black window, that is the upstream "fast mode"
-   presentation quirk — set `SDL_BGI_RATE=auto` or call `refresh()` after drawing. Complete
-   Setup's build has this fixed automatically.
-
-### macOS
-1. `xcode-select --install` then `brew install sdl2`.
-2. SDL_bgi — same automatic user-prefix build as Linux.
-
-## Troubleshooting
-
-- **"could not run g++"** — install a compiler (see per-OS above) or set
-  `graphics-h-runner.compilerPath` to its full path.
-- **Doctor says a library probe failed** — read the printed fix, or click **Fix automatically**.
-- **Compiled but the window is black on a self-installed SDL_bgi 3.x** — set
-  `SDL_BGI_RATE=auto`, or re-run Complete Setup so the patched build is installed for you.
-- **Windows: `winget` missing** — use the WinLibs manual download shown by Complete Setup.
-- **`undefined reference to \`circle\` / \`getmaxx\` / ...` at link time** — your compiler cannot
-  use the installed graphics library. The bundled WinBGIM is **64-bit**: the legacy 32-bit
-  MinGW.org g++ (`g++ -dumpmachine` → `mingw32`) silently skips it and every graphics symbol
-  comes out unresolved. Re-run **Complete Run Setup** — since v1.5.6 it detects the
-  incompatibility and installs a compatible 64-bit MinGW-w64 compiler automatically.
-- **The error overlay shows my compiler errors in big type** — a failed build plays a short
-  full-screen error overlay (giant ✗ + the first error headers, 5 s) so the failure explains
-  itself; click or press Esc to dismiss it instantly.
-
-## Publishing notes (for maintainers)
-
-Publishing is fully automated from GitHub:
-
-- **Tag a release** — push a `vX.Y.Z` tag → [`.github/workflows/release.yml`](.github/workflows/release.yml)
-  runs smoke tests, packages the .vsix, publishes to the VS Code Marketplace and creates a GitHub
-  Release with the asset.
-- **Bump the version on main** — [`.github/workflows/auto-publish.yml`](.github/workflows/auto-publish.yml)
-  detects the `package.json` version change on every push to `main`, and if it changed: builds,
-  publishes to the Marketplace, tags `vX.Y.Z` and creates the GitHub Release automatically.
-- Both need one repository secret: **`VSCE_PAT`** — an Azure DevOps PAT with
-  *Organization: all accessible organizations* and *Scopes: Marketplace → Manage*
-  (create at dev.azure.com → User settings → Personal access tokens).
-- Marketplace listing page: <https://marketplace.visualstudio.com/items?itemName=mythos0-labs.graphics-h-runner>
-- OpenVSX (optional): `npx ovsx publish --pat $OPEN_VSX_TOKEN`.
+The test suites live in `test/` — unit tests for the pure modules, a screenshot-verified sample
+pipeline (`run-tests.js`) and real-host end-to-end tests that exercise activation, the native run
+integration and the uninstall restore in a live VS Code instance.
 
 ## License
 
-[MIT](LICENSE) — © 2026 MYTHOS0
+[MIT](LICENSE)

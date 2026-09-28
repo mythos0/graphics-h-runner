@@ -136,16 +136,16 @@ check('activity-bar view is declared type=webview with stable id', () => {
   assert.ok(src.includes("VIEW_ID = 'graphics-h-runner.programs'"), 'provider must target the same view id');
 });
 
-check('v1.5.0: 8 lab catalog entries + renamed extension surfaces', () => {
+check('v1.5.14: 8 lab catalog entries + professional naming contract', () => {
   const lab = loadProgramCatalog(ROOT).filter((p) => p.lab);
   assert.strictEqual(lab.length, 8, 'lab count ' + lab.length);
   const ids = new Set(lab.map((p) => p.id));
   for (const id of ['coordview', 'pixelinspector', 'ddalab', 'bresenhamline', 'bresenhamcircle', 'midpointellipse', 'transforms', 'clipping']) {
     assert.ok(ids.has(id), 'missing lab id: ' + id);
   }
-  assert.strictEqual(pkg.displayName, 'graphics.h Runner. One-click Setup', 'displayName wrong');
-  assert.strictEqual(pkg.contributes.viewsContainers.activitybar[0].title, 'Graphics.h CPP Program Runner One-click setup', 'container title wrong');
-  assert.strictEqual(pkg.contributes.views['graphics-h-runner'][0].name, 'Graphics.h CPP Program Runner One-click setup', 'view name wrong');
+  assert.strictEqual(pkg.displayName, 'graphics.h Runner — One-Click Setup', 'displayName wrong');
+  assert.strictEqual(pkg.contributes.viewsContainers.activitybar[0].title, 'graphics.h Runner', 'container title wrong');
+  assert.strictEqual(pkg.contributes.views['graphics-h-runner'][0].name, 'graphics.h Runner', 'view name wrong');
   assert.strictEqual(pkg.contributes.views['graphics-h-runner'][0].type, 'webview', 'view type drifted');
 });
 

@@ -1,1085 +1,309 @@
-# ChangeLog
+# Changelog
 
-## 1.5.13 — 2026-09-28
+All notable changes to this extension are documented in this file.
 
-The clean-exit guarantee — *"when uninstalling this extension, all settings
-(changed by this extension) should be reverted as they were before running of
-Complete Run Setup."* Uninstalling now puts every modified setting back,
-automatically, exactly as it was before the first setup ran.
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-### Added
-- **Automatic restore on uninstall.** Before Complete Run Setup (or the
-  standalone native-run command) touches ANYTHING, the extension snapshots
-  the original global-scope values of every setting it may write
-  (`graphics-h-runner.*` toolchain paths, `code-runner.executorMap.cpp`,
-  `code-runner.runInTerminal/saveFileBeforeRun/fileDirectoryAsCwd`,
-  `C_Cpp.default.compilerPath`) plus the raw text of the workspace's
-  `.vscode/settings.json`, `launch.json` and `tasks.json` into its private
-  storage. The FIRST snapshot wins — re-running setup never overwrites the
-  true "before" state. When the extension is uninstalled, `deactivate()`
-  restores everything automatically.
-- **Real-uninstall detection (not just any shutdown).** `deactivate()` also
-  fires on plain VS Code shutdowns and on extension updates — the new
-  discriminator reads the extensions folder's `.obsolete` marker, verifies
-  no other version of the extension is still installed (an update marks the
-  old version too) and cross-checks `extensions.json` against stale
-  markers. Shutdowns and updates never touch user settings; only a genuine
-  uninstall does. Any doubt = no action.
-- **Surgical restore, not scorched earth.** Only what the extension
-  actually wrote is reverted, per key: our `code-runner.executorMap.cpp` is
-  removed while the user's own `javascript`/`java`/`c` executors and every
-  unrelated setting survive; a key that did not exist before is removed
-  again, a key that did is restored to its exact previous value. In
-  `launch.json`/`tasks.json` our entry is removed (or the user's pre-setup
-  same-name entry restored); a file the setup created is deleted again once
-  nothing else remains, and user entries added AFTER the setup survive. An
-  original file that was not valid JSONC is restored byte-exact. Stale
-  `*.graphics-h-backup` corrupt-file copies are cleaned up too.
-- **`graphics.h: Restore Original Settings (undo Complete Run Setup)`.**
-  The same restore, on demand, behind a modal confirmation — this is also
-  the safety net for the one gap VS Code cannot close: uninstalling while
-  VS Code is CLOSED runs no extension code, so the manual command (or a
-  later reinstall + re-setup) handles it. A full restore deletes the
-  snapshot; a partial failure keeps it for a retry.
-- **Doctor visibility.** Every Setup Doctor run now prints a `cleanup`
-  line: whether a snapshot is armed, when it was taken, how many settings
-  and files are recorded, and how to undo early.
-- **Opt-out setting.** `graphics-h-runner.restoreSettingsOnUninstall`
-  (default `true`) — turn it off to keep the setup after uninstalling.
-- **Scope note.** The Windows "make global" step copies files into the
-  MinGW toolchain folders and edits the user PATH — that is system state
-  outside VS Code's settings and is deliberately NOT auto-deleted (removing
-  files from a compiler installation automatically is too risky); it is
-  documented here and visible in the Doctor output.
+## [1.5.14] — 2026-09-28
 
-### Tests
-- New `test/uninstall-restore-tests.js` (28 checks): first-wins snapshot,
-  write bookkeeping merge discipline, per-key surgical semantics (executor
-  sub-key restore/remove, scalar restore/unset, corrupt-original
-  byte-exact fallback), launch/tasks entry semantics, a FULL LIFECYCLE
-  round-trip in a real temp directory (snapshot → setup writes → restore →
-  exact pre-state + backup cleanup), partial-failure backup retention, and
-  the uninstall/update/shutdown discriminator including stale-marker
-  protection. The battery caught one real bug pre-release (executor values
-  are strings, not objects — the restore wrongly emptied the map).
-- New real-host `test/e2e-uninstall-restore.js` + host tests: a REAL VS Code
-  with a REAL user-seeded workspace — `nativeRunSetup` writes everything,
-  `restoreOriginalSettings` reverts `settings.json` surgically (user keys
-  and the user's own launch config + default build task intact), restores a
-  global setting through the real Settings API, deletes the snapshot; a
-  second restore is a clean no-op.
-- `registry-tests` pins the new command + kill-switch default; full battery
-  green (registry, native-run 25, pc-states 61, globalize 22, setup-download
-  21, deps-audit 14, win-header 31/31, celebrate, health, tree-model,
-  view-tests, smoke-view, diagnostics, robust); `run-tests` 31/31 on real
-  SDL_bgi; `e2e-activation` PASS (16 commands); `e2e-native-run` PASS.
-
-## 1.5.12 — 2026-09-28
-
-Major update — the native VS Code run integration. Complete Run Setup now
-modifies the **main VS Code run options** so a normal C++ run behaves exactly
-like the extension's own Ctrl+Alt+R: **F5** and **Code Runner's Ctrl+Alt+N**
-compile with the same compiler, the same graphics.h flags and the same
-auto-detect logic, without touching our buttons.
-
-### Added
-- **F5 runs through the graphics.h engine.** Complete Run Setup (and a new
-  `graphics.h: Enable native VS Code run (F5, Ctrl+Alt+N, Ctrl+Shift+B)`
-  command) writes `.vscode/launch.json` with the extension's own `graphics-h`
-  debug type as the first (default) configuration. Pressing F5 on any `.cpp`
-  compiles it through the exact `resolvePlan` pipeline used by Ctrl+Alt+R —
-  graphics.h auto-detect, the right `-l` list, static linking on Windows —
-  with **zero external debugger extensions** required.
-- **Ctrl+Alt+N (Code Runner) works with the same toolchain.** The setup
-  writes `code-runner.executorMap.cpp` with the identical compile + link
-  command and switches Code Runner to **run-in-terminal** (so `cin`/`scanf`
-  /`getch` input works exactly like the extension's runner terminal),
-  `saveFileBeforeRun` and `fileDirectoryAsCwd` included. Plain C++ files
-  without `graphics.h` run through the same template — the graphics libraries
-  are harmless when unused. When Code Runner is not installed, the summary
-  says so and the standalone command offers a one-click install path.
-- **Ctrl+Shift+B builds with the same flags.** `.vscode/tasks.json` gains a
-  `graphics.h: build active file` default build task with the full flag set
-  and the `$gcc` problemMatcher, so compiler errors land in the Problems
-  panel. If the user already has their own default build task, ours is
-  registered without stealing the default.
-- **IntelliSense alignment.** `C_Cpp.default.compilerPath` is pointed at the
-  very same g++ the extension validated, so the C/C++ extension (when
-  installed) squiggle-checks against the real toolchain.
-
-### Fixed
-- **Merge-safe writes — user content can never be lost.** Every artifact
-  (`launch.json`, `tasks.json`, `settings.json`) is parsed as tolerant JSONC
-  and merged: existing configurations/tasks/settings survive, only entries
-  with our own name/label are replaced (idempotent re-runs never duplicate),
-  and an unparseable file is backed up (`*.graphics-h-backup`) before it is
-  rebuilt. Settings keys owned by extensions that are not installed (the
-  Settings API refuses those with "not a registered configuration") are
-  written directly into `.vscode/settings.json` — inert until the owner
-  exists, exactly what the user would have typed.
-- The Complete Setup success message and summary now report the native-run
-  wiring ("NATIVE RUN: …" lines), and a failure there is a classified,
-  non-fatal Sentry warning (`native run config failed`) instead of a crash.
-
-### Tests
-- New `test/native-run-tests.js` (25 checks): JSONC tolerance, executor
-  templates (Windows quoting/-static/WinBGIm list, Linux rpath/SDL list), a
-  lib-drift guard against `buildArgs`, tasks/launch/settings merge semantics,
-  and a **REAL compile+run** of the generated executor string on the sandbox
-  toolchain — both a graphics.h program and a plain C++ program.
-- New real-host e2e `test/e2e-native-run.js` + `test/native-run-host-tests.js`:
-  a real VS Code with a real folder open — verifies every written `.vscode`
-  artifact, starts a REAL debug session **from the written launch.json**
-  (the exact F5 path: compiled + launched + terminated), and proves
-  idempotency and user-content preservation across re-runs.
-- Full battery green: registry, pc-states 61, globalize 22, setup-download 21,
-  deps-audit 14, diagnostics, health, tree-model, celebrate, cheat-dom,
-  cheat-sheet, smoke-view, view-tests, robust battery, win-header 31/31;
-  run-tests **31/31** on real SDL_bgi; `e2e-activation` PASS (15 commands).
-
-## 1.5.11 — 2026-09-28
-
-Sentry triage release: both unresolved production issues fixed at the root —
-the blind "make-global probe failed" warning (GRAPHICS-H-RUNNER-F, 15 events
-across two users on Windows) and the "Channel has been closed" unhandled
-rejection (GRAPHICS-H-RUNNER-G).
-
-### Fixed
-- **Corrupt WinBGIm downloads can no longer poison the setup**
-  (GRAPHICS-H-RUNNER-F). `installWinbgimWindows` used to write ANY bytes that
-  arrived with HTTP 200 — an HTML error page, a truncated transfer, an
-  AV-mangled binary — as `libbgi.a` and log "install-winbgim ok"; every later
-  probe then failed with "undefined reference" while users re-ran Full Setup
-  a dozen times. Every artifact is now validated BEFORE it lands on disk
-  (libbgi.a: `!<arch>` magic + plausible size; headers: real C++ text that
-  declares graphics functions, never HTML) and a rejected download fails the
-  install loudly with the exact reason. One clean automatic re-download runs
-  when a 64-bit compiler still cannot link the fresh archive.
-- **The link probe now runs immediately after the WinBGIm install**, at the
-  step that caused the problem. Failures are classified into actionable
-  advice (32-bit toolchain → install WinLibs MinGW-w64; 64-bit + undefined
-  refs → corrupt library, re-download; missing graphics.h → include paths)
-  and pushed into the setup summary — no more discovering it three steps
-  later as a vague global-setup warning.
-- **"Channel has been closed" crash eliminated** (GRAPHICS-H-RUNNER-G). VS
-  Code disposes the extension's output channel on window reload, extension
-  update or host shutdown while pending async continuations (setup flow,
-  timers) still want to write — `appendLine`/`show` then threw and surfaced
-  as an unhandled promise rejection. All channel access now goes through
-  guarded helpers that no-op after the channel is gone, and the dispose hook
-  arms the guard the moment VS Code closes the channel.
-- **Setup verify failures are now visible to error reporting.** The final
-  "verify" step used to produce only a breadcrumb — the Windows 11 machine
-  that failed it 12 times generated ZERO events. A failed verify now captures
-  a warning with the failing check details and the compiler architecture.
-- **The "make-global probe failed" warning now carries its root cause:**
-  compiler architecture (`-dumpmachine`) plus the probe's own stderr tail,
-  both PII-scrubbed (usernames → `~`), instead of only the platform tag.
-
-### Verified
-- new `setup-download-tests.js` (21 checks): valid/truncated/HTML/empty/
-  garbage artifacts against the validator, corrupt-download installs that
-  must throw without writing a bad `libbgi.a`, the failure classifier's
-  32-bit/corrupt/include-path messages, and PII scrubbing of the new
-  diagnostic extras
-- full battery green: smoke-view, view-tests, pc-states 61, registry,
-  celebrate, health, tree-model, globalize 22, deps-audit 14, robust,
-  win-header 31/31, setup-download 21
-- run-tests 31/31 on real SDL_bgi (Xvfb); real-host e2e PASS (activation,
-  14 commands incl. cheatSheet, run paths, fallback tree, fireworks toggle)
-
-## 1.5.10 — 2026-09-28
-
-The cheat sheet becomes a pure, detailed graphics.h function reference.
+Documentation and listing refresh.
 
 ### Changed
-- **Only function docs remain — everything else removed** (user request: "keep
-  only detailed doc for easy to learn all functions of graphics.h, remove
-  other things"). The v1.5.9 sheet mixed reference with extension content; the
-  four non-function sections are gone: "The screen coordinate system" blurb,
-  "Run it here" (Ctrl+Alt+R/B/S extension shortcuts), "Celebrations" (panel
-  effects) and "Common pitfalls". The footer's library note is trimmed to just
-  the Esc hint. What remains is **11 sections / 81 entries — every one a real
-  graphics.h function** with a detailed, learning-oriented description:
-  parameter meanings, pixel/degree conventions (angles counterclockwise from 3
-  o'clock), the 16 standard colors, all 13 fill patterns, the 5 BGI fonts,
-  getch() extended-key codes (0/224 + 72/80/75/77), malloc(imagesize(...))
-  sprite patterns, mouse event kinds, and the WinBGIm/SDL_bgi extras (COLOR
-  macro, swapbuffers, multi-window, resize events). Coverage now spans the
-  whole practical BGI surface: setup & lifecycle (13), coordinates (5), pixels
-  & lines (8), shapes & curves (12), colors (8), filling (5), text (7),
-  keyboard (3), mouse (5), images & animation (7), viewports & pages (8).
-  The useful pitfall knowledge was folded into the function docs it belongs to
-  (outtextxy char buffers, getch() to keep the window open, putpixel slowness,
-  floodfill leak warning, state-before-draw fill notes).
-- The reference card is wider (640px) to give the longer descriptions room.
+- Rewritten documentation: the README now contains a complete feature list, a six-way run reference, the full command and settings tables, per-platform details and the complete 31-program test results.
+- This changelog was rewritten in a standard, user-focused format.
+- Clarified naming: the extension display name is now "graphics.h Runner — One-Click Setup" and the activity-bar view is titled "graphics.h Runner".
+- More precise descriptions for the Celebrations and Clean-exit settings.
 
-### Verified
-- cheat-dom-tests extended: the parsed overlay must contain ZERO extension
-  content, all 11 section titles + 81 entries verbatim (escaped), spot-checks
-  across every section; smoke-view / cheat-sheet / registry suites updated;
-  real-Chromium browser check re-run (11 categories visible in the scroll
-  area, all 81 entries rendered, search/Esc/× flows pass, mobile layout OK);
-  real-host e2e re-run (the view-title ? command opens the sheet in a live
-  VS Code webview).
+## [1.5.13] — 2026-09-28
 
-## 1.5.9 — 2026-09-28
-
-The cheat sheet rebuild + a cleaner view title bar.
-
-### Fixed
-- **The cheat sheet is whole again** (the "cheatsheet just showing 'WinBGIM is
-  the default on Windows; SDL_bgi on Linux/macOS. Press Esc to close.'"
-  report): one stray `</div>` in the hand-written overlay closed the scroll
-  area after the third category, so the remaining eight categories became
-  stray children of the card (clipped invisible) and the footer line escaped
-  the card entirely — the only thing left on screen WAS the footer. The
-  overlay is now **rendered from a data source** (`CHEAT_SECTIONS`: 12
-  sections, 60 entries) by a three-template generator whose markup is
-  balanced by construction — this bug class is structurally impossible now.
-  The new **Common pitfalls** section documents the five mistakes that cost
-  students the most (setfillstyle before bar, outtextxy char buffers, getch()
-  at the end, the cleardevice→draw→delay rhythm, putpixel slowness), and the
-  Keyboard section gained the Esc-key code (27). Verified in a real Chromium:
-  all 12 sections laid out inside the scroll area, footer inside the card,
-  search/Esc/× all work — and the same checks FAIL on the shipped 1.5.8 page.
-  New `cheat-dom-tests.js` parses the rendered page with a browser-style
-  stack parser (16 checks) so no hand-edited markup can regress it.
-- **The "no search results" row could never appear**: it resets
-  `style.display = ''`, which falls back to the stylesheet's own
-  `display: none`. It now force-shows (`block`) when a query matches nothing.
-
-### Changed
-- **The view title bar is clean: one ? icon** (user request: "remove the 3
-  icons, and move there the ? icon from activity panel inside header"). The
-  setup / doctor / fireworks-simulator icons beside "Graphics.h CPP Program
-  Runner One-click setup" are gone, and the **? cheat-sheet button moved out
-  of the panel header into their place** — the new
-  `graphics.h: Cheat Sheet` command opens (and toggles) the sheet inside the
-  panel, parks the request until the webview has booted, and even restores
-  the real panel first when the fallback recovery page is showing. The panel
-  header itself now carries no buttons. The fallback list view keeps its
-  recovery actions.
-
-## 1.5.8 — 2026-09-28
-
-The "?" cheat-sheet reliability release, from the report
-"? button click not opens cheatsheet" — plus the requested showpiece:
-a proper graphics.h fireworks simulation leading the Example Programs.
+Clean exit — uninstalling the extension restores every setting that Complete Run Setup changed.
 
 ### Added
-- **The Fireworks Show sample is now a real shell-based simulation**
-  (and it now leads the Example Programs list): a pool of up to six
-  shells, each a gravity-driven rocket that leans as it climbs and
-  drops spark trail, exploding near its apex into one of four burst
-  types — peony, ring, willow (long golden droop) and crackle (white
-  flicker finale). Particles fly with velocity, air drag, gravity,
-  shimmer and fade to embers; the burst flashes and lights up the city
-  below; stars twinkle, windows lit, moon with craters. Written with
-  crash-safe classic BGI primitives only (no putpixel), so the SAME
-  source compiles and runs against WinBGIm on Windows and SDL_bgi on
-  Linux/macOS — verified in both gates.
+- **Automatic restore on uninstall.** Before Complete Run Setup (or the native-run command) changes anything, the extension records the original values of every setting it may write — the toolchain paths, the Code Runner executor and related options, and the workspace's `settings.json`, `launch.json` and `tasks.json`. Uninstalling the extension puts all of them back automatically. The first snapshot is preserved as the true "before" state, so re-running the setup never overwrites it.
+- **Surgical restore.** Only what the extension actually wrote is reverted: your own settings, your own launch configurations and build tasks, and executors for other languages are never touched. A setting that did not exist before is removed again; a file that was not valid configuration markup is restored byte-exact; files the setup created are deleted only once nothing user-owned remains in them.
+- **`graphics.h: Restore Original Settings`** performs the same restore on demand, behind a confirmation. This also covers the one case VS Code cannot handle automatically: uninstalling while VS Code is closed.
+- The Setup Doctor now reports whether a snapshot is armed, when it was taken and what it contains.
+- New setting `graphics-h-runner.restoreSettingsOnUninstall` (default: enabled) to keep the setup in place after uninstalling if you prefer.
 
-### Fixed
-- **The ? cheat sheet can no longer be destroyed by a panel re-render.**
-  Forensics: the sheet's click wiring was always correct (verified with a
-  scripted click inside a REAL VS Code webview — it opens, Esc closes,
-  re-click reopens), but the panel re-renders its whole page on doctor,
-  busy, celebration and visibility events — and those re-renders cluster
-  right after the panel opens, exactly when a user first clicks ?. A
-  click landing during the page swap was swallowed; an open sheet was
-  wiped the instant the new page arrived. The fix, both sides:
-  - **The sheet survives re-renders**: its open state is persisted in
-    the webview's saved state (merged with the section toggles, never
-    wiping them) and every fresh page re-opens the sheet on boot, then
-    re-syncs the host.
-  - **The host stops swapping the page while you read**: while the sheet
-    reports open, the panel DEFERS full re-renders (doctor/busy/
-    celebration updates) and delivers them the moment the sheet closes.
-    The liveness watchdog's retry/fallback recovery still bypasses this
-    gate — recovery must always win.
-- Verified three ways: a new `cheat-sheet-tests.js` contract suite, a
-  real-Chromium behavioral harness (open → simulated re-render → sheet
-  still open → Esc → re-render → stays closed, with the host sync
-  messages asserted), and a scripted click inside a live VS Code
-  webview driven over CDP.
+### Notes
+- The Windows "make global" step copies library files into the compiler folders and edits the user PATH. That is system state outside VS Code's settings and is intentionally not modified by the automatic restore; the Setup Doctor makes it visible.
 
-## 1.5.7 — 2026-09-28
+## [1.5.12] — 2026-09-28
 
-The celebrations get their right home, per user feedback: the full-screen
-overlay TAB is reserved for the things that deserve to interrupt you —
-errors and fireworks — while the happy stuff moves INSIDE the
-graphics.h activity-bar panel, over its full screen.
-
-### Changed
-- **Celebrations surface split** (the full-screen new tab no longer opens
-  for happy moments):
-  - **Success confetti** and the **School Pride first-open show** now rain
-    across the **full activity-panel screen only** — no editor tab opens,
-    the panel stays fully clickable (the canvas is click-through), and
-    the show replays safely across the panel's busy/doctor re-renders
-    (every re-render bakes the remaining show time).
-  - **The compile-error overlay and the Fireworks Simulator keep their
-    full-screen new tab, unchanged** — a giant shaking red ✗ with big
-    compiler error headers for failures, and the festive simulator on
-    demand.
-- New in-panel renderer `media/celebrate-panel.js`: its own fixed
-  full-panel canvas rendered on the MAIN thread
-  (`confetti.create(canvas, { useWorker: false })`), so the panel's strict
-  CSP needs no blob:-Worker and no Worker-hiding dance; the canvas
-  removes itself after the show. `confetti.browser.js` (vendored) and
-  `celebrate.js` are untouched engines — only the routing changed:
-  `celebrate()` now dispatches confetti/schoolpride to the panel and
-  error/fireworks to the overlay host.
-- README + settings description updated to describe where each
-  celebration lives. Browser-verified in real Chromium under Xvfb: both
-  panel shows paint real particles, clicks pass through the canvas, and
-  the canvas is removed after the show.
-
-
-## 1.5.6 — 2026-09-27
-
-The "works on ANY PC" release, built from a real user's Full Setup log:
-their PC ran the legacy 32-bit **MinGW.org GCC 6.3.0**, Full Setup declared
-everything READY, and then EVERY program failed to build with a wall of
-`undefined reference to \`getmaxx\` / \`circle\` / \`line\` ...` linker errors.
-
-### Fixed
-- **Full Setup can no longer bless a compiler that cannot build graphics.h**
-  (the reported "ran Full Setup, still doesn't run" failure):
-  - The Setup Doctor / Full Setup probe now **compiles AND links** a probe
-    that actually calls a graphics function. The old probe never referenced
-    any BGI symbol, so the linker never touched `libbgi.a` and a 32-bit
-    compiler silently skipping the 64-bit archive looked "READY".
-  - Full Setup detects a **BGI-incompatible compiler** up front (a real
-    link probe when WinBGIM is installed, `g++ -dumpmachine` architecture
-    sniffing otherwise) and **installs a compatible 64-bit MinGW-w64
-    compiler automatically** (winget, then the sha256-verified direct
-    download fallback) — with the reason spelled out in the step detail.
-  - Compiler discovery now **prefers x86_64 candidates** and rejects
-    32-bit ones when replacing a known-incompatible compiler, so the old
-    MinGW.org g++ can never be re-selected after an install.
-  - When a real build fails with undefined references to graphics symbols,
-    the extension now explains it in one line and offers **one click to
-    Complete Run Setup** instead of a wall of linker errors.
-  - The doctor's compiler line shows the target architecture, e.g.
-    `— target mingw32 (32-bit: cannot link the bundled 64-bit graphics library — run Full Setup)`.
-- **The "global" setup can no longer write to the wrong folders**: a bare
-  `g++` compiler path (compiler found on PATH, never stored absolutely)
-  was resolved against the extension host's working directory, producing
-  garbage targets — on the reported PC it tried `E:\include`, added the
-  VS Code install dir (`E:\Microsoft VS Code`) to the user PATH and
-  littered the drive root. The compiler is now resolved through the OS
-  (`where`/`which`), validated to really exist in its bin folder, and the
-  whole global step is SKIPPED with a clear message when it cannot be.
-
-### Changed
-- **The snow-on-errors animation is replaced by a relatable ERROR overlay**:
-  a giant shaking red \u2717, a big "COMPILE ERROR" headline, the compiler's
-  first error messages in **big monospace type** on red panels, a pulsing
-  red vignette and a red-ember rain — 5 s (click or Esc to dismiss), so
-  the failure actually explains itself.
-
-
-## 1.5.5 — 2026-09-27
-
-Celebrations release, plus the definitive fix for the fallback-view bug
-("Actual command not found, wanted to execute graphics-h-runner.runSample /2").
-
-### Fixed
-- **The fallback list view works on every click, after every restart**:
-  the tree passed the clicked program to `graphics-h-runner.runSample` via
-  `TreeItem.command.arguments`. VS Code's command converter caches such
-  argument-carrying tree commands under a throwaway delegate id
-  (`graphics-h-runner.runSample /N`); when the extension host restarts (or
-  the cache entry is disposed) while the list is still rendered, EVERY
-  click fails with "Actual command not found, wanted to execute
-  graphics-h-runner.runSample /2". Each program now has its own STATIC
-  per-node command id (`graphics-h-runner.runSample.<id>`, registered on
-  every activation) and the tree passes NO arguments — the failure mode is
-  structurally impossible now. A new `registry-tests.js` suite pins the
-  whole command graph (contributed ↔ registered ↔ referenced) and a
-  real-host E2E exercises two per-node click paths + the fireworks toggle.
+Native VS Code run integration — the standard run paths now use the same toolchain as the extension.
 
 ### Added
-- **🎉 Confetti on every successful compilation** — a full-screen overlay
-  plays the canvas-confetti "Realistic Look" burst (vendored
-  catdad/canvas-confetti v1.9.4, ISC). Click anywhere or Esc to dismiss;
-  auto-closes after ~3 s. Never fires for failed builds.
-- **❄️ Snow for 3 seconds on compile errors** — a failed build is
-  impossible to miss: a snowfall overlay drops for exactly 3 s while the
-  Problems panel carries the clickable errors.
-- **🎒 School Pride on the first panel open of every session** — the
-  canvas-confetti "School Pride" side cannons play for 5 s the first time
-  the graphics.h panel opens after each desktop/window start.
-- **🎆 Fireworks Simulator action button** — the festive (animated
-  violet→pink→amber) button in the action grid launches the full-screen
-  [Fireworks Simulator](https://github.com/troyxun/fireworks-simulator)
-  (MIT — simulation by Caleb Miller, cmiller.tech; vendored verbatim with
-  its settings menu: shell type/size, quality, sky lighting, scale,
-  auto-launch, finale mode, long exposure). The SAME button turns into
-  **Stop Fireworks** while the show runs (also on the view title bars, in
-  the palette, via Esc, or the red in-overlay Stop button). Audio is
-  silently skipped when the streamed samples are unavailable — the show
-  itself never depends on them.
-- **`graphics-h-runner.celebrations.enabled`** setting (default `true`)
-  gates the automatic celebrations; the Fireworks Simulator button always
-  works.
+- **F5 runs graphics.h programs.** Complete Run Setup writes a launch configuration using the extension's built-in debug adapter: pressing F5 on a C++ file compiles it with the same flags as Ctrl+Alt+R — graphics.h auto-detection included — and opens the graphics window. No additional debugger extension is required.
+- **Ctrl+Alt+N (Code Runner) uses the same compiler and flags**, and runs in the terminal so `cin` / `scanf` / `getch()` input works. Plain C++ files without `graphics.h` run through the same configuration.
+- **Ctrl+Shift+B builds with the same flags** through a default build task that routes compiler errors into the Problems panel. If you already have your own default build task, it stays the default.
+- **IntelliSense alignment**: `C_Cpp.default.compilerPath` points at the compiler the setup validated.
+- New command **`graphics.h: Enable native VS Code run`** applies the wiring to any workspace at any time.
 
+### Fixed
+- Every configuration write is merge-safe and idempotent: existing launch configurations, tasks and settings are preserved, re-running never duplicates entries, and an unparseable file is backed up before being rebuilt.
+
+## [1.5.11] — 2026-09-28
+
+Setup reliability.
+
+### Fixed
+- Corrupt library downloads can no longer poison the setup: every downloaded file is validated before it is written to disk (a truncated transfer, an HTML error page or an antivirus-mangled binary now fails immediately with the exact reason), followed by one clean automatic re-download.
+- The link verification runs immediately after the library install instead of several steps later, and its failures are classified into specific, actionable advice (32-bit toolchain, corrupt library, missing include paths).
+- Fixed "Channel has been closed" errors that could appear as unhandled rejections when VS Code reloaded the window or shut down while work was in flight.
+- Setup verification failures are now reported to error telemetry with diagnostic details; all diagnostics are scrubbed of user-identifying paths.
+
+## [1.5.10] — 2026-09-28
+
+The cheat sheet becomes a pure `graphics.h` function reference.
+
+### Changed
+- The cheat sheet now contains only detailed function documentation: 81 entries in 11 sections covering the whole practical BGI surface — setup and lifecycle, coordinates, pixels and lines, shapes and curves, colors, filling, text, keyboard, mouse, images and animation, viewports and pages — with parameter meanings, angle and color conventions, fill patterns, fonts, extended-key codes and classic usage patterns for every function. General extension content was removed, and the useful notes were folded into the function entries they belong to.
+
+## [1.5.9] — 2026-09-28
+
+Cheat sheet reliability and a cleaner view title bar.
+
+### Fixed
+- A stray markup tag could leave the cheat sheet showing nothing but its footer line. The sheet is now generated from a structured data source with balanced markup by construction, so this class of bug cannot recur, and the "no search results" hint displays correctly.
+### Changed
+- The view title bar now shows a single **?** button that opens and toggles the cheat sheet; the panel header itself carries no buttons.
+
+## [1.5.8] — 2026-09-28
+
+Fireworks showpiece and cheat-sheet resilience.
+
+### Added
+- The Fireworks Show example is now a shell-based simulation: up to six rockets that lean as they climb and drop spark trails, exploding near their apex into peony, ring, willow and crackle bursts over a city skyline with twinkling stars and a moon. Written with portable primitives, so the same source runs on the Windows and Linux/macOS graphics libraries.
+### Fixed
+- The ? cheat sheet survives panel re-renders: its open state is persisted across page rebuilds, the panel stops swapping the page while you are reading the sheet, and recovery flows still take priority over the gate.
+
+## [1.5.7] — 2026-09-28
+
+Celebrations refinements.
+
+### Changed
+- Success confetti and the first-open show of each session now play inside the graphics.h panel itself — no editor tab opens and the panel stays fully interactive.
+- The compile-error overlay and the Fireworks Simulator keep their full-screen presentation.
+
+## [1.5.6] — 2026-09-27
+
+Works on any PC.
+
+### Fixed
+- The setup can no longer declare a compiler "ready" that cannot build graphics.h programs. The verification now compiles **and links** a real graphics program; 32-bit compilers that cannot use the bundled 64-bit graphics library are detected up front and replaced with a compatible 64-bit MinGW-w64 toolchain automatically — with the reason explained in the setup summary.
+- The "make global" step resolves the compiler through the OS and validates it before writing anything; when it cannot, the step is skipped with a clear message instead of writing to wrong folders.
+- Linker errors about unresolved graphics functions now explain the cause in one line and offer one-click Complete Run Setup instead of a wall of linker errors.
+### Changed
+- A failed build shows a brief full-screen error overlay with the first compiler messages in large type (click or Esc to dismiss), replacing the snowfall animation.
+
+## [1.5.5] — 2026-09-27
+
+Celebrations and a definitive fix for the fallback list view.
+
+### Fixed
+- Program clicks in the fallback list view keep working after extension-host restarts. Each program now has its own static command registration instead of cached dynamic command arguments, which removes the failure mode entirely.
+### Added
+- **Confetti** on every successful compilation, **snowfall** for three seconds on compile errors, and a **School Pride** show the first time the panel opens each session.
+- **Fireworks Simulator** action button: a full-screen simulation with a complete settings menu (shell type and size, quality, sky lighting, auto-launch, finale mode), stoppable from the same button, the view title bar, or Esc.
+- New setting `graphics-h-runner.celebrations.enabled` (default: enabled) gates the automatic effects; the Fireworks Simulator button always works.
 ### Security
-- Both overlay pages run under the same CSP discipline as the panel:
-  `default-src 'none'`, nonce'd scripts + the webview cspSource only,
-  zero remote requests. canvas-confetti's blob:-URL Worker renderer is
-  deliberately bypassed (Worker hidden during library load, restored
-  immediately after) — the strict CSP would block blob: workers and leave
-  the transferred OffscreenCanvas blank; the main-thread renderer is used
-  instead (verified pixel-for-pixel in a real Chromium).
+- All overlay pages run under a strict content-security policy with nonce'd scripts and zero network requests; the bundled confetti engine renders on the main thread where the policy requires it.
 
-## 1.5.4 — 2026-09-27
+## [1.5.4] — 2026-09-27
 
-Stability release driven by two stubborn student reports: programs still
-"quit on their own", and the terminal died right after "Press any key to
-close this window . . .".
+Predictable program lifecycle.
 
 ### Fixed
-- **Programs quit ONLY when YOU quit them**: v1.5.3 still exited every
-  sample on ANY keypress — a stray keystroke in the terminal (or keys
-  typed while the program was compiling, sitting in the console buffer)
-  killed the running program instantly, which looked exactly like an
-  auto-quit. All 31 samples now ignore random keys entirely; only ESC
-  (or Q) quits, as printed on each window. Verified with synthetic-key
-  probes: x/z/c/Enter/Space no longer stop anything; ESC and Q do.
-- **The terminal never closes itself again**: the v1.5.1/1.5.3 pause
-  wrapper ("Press any key to close this window . . .") was the terminal's
-  ROOT process, so answering it ended the wrapper and VS Code closed the
-  whole terminal — output and all. That wrapper is gone entirely.
+- Programs quit only when you quit them: stray keystrokes (typed while compiling or after a run) no longer stop a running program. ESC — or Q — quits, as printed in each window.
+- The terminal no longer closes itself after a run; the pause wrapper that caused it was removed entirely.
+### Changed
+- One persistent "graphics.h Runner" terminal is created once and reused for every run; its output history stays available until you close it. Stop (Ctrl+Alt+S) interrupts the program and lands back at the prompt of the same terminal, ready for the next run.
+
+## [1.5.3] — 2026-09-27
+
+Classroom-driven usability.
 
 ### Changed
-- **One persistent terminal for everything**: all programs now run in a
-  single "graphics.h Runner" terminal that is created once and REUSED for
-  every run — the program is started by typing its command line into the
-  live shell, so the shell never exits and the terminal (with all output
-  from every run) stays open until YOU close it. Stop (Ctrl+Alt+S) sends
-  Ctrl+C to the program and lands back at the prompt of the same
-  terminal — the same terminal is immediately ready for the next run.
-- The "Press any key" pause is gone — the returning prompt IS the visible
-  "program finished" signal, and every printf/cout line stays above it.
+- Programs run until you quit them; the automated-demo self-exit timers were removed from all samples.
+- The terminal stays open with all output after a program finishes.
+### Added
+- Stale-binary protection: Run recompiles automatically when the source file is newer than the compiled binary, so editing a program and pressing Run never shows the previous version.
+- The runner terminal is named after the running program, so several terminals are easy to tell apart.
 
-## 1.5.3 — 2026-09-27
+## [1.5.2] — 2026-09-27
 
-UX release driven by real student sessions: programs used to vanish on their
-own, and the terminal died together with its output.
+Correctness.
 
-### Changed
-- **Programs run until YOU quit them**: every sample carried a ~10-14 s
-  self-exit timer (a leftover from the automated test battery), so windows
-  closed themselves mid-demo. All 31 samples now run until the user quits
-  (ESC / any key, as printed on each window). The automated battery ends
-  runs through a `BGI_AUTOEXIT_MS` hook instead — real users never set it.
-- **The terminal stays open with all output**: graphics programs were
-  spawned as the terminal's root process, so when the program ended the
-  terminal closed with it and every printf/cout line was lost. ALL programs
-  now run through the pause wrapper — "[program finished with exit code N]"
-  + press-a-key — exactly like plain console programs since 1.5.1.
+### Fixed
+- The two mouse lab programs failed to compile on Windows: the WinBGIm header declares `getmouseclick` with reference arguments while SDL_bgi uses pointers. Both samples now compile against both libraries.
+- The Windows dependency audit no longer warns about missing DLLs on fully static builds: it now reads the executable's real import table instead of scanning raw byte strings, so only DLLs the Windows loader must resolve are reported.
+
+## [1.5.1] — 2026-09-27
+
+Production hardening and global setup.
+
+### Fixed
+- Plain C++ programs no longer fail to start with exit code -1073741515 (missing runtime DLL): every Windows build is now fully statically linked and imports only DLLs that ship with Windows itself.
+- Plain console programs pause after finishing so their output can be read before the terminal closes.
+- The run environment includes the compiler's bin directory, so even a non-statically-linked executable finds its runtime libraries.
+- Benign command cancellations are no longer reported as errors.
+### Added
+- **Global setup** (Windows): the graphics library is copied into the compiler toolchain's own include/lib folders and the compiler's bin directory is appended to your user PATH, verified by a compile that uses no extension settings — so graphics.h then compiles in **any** terminal or IDE without this extension. The Setup Doctor proves it with a "global (no flags)" check. Linux/macOS instructions for a system-wide SDL_bgi are printed as well.
+
+## [1.5.0] — 2026-09-27
+
+Computer Graphics Lab and cheat sheet.
 
 ### Added
-- **Stale-binary protection**: the Run command now recompiles automatically
-  when the source file is newer than the .exe — editing a program and
-  pressing Run no longer silently shows the PREVIOUS version.
-- The runner terminal is named after the program (e.g. "graphics.h Runner
-  — 24_coordinate_viewer"), so several terminals are easy to tell apart.
-- The cheat sheet documents the quit behavior (ESC / any key;
-  Ctrl+Alt+S force-stops).
+- **Computer Graphics Lab** — eight screenshot-verified lab programs covering the classic course algorithms: Coordinate Viewer (grid, axes, origin, snap), Pixel Inspector (mouse x/y + color readout), DDA Line, Bresenham Line, Bresenham Circle, Midpoint Ellipse, 2D Transformations and Cohen–Sutherland Clipping — 31 examples in total. Each lab prints its algorithm's step table in the terminal.
+- **Cheat sheet** — a searchable graphics.h reference behind the **?** button in the panel, closing with Esc or a backdrop click.
+### Changed
+- The extension and its views are renamed to describe the one-click setup more clearly.
 
-## 1.5.2 — 2026-09-27
+## [1.4.9] — 2026-09-27
 
-Correctness release driven by real student-machine reports: the two mouse
-lab programs failed to compile on Windows, and the new dependency audit
-scared users with false warnings on perfectly static builds.
-
-### Fixed
-- **24_coordinate_viewer / 25_pixel_inspector failed to compile on
-  Windows** ("invalid conversion from int* to int"): the WinBGIm header
-  declares `void getmouseclick(int kind, int& x, int& y)` with REFERENCE
-  arguments, but the samples passed `&mx, &my`. SDL_bgi on Linux (a C
-  library) accepts pointers, WinBGIm does not — so the samples ran in the
-  Linux test battery yet died on Windows. Both samples now carry an
-  `#ifdef _WIN32` shim and compile against BOTH libraries.
-- **Dependency-audit false positives on fully static builds**: the 1.5.1
-  audit string-scanned the .exe, so inert DLL-name strings inside the
-  statically linked MinGW runtime (e.g. `libgcc_s_dw2-1.dll`,
-  `libgcj-16.dll`) triggered the "-1073741515" warning even though the
-  program was fully self-contained. The audit now parses the REAL PE
-  import table (standard + delay-load descriptors); only DLLs the Windows
-  loader must resolve are reported. Static builds audit clean and silent;
-  non-PE or truncated files no longer produce warnings either.
-
-### Added
-- **Windows-header release gate** (`test/win-header-tests.js`): all 31
-  samples are syntax-checked against the exact WinBGIm headers the
-  extension installs on Windows (`-fsyntax-only -D_WIN32` with the real
-  graphics.h/winbgim.h). Windows-only API mismatches are now caught
-  before release — this gate would have flagged the getmouseclick bug
-  that shipped in 1.5.0/1.5.1.
-
-## 1.5.1 — 2026-09-27
-
-Production-hardening release: fixes the "failed to launch (exit code
--1073741515)" family of bugs reported by students, makes plain console
-programs usable again, and ships the #1 requested feature — a **global**
-setup so graphics.h compiles in ANY terminal or IDE without this extension.
-
-### Fixed
-- **Exit code -1073741515 (0xC0000135 DLL not found) for plain C++
-  programs**: v1.5.0 statically linked only graphics builds, so a normal
-  `cin`/`cout` program produced an .exe that needed `libstdc++-6.dll` /
-  `libgcc_s_seh-1.dll` and died before `main()` on PCs without MinGW in
-  PATH. **Every** Windows build is now fully static — the exe only imports
-  DLLs that ship with Windows itself.
-- **Plain console programs "not running"**: they printed and exited in
-  milliseconds, closing the terminal before the output could be read.
-  They now run through a pause wrapper (`[program finished with exit code
-  N]` + press-any-key); graphics programs keep the direct launch.
-- The run environment now carries the **compiler's** bin dir (previously
-  the program's own folder was added by mistake), so even a non-static
-  exe finds its runtime DLLs.
-- Post-compile **dependency audit**: every Windows build is scanned for
-  DLL imports that are not part of base Windows; a problem surfaces at
-  compile time with an actionable message instead of a hex code at run
-  time.
-- Sentry: benign VS Code command cancellations ("Canceled") are no longer
-  reported as errors.
-
-### Added
-- **Global setup (major)**: "Complete graphics.h Run Setup" now makes the
-  toolchain serve the WHOLE machine:
-  - WinBGIM (`graphics.h`, `winbgim.h`, `libbgi.a`) is copied into the
-    compiler toolchain's own `include`/`lib` folders — MinGW resolves them
-    with **zero -I/-L flags**.
-  - The compiler's `bin` folder is appended to your **user PATH**
-    (registry `HKCU\Environment\Path`, `REG_EXPAND_SZ` preserved,
-    idempotent) with a best-effort `WM_SETTINGCHANGE` broadcast.
-  - Verified by a **no-flags probe compile**: `g++ probe.cpp -lbgi ...`
-    must succeed without any extension settings before the step reports
-    success.
-  - A `graphics-h-anywhere.txt` readme with the universal command lands
-    in the toolchain root.
-  - The Setup Doctor gained a **"global (no flags)"** check that proves
-    `g++ main.cpp -o main.exe -lbgi -lgdi32 -lcomdlg32 -luuid -loleaut32
-    -lole32` works in ANY terminal (cmd.exe, Dev-C++, Code::Blocks, ...)
-    without the extension.
-  - Linux/macOS: the Setup summary now prints the exact `sudo cp` +
-    `ldconfig` commands to make SDL_bgi global as well.
-
-
-## 1.5.0 — 2026-09-27
-
-The Computer Graphics Lab release: a dedicated lab section for the classic
-course algorithms, a searchable graphics.h cheat sheet, and a renamed,
-self-describing extension.
-
-### Added
-- **Computer Graphics Lab section** (below Example Programs) with 8 new
-  screenshot-verified programs — **31 examples total**:
-  - **Coordinate Viewer** — the screen coordinate system live: grid,
-    axes, origin marker, coordinate labels every 100 px and a 10-px snap;
-    toggle each feature with `G C O A S`, click to plot points (printed
-    in the terminal), the lecture point `(250,100)` always shown.
-  - **Pixel Inspector** — move the mouse to read any pixel's `X`, `Y`,
-    color name and classic VGA `RGB`; clicking prints a copy-ready
-    `X=.., Y=.., RGB=(..), COLOR=..` line in the terminal.
-  - **DDA Line Lab** — every DDA step plotted on a grid with the
-    `line()` reference underneath and the full step table in the terminal.
-  - **Bresenham Line Lab** — the all-integer algorithm (all octants)
-    with the decision-variable table.
-  - **Bresenham Circle Lab** — midpoint circle, 8-way symmetry, step
-    table, `circle()` reference.
-  - **Midpoint Ellipse Lab** — region 1 / region 2 in 4 quadrants.
-  - **2D Transformations Lab** — translate / rotate / scale a house with
-    real 2-D matrices (printed to the terminal on every keypress).
-  - **Cohen-Sutherland Clipping Lab** — outcodes (TBRL), verdicts and
-    clipped segments against a clip window.
-- **"?" cheat-sheet button** beside the panel title: a searchable
-  graphics.h reference (setup & lifecycle, shapes, colors & filling,
-  text, keyboard, mouse, animation, viewport) with Esc / backdrop close.
-- The fallback list view mirrors the lab as its own section.
+Panel polish and deep robustness work.
 
 ### Changed
-- **Extension renamed** on the Marketplace to **"graphics.h Runner.
-  One-click Setup"**; the activity-bar view title is now **"Graphics.h
-  CPP Program Runner One-click setup"** (was "graphics.h Runner" +
-  "graphics.h Programs").
-- Both panel section toggles now share the webview state safely
-  (toggling one no longer resets the other after a re-render).
+- The version chip sits beside the Ready status pill; the Open Examples Folder button left the panel grid (the command remains available); the footer was cleaned up with the university badge on the right.
+### Fixed
+- The status bar indicator no longer resets to idle while a program is still running — the running state and the Stop control remain available.
+- Turbo C++ textbook code with `const char*` strings now compiles on Linux/macOS: the installed SDL_bgi header is const-corrected for read-only text APIs after the build.
 
-## 1.4.9 — 2026-09-27
-
-Panel polish per user feedback, two production fixes from a new deep
-robustness battery, and cleaner header space.
-
-### Changed
-- **Version chip moved beside the Ready pill** — the pill row now reads
-  `Ready — winbgim  v1.4.9` instead of stacking the chip below it.
-- **"Open Examples Folder" action button removed from the panel** — the grid
-  is a clean 2×3 and the freed row goes to the Example Programs section
-  (more room for expansion + scrolling). The command itself remains available
-  from the Command Palette.
-- **Footer cleaned up**: the "Inside a .cpp file just press Ctrl+Alt+R…" and
-  "errors are reported automatically…" lines are gone (the shortcut stays on
-  the Compile & Run button), and the **DIU badge now sits on the exact right
-  side of the footer text**, vertically centred.
-- **Platform chip ("Windows · WinBGIM") removed from the top** — the library
-  is already visible in the Ready pill.
+## [1.4.8] — 2026-09-26
 
 ### Fixed
-- **Status bar no longer lies while compiling**: a plain Compile (or a failed
-  rebuild) while a graphics program is running used to flip the indicator
-  back to "idle" even though the program's terminal was still alive; the
-  RUNNING indicator is now preserved (and Stop / Ctrl+Alt+S keep working).
-- **Turbo C++ textbook code with `const char*` strings now compiles on
-  Linux/macOS**: SDL_bgi declares `outtextxy`/`outtext`/`textheight`/
-  `textwidth`/`initgraph`/… with non-const `char*` parameters, so any
-  indirect const string (ternary, const variable) was a hard compile error.
-  Auto-setup now const-corrects the installed header (12 read-only text
-  APIs) after the build — the library binary is unchanged.
+- The university badge was not served to the live panel in 1.4.7; it now displays correctly.
+
+## [1.4.7] — 2026-09-26
+
+Turbo C++ examples and Problems-panel integration.
 
 ### Added
-- **Robustness battery** (`test/robust-tests.js`, 24 checks): complex
-  fixtures (Julia-set math, gravity animation, conio-style poll menu,
-  getimage/putimage verbs, viewport clipping, text-metrics layout, fill
-  patterns, an 18,800-primitive stress test), terminal-I/O correctness with
-  piped stdin + EOF fallback, crash surfacing (SIGSEGV exits non-zero, never
-  hangs, display stays healthy), stop-mid-flight + immediate replace, the
-  production diagnostics parser fed with real g++ output, and rapid re-run
-  cycling.
+- Turbo C++ & conio.h example pack: a graphics tour (`bar3d`, `pieslice`, `sector`, `floodfill`, fill patterns, dashed lines), viewport clipping, sprite animation (`getimage`/`putimage`) and a `conio.h` keyboard drawing pad.
+- Compiler errors appear as clickable file:line diagnostics in the Problems panel with inline squiggles; a clean build clears them.
+- The status bar shows *Compiling…* and a click-to-stop control while a program runs; **Ctrl+Alt+S** stops the running program from anywhere.
+### Changed
+- The panel's Example Programs section is collapsed by default and scrolls inside its own container, so the action buttons stay put; the university badge sits in the title row.
+### Fixed
+- Error reporting is quieter: user compile errors are not telemetry errors (they are visible in the Problems panel), and crashes from other extensions sharing the host are ignored.
+- Sprite-animation sample fixed for portable erase/redraw on SDL_bgi.
 
-## 1.4.8 — 2026-09-26
+## [1.4.6] — 2026-09-26
+
+Terminal launch fix and a new DDA example.
 
 ### Fixed
-- **The DIU badge was not wired into the live panel in 1.4.7** (the wiring
-  change sat in a patch batch that failed halfway; the badge showed in test
-  previews, which pass the logo URI explicitly, but the real panel never
-  received it). The panel provider now serves `media/diu-logo.png` as a
-  webview resource and passes it to the page; `localResourceRoots` is scoped
-  to `media/` again. 1.4.7 shipped everything else in this release note.
+- "The terminal process failed to launch: Path to shell executable cmd.exe does not exist": the compiled program is now spawned directly as the terminal's root process — no shell is involved — so console input and output work on every Windows setup; behavior is identical on Linux/macOS.
+- The fireworks sample no longer crashes intermittently (its particle arrays are now initialized).
+### Added
+- New example **DDA Line (Terminal Input)**: type two endpoints in the terminal and the program prints the DDA step table and plots every generated point in a graphics window with math-style axes.
 
-## 1.4.7 — 2026-09-26
+## [1.4.5] — 2026-09-26
 
-Panel redesign per user feedback, Turbo C++ / conio.h examples, compiler
-diagnostics in the Problems panel, and a quieter Sentry error inbox.
+Terminal input and output.
+
+### Fixed
+- Programs could not take input or show output on Windows: the executable was launched detached with its standard streams discarded. Programs now run in the integrated terminal with a real console — `cin` / `scanf` / `getch()` input and `printf` / `cout` output work — while the graphics window opens as before.
+
+## [1.4.4] — 2026-09-26
+
+Panel self-recovery.
+
+### Fixed
+- The panel now watches its own loading health: a page that fails to load is re-rendered once automatically (clearing the webview service-worker race), and if it still cannot load, a native list view with the same actions and all example programs appears instantly, with a retry page for the full panel. Ctrl+Alt+R keeps working regardless.
+- The fireworks sample failed to compile on Windows (missing `<cmath>` include).
+### Changed
+- Compile & Run is the large primary button; the remaining actions follow in a tidy two-per-row grid.
+
+## [1.4.3] — 2026-09-26
+
+### Changed
+- The panel footer closes with the university credit line.
+
+## [1.4.2] — 2026-09-26
+
+Panel polish.
+
+### Changed
+- Cleaner panel header: the logo and credit line moved out of the hero, which now opens straight with the title and status pill.
+- Each action button received its own distinct color, with matching styling for the setup call-to-action.
+- The attribution wording was updated to "Powered by Department of CSE, Dhaka International University, Bangladesh".
+
+## [1.4.1] — 2026-09-26
+
+Fix for the empty activity-bar panel.
+
+### Fixed
+- Fixed "There is no data provider registered that can provide view data" (an empty panel) reported on 1.4.0. Two independent causes: the panel view was not declared as a webview in the manifest, and the telemetry SDK touched a restricted global at module load on some hosts. Both are fixed and covered by real-host activation tests.
+
+## [1.4.0] — 2026-09-26
+
+Webview panel, F5 support and nine new examples.
 
 ### Added
-- **Turbo C++ & conio.h example pack (WinBGIM stays the default library; 23
-  examples total)**: "Turbo C++ Graphics Tour" (bar3d, pieslice, sector,
-  floodfill, fill patterns, dashed lines), "Viewport & Clipping"
-  (setviewport/clearviewport with two clipped panes), "Sprite Animation"
-  (getimage/putimage rocket over a starfield), and "Conio Keyboard Paint"
-  (a conio.h kbhit/getch drawing pad with a menu bar). Every sample compiles
-  on WinBGIM (Windows) and SDL_bgi (Linux/macOS) and auto-exits.
-- **Compiler errors in the Problems panel**: g++ output is parsed into
-  clickable file:line diagnostics (errors, warnings, notes) with inline
-  squiggles; a clean build clears them.
-- **Status bar now tracks the run**: `Compiling…` while the toolchain runs,
-  and a click-to-STOP indicator while a graphics program is running; back to
-  the environment indicator when idle.
-- **Ctrl+Alt+S** stops the running graphics program from anywhere.
-- The "Open Examples Folder" hint and every count now follow the real
-  catalog size automatically.
-
-### Changed
-- **Panel, per user feedback**: the ready-state "Everything is ready" card is
-  gone (the green pill + chips carry the ready message); Example Programs are
-  **collapsed by default** — tap the section header to expand, and the list
-  **scrolls inside its own container** like a second tab below the actions,
-  so the action buttons stay put; the choice is remembered across re-renders.
-  The **DIU badge** now sits in the empty top-right corner of the title row
-  (responsive: smaller but never stretched on narrow sidebars), and the
-  footer credit stays pinned to the bottom.
-
-### Fixed
-- **Sentry inbox noise**: user-code compile errors are no longer reported as
-  telemetry errors (they are the normal edit-compile loop — now visible in
-  the Problems panel instead; the first error lines ride along as
-  breadcrumbs), the webview-fallback event is downgraded to a warning
-  (resilience working as designed), and uncaught crashes/rejections from
-  OTHER extensions in the shared host (e.g. frame-less "Cannot find package
-  'prettier'" rejections) are dropped even when they carry no frames.
-- Sprite-animation sample: background "restore" via a captured bitmap cannot
-  erase on SDL_bgi (transparent alpha in the captured bitmap) — the sample
-  now erases with cleardevice() + opaque primitive redraws, the portable
-  pattern; also fixed the missing initial draw that left an orphaned sprite
-  in the classic XOR variant, and viewport labels that clearviewport()
-  wiped each frame.
-
-## 1.4.6 — 2026-09-26
-
-Terminal-launch fix for every Windows setup plus a new DDA line-drawing
-example with live terminal I/O.
-
-### Fixed
-- **"The terminal process failed to launch: Path to shell executable
-  \"cmd.exe\" does not exist"** — v1.4.5 pinned the Windows runner terminal
-  to a bare `cmd.exe`, which some VS Code setups cannot resolve. The compiled
-  program is now spawned **directly as the terminal's process** — no shell is
-  involved at all, so there is nothing to resolve or quote. The program keeps
-  its real console (stdin input + visible output) and the graphics window
-  opens as usual. Running a new program now replaces the previous runner
-  terminal, and the terminal takes focus so prompts can be answered
-  immediately.
-- **Fireworks sample could crash the window** (intermittent SIGSEGV on some
-  machines): its particle arrays were read before initialization, feeding a
-  garbage color index into the palette. All arrays are now zero-initialized;
-  20 consecutive runs verified crash-free.
-
-### Added
-- **New example: "DDA Line (Terminal Input)"** (19 examples total): type two
-  endpoints in the terminal, the program prints dx/dy/steps, the increment
-  values and **every generated DDA point**, and plots the line pixel by
-  pixel in a graphics window with math-style axes (y grows upward from the
-  window centre). Falls back to a demo line when stdin is closed, so it
-  self-exits everywhere. Useful alongside the classic direct-equation
-  approach — which divides by zero for vertical lines and hardcodes the
-  screen centre; the DDA example avoids both pitfalls.
-
-## 1.4.5 — 2026-09-26
-
-Programs now run in the VS Code integrated terminal so console input and
-output work exactly as students expect.
-
-### Fixed
-- **Programs could not take input or show output** on Windows: the compiled
-  .exe was launched detached with its standard streams discarded, so
-  `cin`/`scanf`/`getch()` had nothing to read and `printf`/`cout` output was
-  invisible. Programs that mix graphics with console I/O (e.g. asking for a
-  choice with `cin >>`, printing scores with `cout`) now work properly.
-- Removed a leftover dead source file (`programsView.ts`) that broke strict
-  recompiles from a clean checkout.
-
-### Changed
-- **Run in terminal**: the compiled program now runs inside the VS Code
-  integrated terminal. The graphics window opens as before, and the terminal
-  provides a real console — type input, see output, and press any key for
-  `getch()`-style pauses. On Windows the runner terminal is pinned to
-  `cmd.exe` (identical behavior on every machine regardless of the user's
-  default shell profile) and the compiler's bin directory is prepended to the
-  terminal PATH so non-statically-linked executables still find their runtime
-  DLLs. **Stop** disposes the runner terminal, closing the graphics program.
-
-## 1.4.4 — 2026-09-26
-
-Production-hardening release: a broken example, a panel layout refresh and
-automatic recovery from a VS Code webview loading failure.
-
-### Fixed
-- **Fireworks sample failed to compile on Windows** ("'cos' was not declared
-  in this scope" on MinGW 6.3): `12_fireworks.cpp` now includes `<cmath>`
-  so `cos()`/`sin()` are always declared. All 18 examples re-verified
-  end to end (compile → run on a virtual display → screenshot → clean
-  self-exit): 18/18 PASS.
-- **"Could not register service worker: InvalidStateError"** — the webview
-  panel now watches its own liveness: the page answers a ping as soon as it
-  loads, a dead page is re-rendered once automatically (which clears the
-  service-worker race), and if it still cannot load the extension
-  **instantly reveals a native "graphics.h Programs (List)" tree view**
-  with the same 8 actions and all 18 example programs, plus a small
-  recovery page with a "Retry panel" button. Nothing is lost when the
-  webview breaks — and `Ctrl+Alt+R` keeps working regardless.
-
-### Changed
-- **Action buttons layout**: the 1st button (Compile & Run) is now the
-  hero — big, full-width and alone on its row with a soft green glow;
-  the other 7 actions sit below it in a tidy 2-per-row grid. The panel
-  keeps its flat dark theme with the single green accent.
-
-### Notes
-- Sentry noise fixed at the source: telemetry is suppressed outside
-  production, and auto-captured errors not attributable to this extension
-  are dropped, so shared-extension-host crashes (e.g. other extensions or
-  host shutdown) no longer land in our inbox.
-
-## 1.4.3 — 2026-09-26
-
-One more panel tweak, requested right after 1.4.2:
-
-### Changed
-- **Footer credit added back by popular demand**: the bottom of the
-  graphics.h panel now closes with
-  "Powered by Department of CSE, Dhaka International University,
-  Bangladesh." — the hero stays clean (no logo, no credit line up top).
-
-## 1.4.2 — 2026-09-26
-
-Panel polish in the activity bar, requested by users:
-
-### Changed
-- **Cleaner hero**: the logo image and the university credit line were
-  removed from the top of the graphics.h panel (and from the footer).
-  The panel now opens straight with the title, the environment status
-  pill and the platform/version chips.
-- **Every action button has its own color**: Compile & Run (violet),
-  Complete Run Setup (amber), Setup Doctor (emerald), Compile (blue),
-  Run Last Build (cyan), Stop Running Program (rose), Copy Compile
-  Command (fuchsia) and Open Examples Folder (lime). The environment
-  card's "Complete Run Setup" call-to-action uses the same amber so the
-  two entry points to setup read as one.
-- **Attribution wording**: the Marketplace/README credit now reads
-  "Powered by Department of CSE, Dhaka International University,
-  Bangladesh" (previously "Made by …").
-
-### Notes
-- The university attribution stays on the Marketplace page and in the
-  README; it is only removed from the in-editor activity bar panel.
-- All 18 example programs were re-verified end to end (compile → run on
-  a virtual display → screenshot → clean self-exit): 18/18 PASS.
-
-## 1.4.1 — 2026-09-26
-
-Fixes the empty activity-bar panel reported on v1.4.0
-("There is no data provider registered that can provide view data").
-Two independent root causes, both fixed and now covered by a real
-VS Code activation test:
-
-### Fixed
-- **The panel view is now declared `"type": "webview"`** in the manifest.
-  v1.4.0 registered a `WebviewViewProvider` but the view declaration lacked
-  the webview type, so VS Code created a tree pane instead — and a tree pane
-  without a `TreeDataProvider` shows exactly that error.
-- **Sentry's module-load initialization no longer runs at module load.**
-  On newer VS Code hosts (with extensions targeting older `engines`), reading
-  the `navigator` global raises a migration-trap error; the Sentry SDK touches
-  `navigator` while setting up, which could crash the extension's module
-  evaluation before anything registered — same visible symptom, empty panel.
-  Initialization now happens inside `activate()`, and a navigator guard
-  replaces the trapped global with a benign stub so automatic error
-  collection keeps working on those hosts.
-
-### Added
-- **Real extension-host verification**: the test suite now launches an actual
-  VS Code instance (`@vscode/test-electron`), activates the extension, focuses
-  the panel, runs the Setup Doctor and scans the workbench logs for the
-  data-provider error — v1.4.0 would have failed this test.
-
-## 1.4.0 — 2026-09-26
-
-The activity-bar panel becomes a real webpage, F5 runs graphics programs, the
-command list gets leaner, and 9 new fun examples join the catalog — 18 in total.
-
-### Added
-- **Modern webpage-style panel (Activity Bar)** — the plain black-and-white
-  tree view is replaced by a styled webview: gradient hero with the DIU logo
-  and "made by Department of CSE, Dhaka International University, Bangladesh"
-  credit, a live environment card (Ready / Not ready / Checking with a
-  one-click **Complete Run Setup** call-to-action while anything is missing),
-  a 2-column action grid, and an emoji card for every example program with
-  **▶ Run** (open + compile + launch in one click) and **Open** buttons.
-  Responsive layout adapts to narrow sidebars; looks identical in light &
-  dark themes.
-- **Run and Debug integration (F5)** — a `graphics-h` debug type with a
-  minimal run-only adapter: pressing **F5** offers **"Run graphics.h program"**
-  next to the other debuggers, and launching it compiles the active file and
-  opens the graphics window through the normal pipeline (progress, output and
-  setup offers included).
-- **Run button dropdown** — Compile & Run and Compile now appear in the
-  editor's **▶ run button menu** right beside the C/C++ extension's
-  "Run C++ File" entry (for `.cpp`/`.c` files).
-- **9 new fun example programs** (18 total): Winking Smiley 😊, Bouncing
-  Balls 🎱, Fireworks Show 🎆, Solar System 🪐, Aquarium 🐠, Rainbow Spiral
-  🌈, Helicopter 🚁, Sunset Scene 🌅, Warp Starfield ✨ — all auto-exiting,
-  keyboard-dismissible, and portable across WinBGIM and SDL_bgi.
-- **Stop Running Program** (`graphics-h-runner.stopProgram`) — kills the
-  graphics window of the last launched program (process-tree `taskkill` on
-  Windows, runner-terminal dispose fallback elsewhere).
-- **Copy Compile Command** (`graphics-h-runner.copyCompileCommand`) — copies
-  the exact compiler command line for the active file to the clipboard —
-  handy for labs, terminals and reports.
-- **Open Examples Folder** (`graphics-h-runner.openExamplesFolder`) — copies
-  all 18 examples into `graphics-h-programs/` in the workspace and reveals
-  the folder (or offers to open an examples workspace when no folder is open).
-- Panel buttons show a live "Compiling…" pill while a build is running.
-
-### Changed
-- **"Full Setup (0 to running)" is renamed to
-  "Complete graphics.h Run Setup"** (command id unchanged:
-  `graphics-h-runner.setupEverything`); all user-facing copy updated.
-- The sidebar catalog now ships **18 example programs**; program cards carry
-  `classic` / `fun` / `math` / `interactive` tags.
-
+- **Webpage-style activity-bar panel** with a live environment card (Ready / Not ready with a one-click fix), an action grid, and program cards with one-click **Run** and **Open** buttons; responsive for narrow sidebars.
+- **Run and Debug integration (F5)**: "Run graphics.h program" compiles and launches the active file through a built-in run-only debug adapter.
+- Compile & Run / Compile entries in the editor's run-button dropdown beside "Run C++ File".
+- **Nine new example programs** (smiley, bouncing balls, fireworks, solar system, aquarium, rainbow spiral, helicopter, sunset, starfield) — 18 in total.
+- **Stop Running Program** and **Copy Compile Command** commands; Open Examples Folder copies the catalog into the workspace.
 ### Removed
-- **Insert Code Template** command and the 5 quick templates (the 18 samples
-  cover the same ground; snippets remain).
-- **Show Setup Guide** command and the in-editor guide webview (the Setup
-  Doctor + Complete Setup remain the guided paths).
-
+- Insert Code Template and Show Setup Guide commands — superseded by the example catalog, the Setup Doctor and Complete Setup.
 ### Fixed
-- **Fireworks sample crash (SDL_bgi)** — calling `putpixel()` right after a
-  per-frame `cleardevice()` races with SDL_bgi's surface flip and can kill
-  the graphics window (intermittent SIGSEGV in `putpixel` inside
-  libSDL_bgi.so, reproduced ~1 in 3 runs and backtrace-verified). The sample
-  now draws stars/particles with `bar()` filled rects — 8/8 clean runs and
-  18/18 screenshot-verified samples after the fix.
+- The fireworks sample no longer races the SDL_bgi surface flip (it draws with filled primitives instead of per-pixel writes).
 
-## 1.3.0 — 2026-09-25
+## [1.3.0] — 2026-09-25
 
-Automatic error collection via Sentry, so setup/compile failures on any PC are
-reported and diagnosable without asking users to copy-paste logs.
+Automatic error reporting.
 
 ### Added
-- **Automatic error collection (Sentry JS SDK, `@sentry/node`)**: uncaught
-  exceptions and unhandled rejections from the extension are captured
-  automatically and grouped into Sentry issues with stack traces, breadcrumbs
-  and context tags (OS, architecture, VS Code version, graphics library mode).
-- **Breadcrumbs on every key flow** — doctor results, compile starts/results,
-  program runs, each Full Setup step, and every command invocation appear in the
-  trail leading up to an error.
-- **Setup failures are reported even when handled** — winget, direct compiler
-  download, WinBGIM and SDL_bgi step failures inside Full Setup are captured
-  with a `setup_step` tag, so fresh-PC problems surface without a bug report.
-- **Privacy-first by design**:
-  - respects VS Code's telemetry consent — nothing is captured unless
-    `telemetry.telemetryLevel` is not `off` (`vscode.env.isTelemetryEnabled`);
-    toggling the VS Code setting enables/disables collection live;
-  - user-identifying path segments (`C:\Users\<name>`, `/home/<name>`, home
-    directory) are scrubbed from messages, stack frames, breadcrumbs and tags
-    before anything leaves the machine;
-  - no source code, file contents, or compiler output are ever sent.
-- **Extension-host safety**: the uncaught-exception handler is configured with
-  `exitEvenIfOtherHandlersAreRegistered: false` — errors are captured while the
-  shared extension host (and every other extension) keeps running.
-- Events are flushed on extension shutdown; queued events survive deactivation.
-- The extension now ships as a **single esbuild bundle** (`dist/extension.js`,
-  unminified so stack frames stay readable) with the SDK included — install size
-  and load behaviour stay lean.
+- Crash and error reporting through Sentry that respects VS Code's telemetry consent: uncaught exceptions and unhandled rejections are captured with stack traces, breadcrumbs and environment tags, so setup failures on any machine can be diagnosed without a bug report. User-identifying path segments are scrubbed before anything leaves the machine; no source code, file contents or compiler output is ever sent.
+- Breadcrumbs on the key flows (doctor results, compiles, runs, every setup step).
+- Setup step failures are reported even when handled, with a step tag.
+- The extension ships as a single bundle with the SDK included.
 
-### Verified
-- End-to-end delivery confirmed from the real instrumented app: genuine
-  uncaught-exception and unhandled-rejection triggers both reached Sentry
-  (transport flush = true), and the process survived the uncaught exception.
+## [1.2.0] — 2026-09-25
 
-## 1.2.0 — 2026-09-25
-
-Robustness across every kind of PC (fresh / half-setup / messy settings) and a
-friendlier Activity Bar.
+Robustness across every kind of PC.
 
 ### Added
-- **Environment status row** at the top of the graphics.h sidebar: live
-  *Ready — library* / *Not ready — reason* / *Checking…* state (kept in sync by
-  the Setup Doctor), plus a one-click **“Set up everything (fix this)”** button
-  that appears exactly while the environment is broken.
-- **Full Setup rocket button** in the sidebar title bar — the most important
-  action for a fresh PC is now always one click away.
-- **Compiler fast-path discovery**: Full Setup first checks the whole PC for an
-  existing working `g++.exe` (winget packages/shims, MinGW/MSYS2/TDM-GCC roots,
-  Code::Blocks & Dev-C++ bundles, every `PATH` entry) and skips the download
-  entirely when one is found — half-setup PCs are fixed in seconds.
-- Compiler discovery also scans **PATH entries** (catches installers that
-  edited PATH after VS Code was already running) and student-common IDE
-  compiler bundles.
-- **Untitled-document flow**: running an example opened without a workspace
-  folder now offers a Save dialog and continues compiling, instead of failing
-  with “open a .cpp file”.
-- `.c` files get the same keybindings (`Ctrl+Alt+R` / `Ctrl+Alt+B`) and editor
-  context-menu entries as `.cpp`.
-- New robustness suite `test/pc-states-tests.js` — 51 checks covering fresh,
-  half-setup and messy-settings PC states.
-
+- Live environment status at the top of the sidebar with a one-click fix button while anything is missing, and a rocket button for Full Setup in the title bar.
+- Compiler fast-path discovery: existing g++ installations (MinGW/MSYS2/TDM-GCC roots, Code::Blocks and Dev-C++ bundles, PATH entries) are found and used before any download.
+- Untitled documents offer a Save dialog instead of failing.
+- `.c` files get the same keybindings and context-menu entries as `.cpp`.
 ### Fixed
-- **Windows `-4058` spawn failures** (`spawn g++ ENOENT` variants) are now
-  classified as “no compiler” on every runtime path, so users always get the
-  one-click setup dialog instead of a raw compile error.
-- **Messy settings are healed on read**: quotes, double-quotes (“copy as path”),
-  single quotes, `%ENV%` / `$VAR` / `${VAR}` / `~` expansion, trailing
-  slashes/backslashes, directory-instead-of-exe compiler paths, missing `.exe`
-  suffixes, and case-duplicate path lists all resolve to a working value.
-- **Stale include/lib paths** (deleted toolchain folders, wiped globalStorage)
-  are pruned automatically during Full Setup so diagnostics stay truthful.
-- Setup no longer attempts the SDL_bgi build while the compiler is still
-  missing on Linux/macOS (it used to fail noisily before the terminal step).
-- The direct-download fallback is now **idempotent** (re-uses an already
-  extracted toolchain instead of re-downloading 274 MB), tries the built-in
-  `tar.exe` first (much faster than `Expand-Archive` on large archives), and
-  deletes the zip after successful extraction to free disk space.
-- Setup Doctor now shows the detected compiler version and the *normalized*
-  path in its report, making broken settings obvious.
-- Windows: compiled programs are launched **directly (detached)** instead of
-  through the integrated terminal — immune to PowerShell/cmd/Git Bash quoting
-  differences, with terminal fallback if launching fails.
-- Status bar text is now human-readable (`✓ graphics.h`) instead of the cryptic
-  `✓ BGI`; Quick Templates section in the sidebar starts collapsed.
+- Windows spawn failures (-4058) are classified as "no compiler" on every path, so the one-click setup dialog always appears.
+- Messy settings are healed on read: quotes, environment variables, `~`, trailing slashes, directory-instead-of-executable paths, missing `.exe` suffixes and stale include/lib directories.
+- Setup no longer attempts the library build while the compiler is still missing; the direct-download fallback is idempotent, faster and cleans up the archive after extraction.
+- Human-readable status bar text (`✓ graphics.h`).
 
-## 1.1.0 — 2026-09-25
+## [1.1.0] — 2026-09-25
 
-Zero-touch Windows setup — the compiler is now installed automatically too.
+Zero-touch Windows compiler install.
 
 ### Added
-- **Fully automatic Windows compiler install**: Full Setup now runs the WinLibs
-  MinGW-w64 (UCRT) winget package itself — a per-user, portable install with no
-  administrator rights — then discovers the new `g++.exe`, verifies it runs, and
-  wires it into `graphics-h-runner.compilerPath` automatically.
-- **Direct-download fallback** (when winget is missing): the WinLibs UCRT zip is
-  downloaded with live progress, verified against the official sha256 checksum,
-  extracted with the built-in PowerShell `Expand-Archive`, and wired up — still
-  no admin rights.
-- **One-click recovery**: compiling with no compiler no longer fails with a raw
-  `spawn g++ ENOENT`; the extension now explains the problem and offers
-  **"Set up everything (recommended)"** right in the dialog.
-- Compiler discovery also finds existing installs (winget packages/shims,
-  C:\MinGW, C:\msys64\{ucrt64,mingw64}, C:\TDM-GCC-64) and prefers 64-bit
-  toolchains automatically.
+- Fully automatic MinGW-w64 install via winget — per-user, portable, no administrator rights — with discovery of the new compiler and automatic wiring into the settings. When winget is missing, the WinLibs UCRT archive is downloaded directly with live progress and verified against the official sha256 checksum.
+- Existing compiler installs are discovered (winget packages and shims, common MinGW/MSYS2/TDM-GCC folders) and 64-bit toolchains are preferred.
+- Compiling with no compiler offers one-click recovery instead of a raw error.
+### Fixed
+- Windows builds are fully statically linked, so compiled `.exe` files run on any Windows 10/11 PC without missing-DLL errors.
+
+## [1.0.1] — 2026-09-25
+
+Branding.
 
 ### Fixed
-- Windows builds are now **fully statically linked** (`-static` in addition to
-  `-static-libgcc -static-libstdc++`), so compiled `.exe` files run on any
-  Windows 10/11 PC without missing-DLL errors.
-- Setup Doctor's Windows fix text now points to the automatic setup instead of
-  manual PATH editing.
-
-## 1.0.1 — 2026-09-25
-
-Marketplace branding update.
-
-### Fixed
-- **Store logo visibility** — the old icon's background (`#312e81`) was identical to the
-  marketplace banner color, so the icon blended invisibly into the listing header. The new
-  icon uses a brighter indigo→purple gradient plus a white inner ring that stays visible on
-  any background, and the gallery banner is now light (`#e0e7ff`) for full contrast.
-
+- New store icon with a bright gradient and inner ring, plus a light banner color, so the icon stays visible on the listing page.
 ### Added
-- **Attribution** — the extension page now opens with the official
-  **Dhaka International University** logo and
-  *"Made by Department of CSE, Dhaka International University, Bangladesh"*.
-- Publisher author metadata updated to the department.
+- University attribution on the extension page.
 
-## 1.0.0 — 2026-09-25
+## [1.0.0] — 2026-09-25
 
 Initial release.
 
-### Features
-- **Full Setup (0 → running)** — one command bootstraps everything:
-  - *Windows*: installs MinGW-w64 g++ via winget (manual WinLibs fallback), downloads WinBGIM (`graphics.h`, `winbgim.h`, `libbgi.a`) into the extension folder and wires the paths into settings — no copying into MinGW, no admin rights.
-  - *Linux*: guides `build-essential` / `libsdl2-dev` through the terminal (password prompts work there), then downloads, patches and builds SDL_bgi into a **user prefix** automatically — no `sudo` for the library — and wires include/lib paths + rpath into settings.
-  - *macOS*: `xcode-select` / Homebrew guidance, then the same automatic user-prefix SDL_bgi build.
-  - Finishes with a live verification probe and a "press Ctrl+Alt+R" confirmation.
-- **Setup Doctor** — probes the compiler and every candidate graphics library by actually compiling a `graphics.h` probe; prints copy-paste fixes; offers **Fix automatically**; reports via the status bar.
-- **Compile & Run** (`Ctrl+Alt+R`), **Compile** (`Ctrl+Alt+B`), **Run Last Build** — Command Palette, editor context menu and keybindings.
-- **Auto-detection** of `#include <graphics.h>` — BGI linker flags applied automatically; non-graphics files still build as plain C++.
-- **Per-OS linker recipes**
-  - Windows: WinBGIM → `-lbgi -lgdi32 -lcomdlg32 -luuid -loleaut32 -lole32` (+ optional static linking)
-  - Linux: SDL_bgi → `-lSDL_bgi -lSDL2 -lm` or libgraph → `-lgraph`
-  - macOS: SDL_bgi via Homebrew SDL2
-  - Custom library prefixes get matching `-Wl,-rpath` automatically.
-- **Status bar indicator** — `BGI: ready / missing / ?` at a glance, clickable to re-run the doctor.
-- **Snippets** — `gfxprog`, `gfx-anim`, `gfx-mouse`, `gfx-kbd`, `gfx-text`, `gfx-bar`.
-- **Insert Code Template** — 5 ready-made programs (basic window, animation, mouse paint, keyboard control, fractal tree).
-- **Show Setup Guide** — in-editor webview with per-OS walkthroughs.
-- **graphics.h sidebar (Activity Bar)** — dedicated Activity Bar icon opening the "graphics.h Programs" panel:
-  - **Commands section on top** (with keybinding hints) plus title-bar buttons for Compile & Run / Compile / Setup Doctor / Setup Guide;
-  - **Example Programs** — all 9 bundled graphics.h samples, listed with friendly names;
-  - **Quick Templates** — the 5 minimal templates;
-  - clicking any entry opens it in the editor as a real `filename.cpp` (created under `graphics-h-programs/` in your workspace, or as an untitled document when no folder is open).
-
-### Quality
-- 9-sample integration suite (shapes, animation, flag, fractal tree, Mandelbrot, mouse paint, keyboard game, hello) compiles with the extension's exact flags, runs under a virtual display and is screenshot-verified — 9/9 passing.
-- Setup engine tested end-to-end: fresh download → patch → build → user-prefix install → compile → verified render.
-- Sidebar smoke tests (`test/view-tests.js`): catalog integrity, bundled sources byte-identical to the samples, package.json view wiring, click-to-open path resolution.
-- Fixed during testing: a **frame-tearing bug** in the SDL_bgi build produced by the Setup Engine — the library presented the window after every drawing primitive, so frames could appear mid-draw (verified via timed screenshots); presentation is now event-driven, one full-frame present per `delay()` / `kbhit()` / `getch()` call.
-- Enriched samples `03_bouncing_ball` (bordered court + trails), `06_fractal_tree` (sun, ground, colored leaves) and `09_keyboard_paddle` (brick-breaker with score) for clearer screenshot evidence.
+### Added
+- **Complete Run Setup (0 → running)** — one command bootstraps everything: the compiler itself on Windows (winget, with a manual WinLibs fallback), the graphics library per platform (WinBGIm on Windows; SDL_bgi built into a user prefix on Linux/macOS — no `sudo` required), the settings wiring and a live verification probe.
+- **Setup Doctor** — probes the compiler and every candidate graphics library by actually compiling a graphics.h program; prints copy-paste fixes and offers automatic repair.
+- **Compile & Run / Compile / Run Last Build** with per-OS linker recipes (WinBGIm flags with optional static linking; SDL_bgi or libgraph on Linux/macOS; automatic rpath for custom prefixes) and `#include <graphics.h>` auto-detection.
+- Status bar indicator, snippets, code templates, an in-editor setup guide, and the graphics.h sidebar with nine example programs.
+- The produced SDL_bgi build presents frames event-driven (one full-frame present per `delay()`/`kbhit()`/`getch()`), fixing a frame-tearing issue found during the screenshot-verified test pipeline.

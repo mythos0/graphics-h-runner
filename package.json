@@ -1,8 +1,8 @@
 {
   "name": "graphics-h-runner",
-  "displayName": "graphics.h Runner. One-click Setup",
-  "description": "Compile & run C++ graphics.h programs (WinBGIM / SDL_bgi) with one keypress or F5. Auto-detects graphics.h, applies the right linker flags per OS, auto-installs everything from zero, runs programs in a real terminal (stdin/stdout), surfaces compiler errors in the Problems panel, and ships a sidebar with 31 runnable examples (Turbo C++ classics, conio.h keyboard pads, DDA line input) plus a Computer Graphics Lab — coordinate viewer, pixel inspector, DDA, Bresenham, circle, ellipse, transforms, clipping — a searchable graphics.h cheat sheet, a Setup Doctor, and a global one-click setup — graphics.h then compiles in ANY terminal or IDE without this extension.",
-  "version": "1.5.13",
+  "displayName": "graphics.h Runner — One-Click Setup",
+  "description": "Compile and run C++ graphics.h (BGI/WinBGIm/SDL_bgi) programs with one keypress or F5. One command auto-installs the whole toolchain — compiler, graphics library and linker flags — then wires the native VS Code run options, shows compiler errors in the Problems panel, and ships 31 runnable examples with a Computer Graphics Lab, a searchable graphics.h reference and a Setup Doctor.",
+  "version": "1.5.14",
   "publisher": "mythos0-labs",
   "author": {
     "name": "Department of CSE, Dhaka International University",
@@ -45,7 +45,6 @@
     "beginner",
     "bgi",
     "c++",
-    "cmake-free",
     "compile",
     "computer graphics",
     "conio.h",
@@ -75,7 +74,7 @@
       "activitybar": [
         {
           "id": "graphics-h-runner",
-          "title": "Graphics.h CPP Program Runner One-click setup",
+          "title": "graphics.h Runner",
           "icon": "media/activity-icon.svg"
         }
       ]
@@ -85,7 +84,7 @@
         {
           "type": "webview",
           "id": "graphics-h-runner.programs",
-          "name": "Graphics.h CPP Program Runner One-click setup",
+          "name": "graphics.h Runner",
           "when": "true"
         },
         {
@@ -290,7 +289,7 @@
         "graphics-h-runner.celebrations.enabled": {
           "type": "boolean",
           "default": true,
-          "description": "Celebrate results: confetti rains over the graphics.h panel on every successful compilation, the same panel greets you with a School Pride show on first open each session, compile errors get a full-screen error overlay (giant ✗ + the first compiler errors in big type). The Fireworks Simulator button always works."
+          "description": "Show a confetti animation over the graphics.h panel on every successful compilation and a short show when the panel first opens each session. Compile errors produce a full-screen error overlay presenting the first compiler messages. The Fireworks Simulator button always works."
         },
         "graphics-h-runner.restoreSettingsOnUninstall": {
           "type": "boolean",

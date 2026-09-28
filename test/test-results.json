@@ -58,7 +58,7 @@
       "exitCode": 0,
       "shot": "/home/z/my-project/push-work/clone/docs/screenshots/04_moving_car.png",
       "analysis": {
-        "nonblack": 0.0874,
+        "nonblack": 0.0881,
         "unique_colors": 8
       },
       "cmd": "g++ -I/home/z/my-project/bgi-env/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include/x86_64-linux-gnu /home/z/my-project/push-work/clone/samples/04_moving_car.cpp -o /home/z/my-project/push-work/clone/build/04_moving_car -L/home/z/my-project/bgi-env/usr/lib -Wl,-rpath,/home/z/my-project/bgi-env/usr/lib -L/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -Wl,-rpath,/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -lSDL_bgi -lSDL2 -lm",
@@ -163,7 +163,7 @@
       "exitCode": 0,
       "shot": "/home/z/my-project/push-work/clone/docs/screenshots/11_bouncing_balls.png",
       "analysis": {
-        "nonblack": 0.0298,
+        "nonblack": 0.0297,
         "unique_colors": 8
       },
       "cmd": "g++ -I/home/z/my-project/bgi-env/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include/x86_64-linux-gnu /home/z/my-project/push-work/clone/samples/11_bouncing_balls.cpp -o /home/z/my-project/push-work/clone/build/11_bouncing_balls -L/home/z/my-project/bgi-env/usr/lib -Wl,-rpath,/home/z/my-project/bgi-env/usr/lib -L/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -Wl,-rpath,/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -lSDL_bgi -lSDL2 -lm",
@@ -178,8 +178,8 @@
       "exitCode": 0,
       "shot": "/home/z/my-project/push-work/clone/docs/screenshots/12_fireworks.png",
       "analysis": {
-        "nonblack": 0.0839,
-        "unique_colors": 7
+        "nonblack": 0.086,
+        "unique_colors": 8
       },
       "cmd": "g++ -I/home/z/my-project/bgi-env/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include/x86_64-linux-gnu /home/z/my-project/push-work/clone/samples/12_fireworks.cpp -o /home/z/my-project/push-work/clone/build/12_fireworks -L/home/z/my-project/bgi-env/usr/lib -Wl,-rpath,/home/z/my-project/bgi-env/usr/lib -L/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -Wl,-rpath,/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -lSDL_bgi -lSDL2 -lm",
       "stderrTail": ""
@@ -343,7 +343,7 @@
       "exitCode": 0,
       "shot": "/home/z/my-project/push-work/clone/docs/screenshots/23_conio_paint.png",
       "analysis": {
-        "nonblack": 0.0749,
+        "nonblack": 0.0748,
         "unique_colors": 11
       },
       "cmd": "g++ -I/home/z/my-project/bgi-env/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include/x86_64-linux-gnu /home/z/my-project/push-work/clone/samples/23_conio_paint.cpp -o /home/z/my-project/push-work/clone/build/23_conio_paint -L/home/z/my-project/bgi-env/usr/lib -Wl,-rpath,/home/z/my-project/bgi-env/usr/lib -L/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -Wl,-rpath,/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -lSDL_bgi -lSDL2 -lm",
