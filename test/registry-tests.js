@@ -48,8 +48,8 @@ const INTERNAL = new Set(['setContext']); /* workbench-internal, not ours to reg
 
 console.log('registry-tests — command graph consistency\n');
 
-check('version is 1.5.12', () => {
-  assert.strictEqual(pkg.version, '1.5.12');
+check('version is 1.5.13', () => {
+  assert.strictEqual(pkg.version, '1.5.13');
 });
 
 check('v1.5.9 regression: view title = the single ? cheat-sheet icon (setup/doctor/fireworks icons removed)', () => {
@@ -129,6 +129,18 @@ check('celebrations setting exists and defaults to true', () => {
   assert.ok(prop, 'graphics-h-runner.celebrations.enabled missing');
   assert.strictEqual(prop.default, true);
   assert.ok(bundle.includes('graphics-h-runner.celebrations'), 'setting never read by the bundle');
+});
+
+check('v1.5.13 clean exit: restore command contributed + registered, kill-switch defaults true', () => {
+  const cmd = pkg.contributes.commands.find((c) => c.command === 'graphics-h-runner.restoreOriginalSettings');
+  assert.ok(cmd, 'restoreOriginalSettings not contributed');
+  assert.ok(cmd.title.includes('Restore Original Settings'), 'title should say what it does');
+  assert.ok(bundle.includes('graphics-h-runner.restoreOriginalSettings'), 'restore command never registered in the bundle');
+  const prop = pkg.contributes.configuration.properties['graphics-h-runner.restoreSettingsOnUninstall'];
+  assert.ok(prop, 'graphics-h-runner.restoreSettingsOnUninstall missing');
+  assert.strictEqual(prop.default, true, 'uninstall restore must default to ON');
+  assert.ok(bundle.includes('restoreSettingsOnUninstall'), 'kill-switch never read by the bundle');
+  assert.ok(bundle.includes('isRealUninstall'), 'uninstall discriminator never used by the bundle');
 });
 
 check('bundled media manifest matches what the bundle loads at runtime', () => {

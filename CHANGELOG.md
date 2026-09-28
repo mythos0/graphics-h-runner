@@ -1,5 +1,79 @@
 # ChangeLog
 
+## 1.5.13 — 2026-09-28
+
+The clean-exit guarantee — *"when uninstalling this extension, all settings
+(changed by this extension) should be reverted as they were before running of
+Complete Run Setup."* Uninstalling now puts every modified setting back,
+automatically, exactly as it was before the first setup ran.
+
+### Added
+- **Automatic restore on uninstall.** Before Complete Run Setup (or the
+  standalone native-run command) touches ANYTHING, the extension snapshots
+  the original global-scope values of every setting it may write
+  (`graphics-h-runner.*` toolchain paths, `code-runner.executorMap.cpp`,
+  `code-runner.runInTerminal/saveFileBeforeRun/fileDirectoryAsCwd`,
+  `C_Cpp.default.compilerPath`) plus the raw text of the workspace's
+  `.vscode/settings.json`, `launch.json` and `tasks.json` into its private
+  storage. The FIRST snapshot wins — re-running setup never overwrites the
+  true "before" state. When the extension is uninstalled, `deactivate()`
+  restores everything automatically.
+- **Real-uninstall detection (not just any shutdown).** `deactivate()` also
+  fires on plain VS Code shutdowns and on extension updates — the new
+  discriminator reads the extensions folder's `.obsolete` marker, verifies
+  no other version of the extension is still installed (an update marks the
+  old version too) and cross-checks `extensions.json` against stale
+  markers. Shutdowns and updates never touch user settings; only a genuine
+  uninstall does. Any doubt = no action.
+- **Surgical restore, not scorched earth.** Only what the extension
+  actually wrote is reverted, per key: our `code-runner.executorMap.cpp` is
+  removed while the user's own `javascript`/`java`/`c` executors and every
+  unrelated setting survive; a key that did not exist before is removed
+  again, a key that did is restored to its exact previous value. In
+  `launch.json`/`tasks.json` our entry is removed (or the user's pre-setup
+  same-name entry restored); a file the setup created is deleted again once
+  nothing else remains, and user entries added AFTER the setup survive. An
+  original file that was not valid JSONC is restored byte-exact. Stale
+  `*.graphics-h-backup` corrupt-file copies are cleaned up too.
+- **`graphics.h: Restore Original Settings (undo Complete Run Setup)`.**
+  The same restore, on demand, behind a modal confirmation — this is also
+  the safety net for the one gap VS Code cannot close: uninstalling while
+  VS Code is CLOSED runs no extension code, so the manual command (or a
+  later reinstall + re-setup) handles it. A full restore deletes the
+  snapshot; a partial failure keeps it for a retry.
+- **Doctor visibility.** Every Setup Doctor run now prints a `cleanup`
+  line: whether a snapshot is armed, when it was taken, how many settings
+  and files are recorded, and how to undo early.
+- **Opt-out setting.** `graphics-h-runner.restoreSettingsOnUninstall`
+  (default `true`) — turn it off to keep the setup after uninstalling.
+- **Scope note.** The Windows "make global" step copies files into the
+  MinGW toolchain folders and edits the user PATH — that is system state
+  outside VS Code's settings and is deliberately NOT auto-deleted (removing
+  files from a compiler installation automatically is too risky); it is
+  documented here and visible in the Doctor output.
+
+### Tests
+- New `test/uninstall-restore-tests.js` (28 checks): first-wins snapshot,
+  write bookkeeping merge discipline, per-key surgical semantics (executor
+  sub-key restore/remove, scalar restore/unset, corrupt-original
+  byte-exact fallback), launch/tasks entry semantics, a FULL LIFECYCLE
+  round-trip in a real temp directory (snapshot → setup writes → restore →
+  exact pre-state + backup cleanup), partial-failure backup retention, and
+  the uninstall/update/shutdown discriminator including stale-marker
+  protection. The battery caught one real bug pre-release (executor values
+  are strings, not objects — the restore wrongly emptied the map).
+- New real-host `test/e2e-uninstall-restore.js` + host tests: a REAL VS Code
+  with a REAL user-seeded workspace — `nativeRunSetup` writes everything,
+  `restoreOriginalSettings` reverts `settings.json` surgically (user keys
+  and the user's own launch config + default build task intact), restores a
+  global setting through the real Settings API, deletes the snapshot; a
+  second restore is a clean no-op.
+- `registry-tests` pins the new command + kill-switch default; full battery
+  green (registry, native-run 25, pc-states 61, globalize 22, setup-download
+  21, deps-audit 14, win-header 31/31, celebrate, health, tree-model,
+  view-tests, smoke-view, diagnostics, robust); `run-tests` 31/31 on real
+  SDL_bgi; `e2e-activation` PASS (16 commands); `e2e-native-run` PASS.
+
 ## 1.5.12 — 2026-09-28
 
 Major update — the native VS Code run integration. Complete Run Setup now

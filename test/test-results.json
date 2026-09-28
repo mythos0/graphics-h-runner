@@ -178,7 +178,7 @@
       "exitCode": 0,
       "shot": "/home/z/my-project/push-work/clone/docs/screenshots/12_fireworks.png",
       "analysis": {
-        "nonblack": 0.0838,
+        "nonblack": 0.0839,
         "unique_colors": 7
       },
       "cmd": "g++ -I/home/z/my-project/bgi-env/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include/x86_64-linux-gnu /home/z/my-project/push-work/clone/samples/12_fireworks.cpp -o /home/z/my-project/push-work/clone/build/12_fireworks -L/home/z/my-project/bgi-env/usr/lib -Wl,-rpath,/home/z/my-project/bgi-env/usr/lib -L/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -Wl,-rpath,/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -lSDL_bgi -lSDL2 -lm",
@@ -193,7 +193,7 @@
       "exitCode": 0,
       "shot": "/home/z/my-project/push-work/clone/docs/screenshots/13_solar_system.png",
       "analysis": {
-        "nonblack": 0.0183,
+        "nonblack": 0.0182,
         "unique_colors": 10
       },
       "cmd": "g++ -I/home/z/my-project/bgi-env/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include/x86_64-linux-gnu /home/z/my-project/push-work/clone/samples/13_solar_system.cpp -o /home/z/my-project/push-work/clone/build/13_solar_system -L/home/z/my-project/bgi-env/usr/lib -Wl,-rpath,/home/z/my-project/bgi-env/usr/lib -L/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -Wl,-rpath,/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -lSDL_bgi -lSDL2 -lm",

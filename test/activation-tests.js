@@ -41,7 +41,8 @@ exports.run = async function () {
     'graphics-h-runner.cheatSheet',
     'graphics-h-runner.fireworks',
     'graphics-h-runner.stopFireworks',
-    'graphics-h-runner.nativeRunSetup'
+    'graphics-h-runner.nativeRunSetup',
+    'graphics-h-runner.restoreOriginalSettings'
   ]) {
     assert.ok(cmds.includes(id), 'command not registered: ' + id);
   }

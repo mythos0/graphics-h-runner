@@ -77,6 +77,7 @@ import { makeGlobalWindows } from './globalize';
 import { Celebrator } from './celebrateHost';
 import type { CelebrationKind } from './celebrate';
 import { treeRunCommandId } from './programsTreeModel';
+import * as uninstallRestore from './uninstallRestore';
 
 const OUTPUT_CHANNEL_NAME = 'graphics.h Runner';
 const TERMINAL_NAME = 'graphics.h Runner';
@@ -94,6 +95,11 @@ let catalog: LoadedProgram[] = [];
  * types into it again. Cleared only when the user closes it. */
 let runnerTerminal: vscode.Terminal | undefined;
 let storageDir: string | undefined; /* globalStorage — real files for folder-less windows */
+/* v1.5.13 clean exit: where THIS version is installed (uninstall detection
+ * reads the extensions folder .obsolete marker next to it) + our version for
+ * the snapshot metadata. */
+let extensionPath: string | undefined;
+let extVersion = '';
 let diagnostics: vscode.DiagnosticCollection | undefined;
 /* live run feedback for the status bar: idle -> compiling -> running -> idle */
 let runState: 'idle' | 'compiling' | 'running' = 'idle';
@@ -216,6 +222,177 @@ function celebrate(kind: 'confetti' | 'error' | 'schoolpride', errorLines?: stri
   }
 }
 
+/* -------- v1.5.13 clean exit: uninstall reverts every setup change -------- */
+
+function uninstallBackupDir(): string | undefined {
+  return storageDir ? path.join(storageDir, uninstallRestore.BACKUP_DIR_NAME) : undefined;
+}
+
+/**
+ * Capture the pre-extension state ONCE (first run wins): the global values
+ * of every setting the extension may write, plus the raw text of the first
+ * workspace folder's .vscode files. Later setup runs NEVER overwrite the
+ * snapshot, so it always represents the true "before" state that uninstall
+ * (or the restore command) puts back.
+ */
+async function ensureUninstallSnapshot(): Promise<void> {
+  const dir = uninstallBackupDir();
+  if (!dir) {
+    return;
+  }
+  try {
+    if (await uninstallRestore.hasBackup(dir)) {
+      return;
+    }
+    const files: Record<string, string | null> = {};
+    const folder = vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0
+      ? vscode.workspace.workspaceFolders[0]
+      : undefined;
+    if (folder) {
+      const dotVscode = path.join(folder.uri.fsPath, '.vscode');
+      for (const name of [uninstallRestore.SETTINGS_FILE, uninstallRestore.LAUNCH_FILE, uninstallRestore.TASKS_FILE]) {
+        const p = path.join(dotVscode, name);
+        files[p] = uninstallRestore.readTextOrNull(p);
+      }
+    }
+    const global: Record<string, uninstallRestore.ValueSnapshot> = {};
+    const rootCfg = vscode.workspace.getConfiguration();
+    for (const key of uninstallRestore.GLOBAL_SNAPSHOT_KEYS) {
+      const ins = rootCfg.inspect<unknown>(key);
+      const gv = ins ? ins.globalValue : undefined;
+      global[key] = gv === undefined ? { set: false } : { set: true, value: gv };
+    }
+    const created = await uninstallRestore.ensureBackup(dir, { extensionVersion: extVersion, global, files });
+    if (created) {
+      log('[uninstall-restore] original settings snapshot saved — uninstalling (or "Restore Original Settings") puts these back');
+    }
+  } catch (e) {
+    /* best-effort: setup must never fail because of the snapshot */
+    log('[uninstall-restore] snapshot skipped: ' + String(e));
+  }
+}
+
+async function noteGlobalWrite(fqKey: string): Promise<void> {
+  const dir = uninstallBackupDir();
+  if (!dir) {
+    return;
+  }
+  try {
+    await uninstallRestore.noteWritten(dir, { globalKeys: [fqKey] });
+  } catch {
+    /* non-fatal */
+  }
+}
+
+async function noteFileWrite(rec: uninstallRestore.FileWriteRecord): Promise<void> {
+  const dir = uninstallBackupDir();
+  if (!dir) {
+    return;
+  }
+  try {
+    await uninstallRestore.noteWritten(dir, { files: [rec] });
+  } catch {
+    /* non-fatal */
+  }
+}
+
+/** Surgical restore through the pure module (Settings API writer). */
+async function applyUninstallRestore(): Promise<uninstallRestore.RestoreResult> {
+  const dir = uninstallBackupDir();
+  if (!dir) {
+    return { status: 'nothing', restoredGlobal: [], restoredFiles: [], errors: [] };
+  }
+  return uninstallRestore.restoreFromBackup(dir, {
+    log,
+    applyGlobal: async (fqKey, value) => {
+      const dot = fqKey.indexOf('.');
+      await vscode.workspace
+        .getConfiguration(fqKey.slice(0, dot))
+        .update(fqKey.slice(dot + 1), value, vscode.ConfigurationTarget.Global);
+    }
+  });
+}
+
+/**
+ * Palette command: manual undo of Complete Run Setup. Also covers the one
+ * gap VS Code cannot close — uninstalling while VS Code is CLOSED runs no
+ * extension code, so deactivate() cannot fire; the user runs this instead.
+ */
+async function restoreOriginalSettings(skipConfirm?: boolean): Promise<void> {
+  const dir = uninstallBackupDir();
+  if (!dir || !(await uninstallRestore.hasBackup(dir))) {
+    void vscode.window.showInformationMessage(
+      'Nothing to restore — Complete Run Setup has not changed any settings here (or they were already restored).'
+    );
+    return;
+  }
+  if (skipConfirm !== true) {
+    const pick = await vscode.window.showWarningMessage(
+      'Restore the settings that "Complete graphics.h Run Setup" changed? ' +
+      'This undoes the graphics.h wiring of F5, Code Runner (Ctrl+Alt+N), Ctrl+Shift+B and the compiler paths — ' +
+      'back to exactly how they were before the setup ran.',
+      { modal: true },
+      'Restore Settings'
+    );
+    if (pick !== 'Restore Settings') {
+      return;
+    }
+  }
+  try {
+    const res = await vscode.window.withProgress(
+      { location: vscode.ProgressLocation.Notification, title: 'graphics.h: restoring original settings…', cancellable: false },
+      () => applyUninstallRestore()
+    );
+    log('=== Restore original settings summary ===');
+    res.restoredGlobal.forEach((k) => log('- setting restored: ' + k));
+    res.restoredFiles.forEach((f) => log('- file restored: ' + f));
+    res.errors.forEach((e) => log('- ERROR: ' + e));
+    addExtensionBreadcrumb('uninstall-restore', 'restored', {
+      global: String(res.restoredGlobal.length),
+      files: String(res.restoredFiles.length),
+      errors: String(res.errors.length)
+    });
+    if (res.errors.length > 0) {
+      void vscode.window
+        .showWarningMessage(
+          'Restored with problems: ' + res.errors.length + ' item(s) could not be reverted — see the graphics.h output for details.',
+          'Show Output'
+        )
+        .then((pick) => {
+          if (pick === 'Show Output') {
+            showOutput(true);
+          }
+        });
+    } else {
+      void vscode.window.showInformationMessage(
+        'Original settings restored (' + res.restoredGlobal.length + ' setting(s), ' +
+        res.restoredFiles.length + ' file(s)) — the graphics.h run wiring was removed.'
+      );
+    }
+  } catch (e) {
+    log('[uninstall-restore] restore failed: ' + String(e));
+    captureExtensionWarning('uninstall restore failed', { detail: scrubText(String(e)).slice(0, 180) });
+    void vscode.window.showErrorMessage('Could not restore the original settings: ' + String(e));
+  }
+}
+
+/** One-line clean-exit status for the Setup Doctor output. */
+async function describeUninstallCleanup(): Promise<string | undefined> {
+  const dir = uninstallBackupDir();
+  if (!dir) {
+    return 'unavailable (no storage)';
+  }
+  const backup = await uninstallRestore.readBackup(dir);
+  if (!backup) {
+    return 'nothing recorded — Complete Run Setup has not modified settings here';
+  }
+  return (
+    'ARMED — original settings snapshot taken ' + backup.createdAt.slice(0, 10) +
+    ' (' + backup.writtenGlobal.length + ' setting(s), ' + backup.writtenFiles.length + ' file(s) recorded); ' +
+    'uninstalling restores them automatically, "Restore Original Settings" does it now'
+  );
+}
+
 /* ---------------- full setup (0 -> running) ---------------- */
 
 async function addPathsToSetting(key: 'extraIncludePaths' | 'extraLibPaths', additions: string[]): Promise<void> {
@@ -224,6 +401,7 @@ async function addPathsToSetting(key: 'extraIncludePaths' | 'extraLibPaths', add
   const merged = Array.from(new Set([...current, ...additions]));
   if (merged.length !== current.length) {
     await cfg.update(CONFIG_PREFIX + key, merged, vscode.ConfigurationTarget.Global);
+    await noteGlobalWrite(CONFIG_PREFIX + key);
     log(`[setup] ${key} += ${additions.join(', ')}`);
   }
 }
@@ -233,6 +411,7 @@ async function setCompilerPathSetting(gppPath: string): Promise<void> {
   const current = cfg.get<string>(CONFIG_PREFIX + 'compilerPath', 'g++');
   if (current !== gppPath) {
     await cfg.update(CONFIG_PREFIX + 'compilerPath', gppPath, vscode.ConfigurationTarget.Global);
+    await noteGlobalWrite(CONFIG_PREFIX + 'compilerPath');
     log('[setup] compilerPath := ' + gppPath);
   }
 }
@@ -335,6 +514,7 @@ async function pruneStalePaths(): Promise<void> {
       const kept = pruneMissingDirs(current, normOpts());
       if (kept.length !== current.length) {
         await cfg.update(CONFIG_PREFIX + key, kept, vscode.ConfigurationTarget.Global);
+        await noteGlobalWrite(CONFIG_PREFIX + key);
         log(`[setup] pruned ${current.length - kept.length} stale entrie(s) from ${key}`);
       }
     }
@@ -394,6 +574,10 @@ const CODE_RUNNER_ID = 'formulahendry.code-runner';
  * unparseable file is backed up before it is rebuilt.
  */
 async function applyNativeRunIntegration(summary?: string[]): Promise<void> {
+  /* v1.5.13: before the FIRST write, snapshot the pre-extension state
+   * (first run wins) so an uninstall can put everything back exactly
+   * as it was. */
+  await ensureUninstallSnapshot();
   const platform = currentPlatform();
   const cfg = getConfig();
   const info: NativeToolchain = {
@@ -436,6 +620,12 @@ async function applyNativeRunIntegration(summary?: string[]): Promise<void> {
     }
     if (settingsMerged.text !== existing) {
       fs.writeFileSync(settingsPath, settingsMerged.text);
+      /* v1.5.13: record exactly which managed keys this write changed so the
+       * uninstall restore is surgical (user's other settings untouched). */
+      const changedKeys = uninstallRestore.changedManagedKeys(existing, settingsMerged.text);
+      if (changedKeys.length > 0) {
+        await noteFileWrite({ path: settingsPath, kind: 'settings', keys: changedKeys });
+      }
     }
   } else {
     /* no folder open: best-effort write of the Code Runner map into the
@@ -445,17 +635,25 @@ async function applyNativeRunIntegration(summary?: string[]): Promise<void> {
       const currentMap = cr.get<Record<string, string>>('executorMap') || {};
       if (currentMap['cpp'] !== executor) {
         await cr.update('executorMap.cpp', executor, vscode.ConfigurationTarget.Global);
+        await noteGlobalWrite('code-runner.executorMap.cpp');
       }
       if (cr.get<boolean>('runInTerminal', false) !== true) {
         await cr.update('runInTerminal', true, vscode.ConfigurationTarget.Global);
+        await noteGlobalWrite('code-runner.runInTerminal');
       }
       if (cr.get<boolean>('saveFileBeforeRun', false) !== true) {
         await cr.update('saveFileBeforeRun', true, vscode.ConfigurationTarget.Global);
+        await noteGlobalWrite('code-runner.saveFileBeforeRun');
       }
       if (cr.get<boolean>('fileDirectoryAsCwd', true) !== true) {
         await cr.update('fileDirectoryAsCwd', true, vscode.ConfigurationTarget.Global);
+        await noteGlobalWrite('code-runner.fileDirectoryAsCwd');
       }
-      await vscode.workspace.getConfiguration('C_Cpp.default').update('compilerPath', cfg.compilerPath, vscode.ConfigurationTarget.Global);
+      const ccCfg = vscode.workspace.getConfiguration('C_Cpp.default');
+      if (ccCfg.get<string>('compilerPath') !== cfg.compilerPath) {
+        await ccCfg.update('compilerPath', cfg.compilerPath, vscode.ConfigurationTarget.Global);
+        await noteGlobalWrite('C_Cpp.default.compilerPath');
+      }
     } catch (e) {
       log('[native-run] global settings write skipped: ' + String(e));
       if (summary) {
@@ -485,6 +683,7 @@ async function applyNativeRunIntegration(summary?: string[]): Promise<void> {
     }
     if (launchMerged.needsBackup || launchMerged.created || launchMerged.text !== launchExisting) {
       fs.writeFileSync(launchPath, launchMerged.text);
+      await noteFileWrite({ path: launchPath, kind: 'launch' });
     }
 
     const tasksPath = path.join(dotVscode, 'tasks.json');
@@ -503,6 +702,7 @@ async function applyNativeRunIntegration(summary?: string[]): Promise<void> {
     }
     if (tasksMerged.needsBackup || tasksMerged.created || tasksMerged.text !== tasksExisting) {
       fs.writeFileSync(tasksPath, tasksMerged.text);
+      await noteFileWrite({ path: tasksPath, kind: 'tasks' });
     }
     launchNote = stealDefault
       ? ''
@@ -536,6 +736,8 @@ async function runFullSetup(context: vscode.ExtensionContext): Promise<void> {
   const storageRoot = context.globalStorageUri.fsPath;
   const cfg = getConfig();
   const summary: string[] = [];
+  /* v1.5.13: snapshot BEFORE anything is modified (first run wins). */
+  await ensureUninstallSnapshot();
 
   await vscode.window.withProgress(
     { location: vscode.ProgressLocation.Notification, title: 'graphics.h: Complete Setup', cancellable: false },
@@ -1425,6 +1627,11 @@ async function runDoctor(verbose: boolean): Promise<DoctorResult> {
       log(`   fix -> ${res.globalCheck.fix}`);
     }
   }
+  /* v1.5.13: make the clean-exit state visible in every Doctor run */
+  const cleanupLine = await describeUninstallCleanup();
+  if (cleanupLine) {
+    log(`cleanup       : ${cleanupLine}`);
+  }
   log(`graphics.h    : ${res.graphicsReady ? 'READY' : 'NOT READY'}`);
   log('');
 
@@ -1692,6 +1899,8 @@ export function activate(context: vscode.ExtensionContext): void {
   catalog = loadProgramCatalog(context.extensionPath);
   log(`[programs] panel catalog: ${catalog.length} programs loaded`);
   storageDir = context.globalStorageUri.fsPath;
+  extensionPath = context.extensionPath;
+  extVersion = String((context.extension.packageJSON as { version?: string } | undefined)?.version || '');
   const version: string = String(context.extension.packageJSON?.version || '0.0.0');
   const panelProvider = new GhPanelProvider(context.extensionPath, version, catalog, (msg) => {
     void handlePanelClick(msg);
@@ -1957,6 +2166,13 @@ export function activate(context: vscode.ExtensionContext): void {
     ),
 
     vscode.commands.registerCommand(
+      'graphics-h-runner.restoreOriginalSettings',
+      trackedCommand('restoreOriginalSettings', (skipConfirm?: boolean) => {
+        void restoreOriginalSettings(skipConfirm === true);
+      })
+    ),
+
+    vscode.commands.registerCommand(
       'graphics-h-runner.openExamplesFolder',
       trackedCommand('openExamplesFolder', () => {
         void openExamplesFolder(context);
@@ -1987,6 +2203,34 @@ export function activate(context: vscode.ExtensionContext): void {
 }
 
 export async function deactivate(): Promise<void> {
+  /* v1.5.13 THE CLEAN EXIT: a real uninstall puts every setting back that
+   * Complete Run Setup changed. deactivate() also fires on plain shutdowns
+   * and on updates — isRealUninstall() tells those apart via the extensions
+   * folder .obsolete marker plus the installed-version cross-check, so a
+   * shutdown or an update never touches user settings. Best-effort and
+   * silent: teardown must never throw. */
+  try {
+    const dir = uninstallBackupDir();
+    if (extensionPath && dir && (await uninstallRestore.hasBackup(dir))) {
+      const enabled = vscode.workspace
+        .getConfiguration('graphics-h-runner')
+        .get<boolean>('restoreSettingsOnUninstall', true);
+      if (enabled && (await uninstallRestore.isRealUninstall(extensionPath))) {
+        log('[uninstall-restore] uninstall detected — restoring the original settings');
+        const res = await applyUninstallRestore();
+        log(
+          '[uninstall-restore] restored ' + res.restoredGlobal.length + ' setting(s), ' +
+          res.restoredFiles.length + ' file(s), ' + res.errors.length + ' error(s)'
+        );
+      }
+    }
+  } catch (e) {
+    try {
+      log('[uninstall-restore] uninstall restore skipped: ' + String(e));
+    } catch {
+      /* output channel may already be closed */
+    }
+  }
   /* give queued Sentry events a moment to leave before the host tears us down */
   await flushTelemetry(2000);
 }

@@ -2,7 +2,7 @@
   "name": "graphics-h-runner",
   "displayName": "graphics.h Runner. One-click Setup",
   "description": "Compile & run C++ graphics.h programs (WinBGIM / SDL_bgi) with one keypress or F5. Auto-detects graphics.h, applies the right linker flags per OS, auto-installs everything from zero, runs programs in a real terminal (stdin/stdout), surfaces compiler errors in the Problems panel, and ships a sidebar with 31 runnable examples (Turbo C++ classics, conio.h keyboard pads, DDA line input) plus a Computer Graphics Lab — coordinate viewer, pixel inspector, DDA, Bresenham, circle, ellipse, transforms, clipping — a searchable graphics.h cheat sheet, a Setup Doctor, and a global one-click setup — graphics.h then compiles in ANY terminal or IDE without this extension.",
-  "version": "1.5.12",
+  "version": "1.5.13",
   "publisher": "mythos0-labs",
   "author": {
     "name": "Department of CSE, Dhaka International University",
@@ -145,6 +145,12 @@
         "icon": "$(play-circle)"
       },
       {
+        "command": "graphics-h-runner.restoreOriginalSettings",
+        "title": "Restore Original Settings (undo Complete Run Setup)",
+        "category": "graphics.h",
+        "icon": "$(discard)"
+      },
+      {
         "command": "graphics-h-runner.openExamplesFolder",
         "title": "Open Examples Folder",
         "category": "graphics.h",
@@ -285,6 +291,11 @@
           "type": "boolean",
           "default": true,
           "description": "Celebrate results: confetti rains over the graphics.h panel on every successful compilation, the same panel greets you with a School Pride show on first open each session, compile errors get a full-screen error overlay (giant ✗ + the first compiler errors in big type). The Fireworks Simulator button always works."
+        },
+        "graphics-h-runner.restoreSettingsOnUninstall": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Clean exit guarantee: the original values of every setting \"Complete graphics.h Run Setup\" changes are snapshotted before the first write, and UNINSTALLING the extension automatically restores them (F5 launch.json, Code Runner executor, build task, compiler paths). Turn off to keep the setup after uninstall. The command \"Restore Original Settings\" performs the same restore manually at any time."
         }
       }
     },

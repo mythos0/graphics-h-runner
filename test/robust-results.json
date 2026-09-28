@@ -16,7 +16,7 @@
         "nonblack": 0.0326,
         "unique_colors": 6
       },
-      "secs": "7.5"
+      "secs": "7.6"
     },
     "rfx03_conio_menu.cpp": {
       "ok": true,
@@ -25,7 +25,7 @@
         "nonblack": 0.0552,
         "unique_colors": 10
       },
-      "secs": "8.4"
+      "secs": "8.5"
     },
     "rfx04_julia_morph.cpp": {
       "ok": true,
@@ -34,7 +34,7 @@
         "nonblack": 0.2493,
         "unique_colors": 23
       },
-      "secs": "6.8"
+      "secs": "6.7"
     },
     "rfx05_image_ops.cpp": {
       "ok": true,
@@ -43,13 +43,13 @@
         "nonblack": 0.0104,
         "unique_colors": 6
       },
-      "secs": "6.2"
+      "secs": "6.1"
     },
     "rfx06_viewport_clip.cpp": {
       "ok": true,
       "exit": 0,
       "analysis": {
-        "nonblack": 0.0129,
+        "nonblack": 0.013,
         "unique_colors": 4
       },
       "secs": "5.3"
@@ -85,10 +85,10 @@
       "ok": true,
       "exit": 0,
       "analysis": {
-        "nonblack": 0.0091,
+        "nonblack": 0.0089,
         "unique_colors": 5
       },
-      "secs": "9.4"
+      "secs": "9.3"
     }
   },
   "B": {
