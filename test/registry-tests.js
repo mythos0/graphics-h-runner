@@ -48,8 +48,22 @@ const INTERNAL = new Set(['setContext']); /* workbench-internal, not ours to reg
 
 console.log('registry-tests — command graph consistency\n');
 
-check('version is 1.5.8', () => {
-  assert.strictEqual(pkg.version, '1.5.8');
+check('version is 1.5.9', () => {
+  assert.strictEqual(pkg.version, '1.5.9');
+});
+
+check('v1.5.9 regression: view title = the single ? cheat-sheet icon (setup/doctor/fireworks icons removed)', () => {
+  const items = (pkg.contributes.menus['view/title'] || []).filter(
+    (i) => typeof i.when === 'string' && i.when.includes('graphics-h-runner.programs')
+  );
+  assert.strictEqual(items.length, 1, 'programs view title must carry exactly ONE action, got: '
+    + items.map((i) => i.command).join(', '));
+  assert.strictEqual(items[0].command, 'graphics-h-runner.cheatSheet');
+  const cmd = pkg.contributes.commands.find((c) => c.command === 'graphics-h-runner.cheatSheet');
+  assert.ok(cmd, 'cheatSheet not contributed');
+  assert.strictEqual(cmd.icon, '$(question)', 'the ? icon missing');
+  assert.ok(bundle.includes('graphics-h-runner.cheatSheet'), 'cheatSheet never registered in the bundle');
+  assert.ok(bundle.includes('openCheatSheet'), 'bundle never calls openCheatSheet');
 });
 
 check('every panel action button is a contributed command', () => {

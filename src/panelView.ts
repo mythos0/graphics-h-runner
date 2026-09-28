@@ -69,6 +69,12 @@ export class GhPanelProvider implements vscode.WebviewViewProvider {
    * page swap. A boot-restore on every fresh page re-syncs this flag. */
   private cheatOpen = false;
   private pendingRender = false;
+  /* v1.5.9: the ? action lives in the view TITLE bar now. When the page
+   * has not booted yet (or is showing the recovery page) the open request
+   * is parked here and delivered on the page's boot handshake. */
+  private pendingCheatOpen = false;
+  /* v1.5.9: did the page script answer since the last html render? */
+  private pageAlive = false;
 
   constructor(
     private readonly extensionRoot: string,
@@ -95,6 +101,39 @@ export class GhPanelProvider implements vscode.WebviewViewProvider {
   }
 
   /**
+   * v1.5.9: the "?" cheat-sheet action moved from the panel header to the
+   * view TITLE bar (package.json view/title -> graphics-h-runner.cheatSheet).
+   * The host now drives the sheet: reveal the view, then tell the running
+   * page to toggle it. A page that has not booted yet parks the request;
+   * it is delivered when the page posts its boot cheat-sync message. A
+   * fallback recovery page is first swapped back to the real panel.
+   */
+  async openCheatSheet(): Promise<void> {
+    if (this.fallbackActive) {
+      this.reloadPanel(); /* recovery page -> bring the real panel back */
+    }
+    try {
+      await this.reveal(); /* resolves the webview on first use */
+    } catch {
+      return;
+    }
+    if (!this.view) {
+      this.pendingCheatOpen = true;
+      return;
+    }
+    if (this.pageAlive) {
+      const open = !this.cheatOpen; /* the title-bar ? toggles like a button */
+      this.cheatOpen = open;
+      void this.view.webview.postMessage({ type: 'cheat', open }).then(
+        () => undefined,
+        () => undefined
+      );
+    } else {
+      this.pendingCheatOpen = true; /* delivered on the boot handshake */
+    }
+  }
+
+  /**
    * User-facing recovery: rebuild the full panel HTML, clear any fallback
    * state and restart the liveness watchdog (command: reloadPanel).
    */
@@ -102,6 +141,7 @@ export class GhPanelProvider implements vscode.WebviewViewProvider {
     this.fallbackActive = false;
     this.health?.reset();
     if (this.view) {
+      this.pageAlive = false;
       this.view.webview.html = this.renderHtml();
       this.health?.start();
     }
@@ -168,16 +208,19 @@ export class GhPanelProvider implements vscode.WebviewViewProvider {
       retry: () => {
         /* re-navigating the webview clears the service-worker race */
         this.fallbackActive = false;
+        this.pageAlive = false;
         view.webview.html = this.renderHtml();
         this.health?.start();
       },
       fallback: () => {
         this.fallbackActive = true;
+        this.pageAlive = false;
         view.webview.html = this.renderFallbackHtml();
       }
     });
 
     try {
+      this.pageAlive = false;
       view.webview.html = this.renderHtml();
     } catch {
       /* html construction itself failed — go straight to the tree fallback */
@@ -198,11 +241,26 @@ export class GhPanelProvider implements vscode.WebviewViewProvider {
       try {
         if (msg && msg.type === 'pong') {
           this.health?.pong();
+          this.pageAlive = true;
           return;
         }
-        /* v1.5.8: cheat-sheet open/close sync from the page */
+        /* v1.5.8: cheat-sheet open/close sync from the page.
+         * v1.5.9: this message is also the boot handshake — a parked
+         * view-title "?" open request is delivered right here. */
         if (msg && msg.type === 'cheat') {
+          this.pageAlive = true;
           this.cheatOpen = !!msg.open;
+          if (this.pendingCheatOpen) {
+            /* the title-bar ? opened the panel itself — now that the
+             * page can receive messages, open the sheet */
+            this.pendingCheatOpen = false;
+            this.cheatOpen = true;
+            void this.view?.webview.postMessage({ type: 'cheat', open: true }).then(
+              () => undefined,
+              () => undefined
+            );
+            return;
+          }
           if (!this.cheatOpen && this.pendingRender) {
             /* sheet closed — deliver the re-render that was deferred */
             this.postState();
@@ -235,6 +293,7 @@ export class GhPanelProvider implements vscode.WebviewViewProvider {
     view.onDidDispose(() => {
       this.health?.dispose();
       this.health = undefined;
+      this.pageAlive = false;
       if (this.view === view) {
         this.view = undefined;
       }
@@ -284,6 +343,7 @@ export class GhPanelProvider implements vscode.WebviewViewProvider {
     }
     this.pendingRender = false;
     this.cheatOpen = false;
+    this.pageAlive = false;
     /* full re-render: the HTML is cheap to rebuild and always consistent */
     this.view.webview.html = this.fallbackActive ? this.renderFallbackHtml() : this.renderHtml();
   }

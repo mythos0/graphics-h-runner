@@ -1301,6 +1301,11 @@ function activate(context) {
         celebrator?.stop();
     })), vscode.commands.registerCommand('graphics-h-runner.reloadPanel', trackedCommand('reloadPanel', () => {
         panel?.reloadPanel();
+    })), 
+    /* v1.5.9: the "?" in the view TITLE bar (the in-panel ? button is gone).
+       Opens/toggles the cheat sheet inside the activity-bar panel. */
+    vscode.commands.registerCommand('graphics-h-runner.cheatSheet', trackedCommand('cheatSheet', () => {
+        void panelProvider.openCheatSheet();
     })), vscode.commands.registerCommand('graphics-h-runner.openProgram', trackedCommand('openProgram', async (program) => {
         await openProgram(program); /* awaitable: executeCommand resolves when the file is open */
     })));

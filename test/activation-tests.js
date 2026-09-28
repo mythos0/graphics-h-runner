@@ -38,6 +38,7 @@ exports.run = async function () {
     'graphics-h-runner.openProgram',
     'graphics-h-runner.runSample',
     'graphics-h-runner.reloadPanel',
+    'graphics-h-runner.cheatSheet',
     'graphics-h-runner.fireworks',
     'graphics-h-runner.stopFireworks'
   ]) {
@@ -176,5 +177,5 @@ exports.run = async function () {
   await new Promise((r) => setTimeout(r, 300));
   console.log('activation-tests: fireworks toggle OK — start, toggle-stop and idempotent Stop all clean');
 
-  console.log('activation-tests: extension active, 13 commands present, panel focused, doctor ran, all run paths + fallback + celebrations PASS');
+  console.log('activation-tests: extension active, 14 commands present (incl. the v1.5.9 cheatSheet view-title action), panel focused, doctor ran, all run paths + fallback + celebrations PASS');
 };

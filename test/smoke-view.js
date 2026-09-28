@@ -327,30 +327,31 @@ check('Computer Graphics Lab: own section below Example Programs, collapsed + pe
   assert.ok(h.includes("labSec.addEventListener('keydown'"), 'lab toggle keyboard support missing');
 });
 
-check('help "?" button beside the title opens a searchable graphics.h cheat sheet', () => {
+check('cheat sheet: searchable overlay + full data content (? button moved to the view title in v1.5.9)', () => {
   const h = html({});
   const heroAt = h.indexOf('class="hero"');
   const hero = h.slice(heroAt, h.indexOf('class="status-row"'));
   assert.ok(hero.includes('<h1>graphics.h Runner</h1>'), 'hero title missing');
-  assert.ok(hero.includes('id="help-btn"'), 'help button missing beside the title');
-  assert.ok(hero.includes('class="hero-row"'), 'hero row layout missing');
-  assert.ok(hero.includes('>?</button>'), 'help button text missing');
+  /* v1.5.9: the ? is NOT in the panel anymore — the view title bar owns it
+     (package.json view/title -> graphics-h-runner.cheatSheet, pinned by
+     cheat-dom-tests + registry-tests). The page opens the sheet on the
+     host message instead. */
+  assert.ok(!h.includes('help-btn'), 'in-panel ? button must be gone');
+  assert.ok(!hero.includes('<button'), 'no buttons may sit in the hero block');
+  assert.ok(h.includes("m.type === 'cheat'"), 'host-driven cheat message handler missing');
   assert.ok(h.includes('class="cheat-overlay"'), 'cheat overlay missing');
   assert.ok(h.includes('graphics.h Cheat Sheet'), 'cheat sheet heading missing');
   assert.ok(h.includes('id="cheat-q"'), 'cheat search input missing');
   assert.ok(h.includes('id="cheat-close"'), 'cheat close button missing');
   assert.ok(h.includes('id="cheat-empty"'), 'cheat no-results row missing');
   const fns = (h.match(/class="cheat-fn"/g) || []).length;
-  assert.ok(fns >= 40, 'too few cheat entries: ' + fns);
-  for (const sig of ['initwindow(width, height', 'putpixel(x, y, color)', 'setfillstyle(pattern, color)', 'outtextxy(x, y', 'floodfill(x, y, border)', 'getmouseclick(kind', 'ismouseclick(kind', 'kbhit()', 'putimage(l, t, bitmap, verb)', 'setviewport(l, t, r, b, clip)', 'textheight("t")']) {
+  assert.ok(fns >= 55, 'too few cheat entries: ' + fns);
+  for (const sig of ['initwindow(width, height', 'putpixel(x, y, color)', 'setfillstyle(pattern, color)', 'outtextxy(x, y', 'floodfill(x, y, border)', 'getmouseclick(kind', 'ismouseclick(kind', 'kbhit()', 'putimage(l, t, bitmap, verb)', 'setviewport(l, t, r, b, clip)', 'textheight(&quot;t&quot;)', 'setfillstyle(...) BEFORE bar(...)', 'putpixel is SLOW']) {
     assert.ok(h.includes(sig), 'cheat entry missing: ' + sig);
   }
   assert.ok(h.includes('filterCheat'), 'cheat search filter not wired');
   assert.ok(h.includes("ev.key === 'Escape'"), 'Esc close missing');
   assert.ok(h.includes("cheatOv.addEventListener('click'"), 'backdrop close missing');
-  /* the help button is not a command button and must not post commands */
-  const btn = h.slice(h.indexOf('id="help-btn"') - 200, h.indexOf('id="help-btn"') + 400);
-  assert.ok(!btn.includes('data-cmd'), 'help button must not carry a data-cmd');
 });
 
 check('program count lives in the section header (per-button hint gone)', () => {

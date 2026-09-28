@@ -2,7 +2,7 @@
   "name": "graphics-h-runner",
   "displayName": "graphics.h Runner. One-click Setup",
   "description": "Compile & run C++ graphics.h programs (WinBGIM / SDL_bgi) with one keypress or F5. Auto-detects graphics.h, applies the right linker flags per OS, auto-installs everything from zero, runs programs in a real terminal (stdin/stdout), surfaces compiler errors in the Problems panel, and ships a sidebar with 31 runnable examples (Turbo C++ classics, conio.h keyboard pads, DDA line input) plus a Computer Graphics Lab — coordinate viewer, pixel inspector, DDA, Bresenham, circle, ellipse, transforms, clipping — a searchable graphics.h cheat sheet, a Setup Doctor, and a global one-click setup — graphics.h then compiles in ANY terminal or IDE without this extension.",
-  "version": "1.5.8",
+  "version": "1.5.9",
   "publisher": "mythos0-labs",
   "author": {
     "name": "Department of CSE, Dhaka International University",
@@ -173,6 +173,12 @@
         "title": "Stop Fireworks Simulator",
         "category": "graphics.h",
         "icon": "$(debug-stop)"
+      },
+      {
+        "command": "graphics-h-runner.cheatSheet",
+        "title": "Cheat Sheet",
+        "category": "graphics.h",
+        "icon": "$(question)"
       }
     ],
     "debuggers": [
@@ -330,14 +336,9 @@
       ],
       "view/title": [
         {
-          "command": "graphics-h-runner.setupEverything",
+          "command": "graphics-h-runner.cheatSheet",
           "when": "view == graphics-h-runner.programs",
           "group": "navigation@0"
-        },
-        {
-          "command": "graphics-h-runner.doctor",
-          "when": "view == graphics-h-runner.programs",
-          "group": "navigation@1"
         },
         {
           "command": "graphics-h-runner.reloadPanel",
@@ -352,16 +353,6 @@
         {
           "command": "graphics-h-runner.doctor",
           "when": "view == graphics-h-runner.fallback",
-          "group": "navigation@2"
-        },
-        {
-          "command": "graphics-h-runner.fireworks",
-          "when": "view == graphics-h-runner.programs && !graphics-h-runner.fireworksRunning",
-          "group": "navigation@2"
-        },
-        {
-          "command": "graphics-h-runner.stopFireworks",
-          "when": "view == graphics-h-runner.programs && graphics-h-runner.fireworksRunning",
           "group": "navigation@2"
         },
         {

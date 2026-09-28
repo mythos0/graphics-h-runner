@@ -179,6 +179,325 @@ function programCards(programs: PanelProgramInfo[]): string {
     .join('\n        ');
 }
 
+/**
+ * The cheat sheet CONTENT — one source of truth, rendered by cheatSheetHtml()
+ * below (v1.5.9). The hand-written overlay this data used to be was shipped
+ * broken in v1.5.8: a single stray `</div>` closed `.cheat-body` after the
+ * third category, so the remaining eight categories became stray children of
+ * `.cheat-sheet` (clipped invisible) and the footer line was pushed out of the
+ * card — users saw ONLY "WinBGIM is the default on Windows; SDL_bgi … Press
+ * Esc to close." With the markup generated from this array there is exactly
+ * one div-opening template and one closing tag per category/entry, so that
+ * class of bug is impossible by construction; test/cheat-dom-tests.js parses
+ * the rendered page with a browser-style stack parser and pins the structure.
+ */
+interface CheatEntry {
+  sig: string;
+  desc: string;
+}
+
+interface CheatSection {
+  title: string;
+  entries: CheatEntry[];
+}
+
+const CHEAT_SECTIONS: CheatSection[] = [
+  {
+    title: 'The screen coordinate system',
+    entries: [
+      {
+        sig: '(0,0) = the TOP-LEFT corner',
+        desc: '+x grows right, +y grows DOWN. getmaxx()/getmaxy() are the last drawable pixels. The Coordinate Viewer lab program shows this live.'
+      }
+    ]
+  },
+  {
+    title: 'Run it here',
+    entries: [
+      {
+        sig: 'Ctrl+Alt+R  (or F5)',
+        desc: 'Compile & run the open .cpp — the compiler and graphics library are installed automatically on first run.'
+      },
+      {
+        sig: 'ESC or Q (in the window)',
+        desc: 'Programs run until YOU quit them — the graphics window and the terminal (with all output) stay open. Random keystrokes never stop a program. Ctrl+Alt+S force-stops.'
+      },
+      {
+        sig: 'Ctrl+Alt+B',
+        desc: 'Compile only; compiler errors land in the Problems panel.'
+      },
+      {
+        sig: 'Ctrl+Alt+S',
+        desc: 'Stop the running graphics program (Ctrl+C) — the runner terminal stays open with all output, ready for the next run.'
+      }
+    ]
+  },
+  {
+    title: 'Celebrations',
+    entries: [
+      {
+        sig: '\ud83c\udf89 Confetti on success',
+        desc: 'Every successful compilation rains a confetti burst over THIS panel (canvas-confetti, Realistic Look) — no extra tab opens, and the panel stays clickable while the particles fall.'
+      },
+      {
+        sig: '\u274c Error overlay',
+        desc: 'When a compile stops on errors, a full-screen error overlay shows a giant shaking \u2717 and the compiler\u2019s first error messages in big type \u2014 click or press Esc to dismiss.'
+      },
+      {
+        sig: '\ud83c\udf92 School Pride',
+        desc: 'The first time the graphics.h panel opens in a session, a 5-second School Pride show fires across this panel (once per session).'
+      },
+      {
+        sig: '\ud83c\udf86 Fireworks Simulator',
+        desc: 'The festive action button launches a full-screen fireworks show — click it again (or Esc, or the red Stop button) to stop.'
+      }
+    ]
+  },
+  {
+    title: 'Setup & lifecycle',
+    entries: [
+      {
+        sig: 'initwindow(width, height, "title")',
+        desc: 'WinBGIM: open a graphics window (title optional; also 2 args on SDL_bgi).'
+      },
+      {
+        sig: 'initgraph(&gd, &gm, "path")',
+        desc: 'Classic Turbo C++ style startup; detectgraph() picks a driver.'
+      },
+      { sig: 'closegraph()', desc: 'Close the window and shut the graphics system down.' },
+      { sig: 'cleardevice()', desc: 'Erase the whole window (fill with the background color).' },
+      { sig: 'getmaxx() / getmaxy()', desc: 'Last drawable pixel in x / y.' },
+      { sig: 'delay(ms)', desc: 'Pause milliseconds — the heartbeat of every animation loop.' }
+    ]
+  },
+  {
+    title: 'Lines & shapes',
+    entries: [
+      { sig: 'putpixel(x, y, color)', desc: 'Color exactly one pixel (see getpixel below).' },
+      { sig: 'line(x1, y1, x2, y2)', desc: 'Straight line between two points.' },
+      {
+        sig: 'lineto(x, y) / linerel(dx, dy)',
+        desc: 'Line from the current position (absolute / relative).'
+      },
+      {
+        sig: 'moveto(x, y) / moverel(dx, dy)',
+        desc: 'Move the current position without drawing.'
+      },
+      { sig: 'rectangle(left, top, right, bottom)', desc: 'Outline rectangle.' },
+      { sig: 'bar(left, top, right, bottom)', desc: 'Filled bar in the current fill style (no outline).' },
+      {
+        sig: 'bar3d(l, t, r, b, depth, topflag)',
+        desc: '3-D bar; topflag=1 draws the top face.'
+      },
+      { sig: 'circle(x, y, radius)', desc: 'Circle outline.' },
+      {
+        sig: 'arc(x, y, start, end, radius)',
+        desc: "Arc; angles in degrees, 0° at 3 o'clock, counter-clockwise."
+      },
+      {
+        sig: 'ellipse(x, y, start, end, xrad, yrad)',
+        desc: 'Elliptical arc; 0..360 for the full outline.'
+      },
+      { sig: 'fillellipse(x, y, xrad, yrad)', desc: 'Filled ellipse.' },
+      { sig: 'pieslice(x, y, start, end, radius)', desc: 'Filled circular wedge.' },
+      { sig: 'sector(x, y, start, end, xrad, yrad)', desc: 'Filled elliptical wedge.' },
+      {
+        sig: 'drawpoly(n, pts) / fillpoly(n, pts)',
+        desc: 'Polygon outline / filled; pts is int[2n], repeat the first point to close.'
+      }
+    ]
+  },
+  {
+    title: 'Colors & filling',
+    entries: [
+      {
+        sig: 'BLACK=0 BLUE GREEN CYAN RED MAGENTA BROWN LIGHTGRAY DARKGRAY LIGHTBLUE LIGHTGREEN LIGHTCYAN LIGHTRED LIGHTMAGENTA YELLOW WHITE=15',
+        desc: 'The 16 standard color constants (0..15) shared by every BGI implementation.'
+      },
+      { sig: 'setcolor(c) / setbkcolor(c)', desc: 'Current drawing color / background color.' },
+      {
+        sig: 'setfillstyle(pattern, color)',
+        desc: 'Fill used by bar, fillpoly, pieslice, floodfill…'
+      },
+      {
+        sig: 'floodfill(x, y, border)',
+        desc: 'Flood-fill the region around (x,y) until the border color is met.'
+      },
+      {
+        sig: 'getpixel(x, y)',
+        desc: 'Color value of one pixel — the heart of a Pixel Inspector.'
+      },
+      { sig: 'COLOR(r, g, b)', desc: '24-bit color macro (WinBGIM / SDL_bgi extension).' },
+      {
+        sig: 'SOLID_FILL LINE_FILL SLASH_FILL BKSLASH_FILL HATCH_FILL XHATCH_FILL INTERLEAVE_FILL WIDE_DOT_FILL CLOSE_DOT_FILL EMPTY_FILL',
+        desc: 'setfillstyle() pattern constants.'
+      }
+    ]
+  },
+  {
+    title: 'Text',
+    entries: [
+      {
+        sig: 'outtextxy(x, y, "text")',
+        desc: 'Print a string at a pixel position (use a char buffer for numbers).'
+      },
+      {
+        sig: 'settextstyle(font, dir, size)',
+        desc: 'DEFAULT_FONT, TRIPLEX_FONT, SMALL_FONT, SANS_SERIF_FONT, GOTHIC_FONT; HORIZ_DIR / VERT_DIR.'
+      },
+      {
+        sig: 'settextjustify(h, v)',
+        desc: 'How x,y anchor the string (LEFT_TEXT, CENTER_TEXT, …).'
+      },
+      {
+        sig: 'textheight("t") / textwidth("t")',
+        desc: 'Pixel metrics of a string in the current font.'
+      }
+    ]
+  },
+  {
+    title: 'Keyboard',
+    entries: [
+      {
+        sig: 'getch()',
+        desc: 'Wait for one key — keep the window open at the end of main().'
+      },
+      {
+        sig: 'kbhit()',
+        desc: 'True when a key is waiting: the non-blocking poll for animation loops.'
+      },
+      {
+        sig: '0 / 224, then 72 80 75 77',
+        desc: 'Arrow keys send a prefix (0 or 224), then UP=72 DOWN=80 LEFT=75 RIGHT=77.'
+      },
+      {
+        sig: 'getch() == 27',
+        desc: '27 is the Esc key code — the classic "quit on Esc" check; this extension\u2019s samples quit ONLY on Esc or Q.'
+      }
+    ]
+  },
+  {
+    title: 'Mouse (WinBGIM / SDL_bgi)',
+    entries: [
+      { sig: 'ismouseclick(kind)', desc: 'True when that mouse event is queued.' },
+      {
+        sig: 'getmouseclick(kind, &x, &y)',
+        desc: 'Pop the event and read the pixel position.'
+      },
+      {
+        sig: 'clearmouseclick(kind)',
+        desc: 'Drop queued events you do not handle.'
+      },
+      {
+        sig: 'WM_MOUSEMOVE WM_LBUTTONDOWN WM_LBUTTONUP WM_RBUTTONDOWN WM_RBUTTONUP',
+        desc: 'The mouse event kinds.'
+      },
+      {
+        sig: 'getpixel(x, y)',
+        desc: 'Pair the mouse position with a color — instant Pixel Inspector.'
+      }
+    ]
+  },
+  {
+    title: 'Animation & images',
+    entries: [
+      {
+        sig: 'imagesize(l, t, r, b)',
+        desc: 'Bytes needed to snapshot a rectangle.'
+      },
+      {
+        sig: 'getimage(l, t, r, b, bitmap)',
+        desc: 'Snapshot a rectangle into a buffer.'
+      },
+      {
+        sig: 'putimage(l, t, bitmap, verb)',
+        desc: 'Stamp it back: COPY_PUT, XOR_PUT, AND_PUT, OR_PUT, NOT_PUT — the classic sprite trick.'
+      },
+      {
+        sig: 'setactivepage(p) / setvisualpage(p)',
+        desc: 'Double buffering where pages are supported.'
+      }
+    ]
+  },
+  {
+    title: 'Viewport',
+    entries: [
+      {
+        sig: 'setviewport(l, t, r, b, clip)',
+        desc: 'Draw inside a sub-window; coordinates become relative to it.'
+      },
+      { sig: 'clearviewport()', desc: 'Erase only the current viewport.' }
+    ]
+  },
+  {
+    title: 'Common pitfalls',
+    entries: [
+      {
+        sig: 'setfillstyle(...) BEFORE bar(...)',
+        desc: 'Fills are STATE: bar/fillpoly/pieslice paint with the LAST setfillstyle — set the pattern and color before the draw call, not after.'
+      },
+      {
+        sig: 'char buf[16]; sprintf(buf, "%d", n); outtextxy(x, y, buf);',
+        desc: 'outtextxy takes a char*, never an int — format numbers into a buffer first (and keep the buffer in scope).'
+      },
+      {
+        sig: 'getch() at the end of main()',
+        desc: 'Without it the window closes the instant the program finishes — no key, no window, no output to check.'
+      },
+      {
+        sig: 'cleardevice() → draw → delay(20)',
+        desc: 'The animation loop rhythm: erase, redraw, breathe. Skipping the small delay makes frames flicker or never appear.'
+      },
+      {
+        sig: 'putpixel is SLOW',
+        desc: 'Never paint big areas pixel-by-pixel — use bar, fillpoly or putimage. Thousands of putpixel calls per frame will freeze the window.'
+      }
+    ]
+  }
+];
+
+export const CHEAT_SECTION_COUNT = CHEAT_SECTIONS.length;
+export const CHEAT_ENTRY_COUNT = CHEAT_SECTIONS.reduce((n, s) => n + s.entries.length, 0);
+
+/**
+ * v1.5.9: render the cheat sheet from CHEAT_SECTIONS. The only divs in the
+ * whole overlay are emitted by the three templates here — the category
+ * wrapper (`cheat-cat`), the entry row (`cheat-fn`) and the static shell —
+ * each with its closing tag in the SAME template literal. All content goes
+ * through esc(), so no entry can inject markup. Structure is balanced by
+ * construction (the v1.5.8 stray-`</div>` bug class is impossible here).
+ */
+function cheatSheetHtml(): string {
+  const sections = CHEAT_SECTIONS.map(
+    (sec) =>
+      '        <div class="cheat-cat">\n' +
+      `          <h4>${esc(sec.title)}</h4>\n` +
+      sec.entries
+        .map(
+          (e) =>
+            `          <div class="cheat-fn"><code>${esc(e.sig)}</code><span>${esc(e.desc)}</span></div>`
+        )
+        .join('\n') +
+      '\n        </div>'
+  ).join('\n');
+  return [
+    '  <div class="cheat-overlay" id="cheat-overlay" role="dialog" aria-modal="true" aria-label="graphics.h cheat sheet">',
+    '    <div class="cheat-sheet">',
+    '      <div class="cheat-head">',
+    '        <h3>graphics.h Cheat Sheet</h3>',
+    '        <button class="cheat-close" id="cheat-close" type="button" title="Close (Esc)" aria-label="Close the cheat sheet">×</button>',
+    '      </div>',
+    '      <input class="cheat-q" id="cheat-q" type="text" placeholder="Search functions… try circle, mouse, fill, text" autocomplete="off">',
+    '      <div class="cheat-body" id="cheat-body">',
+    sections,
+    '        <div id="cheat-empty">No functions match your search.</div>',
+    '      </div>',
+    '      <div class="cheat-foot">WinBGIM is the default on Windows; SDL_bgi on Linux/macOS. Press <span class="kbd">Esc</span> to close.</div>',
+    '    </div>',
+    '  </div>'
+  ].join('\n');
+}
+
 export function buildPanelHtml(opts: PanelHtmlOptions): string {
   const { commands, status, version, nonce, cspSource, logoUri } = opts;
   const fireworksRunning = !!opts.fireworksRunning;
@@ -343,15 +662,12 @@ export function buildPanelHtml(opts: PanelHtmlOptions): string {
   .kbd { background:rgba(255,255,255,.09); border:1px solid var(--card-line); border-radius:5px; padding:1px 6px; font-size:10px; }
   .chip { display:inline-block; font-size:10px; color:var(--txt-dim); border:1px solid var(--card-line); border-radius:999px; padding:2px 10px; margin:0 3px; }
 
-  /* hero row: the panel title with the "?" cheat-sheet button right
-     beside it (the question mark opens a searchable graphics.h
-     reference — functions, colors, keyboard, mouse, animation) */
-  .hero-row { display:flex; align-items:center; gap:8px; min-width:0; }
-  .help-btn { width:22px; height:22px; flex:0 0 22px; border-radius:50%;
-    border:1px solid var(--card-line); background:rgba(255,255,255,.07);
-    color:var(--txt-dim); font-size:12.5px; font-weight:700; line-height:1;
-    cursor:pointer; transition:.15s; padding:0; }
-  .help-btn:hover { color:var(--txt); border-color:rgba(255,255,255,.3); background:rgba(255,255,255,.14); }
+  /* v1.5.9: the "?" cheat-sheet button moved OUT of the panel header to
+     the view TITLE bar (package.json view/title + the
+     graphics-h-runner.cheatSheet command) — the activity-bar view header
+     now carries exactly one icon, and the panel page opens the sheet on
+     the host's {type:'cheat', open:true} message instead of a local
+     button (the open/close/search logic below is unchanged). */
   /* lab tag gets the ready-green tint — every lab program is verified */
   .tag-lab { background:rgba(52,211,153,.14); color:#8fe3c4; }
   .sec-gap { height:6px; flex:0 0 auto; }
@@ -403,10 +719,7 @@ export function buildPanelHtml(opts: PanelHtmlOptions): string {
 <body>
   <div class="header">
     <div class="hero">
-      <div class="hero-row">
-        <h1>graphics.h Runner</h1>
-        <button class="help-btn" id="help-btn" type="button" title="graphics.h cheat sheet" aria-label="Open the graphics.h cheat sheet" aria-expanded="false">?</button>
-      </div>
+      <h1>graphics.h Runner</h1>
       <div class="status-row">${statusPill(status)}<span class="chip">v${esc(version)}</span></div>
       ${envCard(status)}
     </div>
@@ -445,109 +758,7 @@ export function buildPanelHtml(opts: PanelHtmlOptions): string {
     ${logoUri ? `<div class="foot-brand"><img class="diu-logo" src="${esc(logoUri)}" alt="Daffodil International University — Department of CSE" title="Powered by the Department of CSE, Dhaka International University"></div>` : ''}
   </div>
 
-  <div class="cheat-overlay" id="cheat-overlay" role="dialog" aria-modal="true" aria-label="graphics.h cheat sheet">
-    <div class="cheat-sheet">
-      <div class="cheat-head">
-        <h3>graphics.h Cheat Sheet</h3>
-        <button class="cheat-close" id="cheat-close" type="button" title="Close (Esc)" aria-label="Close the cheat sheet">×</button>
-      </div>
-      <input class="cheat-q" id="cheat-q" type="text" placeholder="Search functions… try circle, mouse, fill, text" autocomplete="off">
-      <div class="cheat-body" id="cheat-body">
-        <div class="cheat-cat">
-          <h4>The screen coordinate system</h4>
-          <div class="cheat-fn"><code>(0,0) = the TOP-LEFT corner</code><span>+x grows right, +y grows DOWN. getmaxx()/getmaxy() are the last drawable pixels. The Coordinate Viewer lab program shows this live.</span></div>
-        </div>
-        <div class="cheat-cat">
-          <h4>Run it here</h4>
-          <div class="cheat-fn"><code>Ctrl+Alt+R  (or F5)</code><span>Compile &amp; run the open .cpp — the compiler and graphics library are installed automatically on first run.</span></div>
-          <div class="cheat-fn"><code>ESC or Q (in the window)</code><span>Programs run until YOU quit them — the graphics window and the terminal (with all output) stay open. Random keystrokes never stop a program. Ctrl+Alt+S force-stops.</span></div>
-          <div class="cheat-fn"><code>Ctrl+Alt+B</code><span>Compile only; compiler errors land in the Problems panel.</span></div>
-          <div class="cheat-fn"><code>Ctrl+Alt+S</code><span>Stop the running graphics program (Ctrl+C) — the runner terminal stays open with all output, ready for the next run.</span></div>
-        </div>
-        <div class="cheat-cat">
-          <h4>Celebrations</h4>
-          <div class="cheat-fn"><code>\ud83c\udf89 Confetti on success</code><span>Every successful compilation rains a confetti burst over THIS panel (canvas-confetti, Realistic Look) — no extra tab opens, and the panel stays clickable while the particles fall.</span></div>
-          <div class="cheat-fn"><code>\u274c Error overlay</code><span>When a compile stops on errors, a full-screen error overlay shows a giant shaking \u2717 and the compiler\u2019s first error messages in big type \u2014 click or press Esc to dismiss.</span></div>
-          <div class="cheat-fn"><code>\ud83c\udf92 School Pride</code><span>The first time the graphics.h panel opens in a session, a 5-second School Pride show fires across this panel (once per session).</span></div>
-          <div class="cheat-fn"><code>\ud83c\udf86 Fireworks Simulator</code><span>The festive action button launches a full-screen fireworks show — click it again (or Esc, or the red Stop button) to stop.</span></div>
-        </div>
-        
-        </div>
-        <div class="cheat-cat">
-          <h4>Setup &amp; lifecycle</h4>
-          <div class="cheat-fn"><code>initwindow(width, height, "title")</code><span>WinBGIM: open a graphics window (title optional; also 2 args on SDL_bgi).</span></div>
-          <div class="cheat-fn"><code>initgraph(&amp;gd, &amp;gm, "path")</code><span>Classic Turbo C++ style startup; detectgraph() picks a driver.</span></div>
-          <div class="cheat-fn"><code>closegraph()</code><span>Close the window and shut the graphics system down.</span></div>
-          <div class="cheat-fn"><code>cleardevice()</code><span>Erase the whole window (fill with the background color).</span></div>
-          <div class="cheat-fn"><code>getmaxx() / getmaxy()</code><span>Last drawable pixel in x / y.</span></div>
-          <div class="cheat-fn"><code>delay(ms)</code><span>Pause milliseconds — the heartbeat of every animation loop.</span></div>
-        </div>
-        <div class="cheat-cat">
-          <h4>Lines &amp; shapes</h4>
-          <div class="cheat-fn"><code>putpixel(x, y, color)</code><span>Color exactly one pixel (see getpixel below).</span></div>
-          <div class="cheat-fn"><code>line(x1, y1, x2, y2)</code><span>Straight line between two points.</span></div>
-          <div class="cheat-fn"><code>lineto(x, y) / linerel(dx, dy)</code><span>Line from the current position (absolute / relative).</span></div>
-          <div class="cheat-fn"><code>moveto(x, y) / moverel(dx, dy)</code><span>Move the current position without drawing.</span></div>
-          <div class="cheat-fn"><code>rectangle(left, top, right, bottom)</code><span>Outline rectangle.</span></div>
-          <div class="cheat-fn"><code>bar(left, top, right, bottom)</code><span>Filled bar in the current fill style (no outline).</span></div>
-          <div class="cheat-fn"><code>bar3d(l, t, r, b, depth, topflag)</code><span>3-D bar; topflag=1 draws the top face.</span></div>
-          <div class="cheat-fn"><code>circle(x, y, radius)</code><span>Circle outline.</span></div>
-          <div class="cheat-fn"><code>arc(x, y, start, end, radius)</code><span>Arc; angles in degrees, 0° at 3 o'clock, counter-clockwise.</span></div>
-          <div class="cheat-fn"><code>ellipse(x, y, start, end, xrad, yrad)</code><span>Elliptical arc; 0..360 for the full outline.</span></div>
-          <div class="cheat-fn"><code>fillellipse(x, y, xrad, yrad)</code><span>Filled ellipse.</span></div>
-          <div class="cheat-fn"><code>pieslice(x, y, start, end, radius)</code><span>Filled circular wedge.</span></div>
-          <div class="cheat-fn"><code>sector(x, y, start, end, xrad, yrad)</code><span>Filled elliptical wedge.</span></div>
-          <div class="cheat-fn"><code>drawpoly(n, pts) / fillpoly(n, pts)</code><span>Polygon outline / filled; pts is int[2n], repeat the first point to close.</span></div>
-        </div>
-        <div class="cheat-cat">
-          <h4>Colors &amp; filling</h4>
-          <div class="cheat-fn"><code>BLACK=0 BLUE GREEN CYAN RED MAGENTA BROWN LIGHTGRAY DARKGRAY LIGHTBLUE LIGHTGREEN LIGHTCYAN LIGHTRED LIGHTMAGENTA YELLOW WHITE=15</code><span>The 16 standard color constants (0..15) shared by every BGI implementation.</span></div>
-          <div class="cheat-fn"><code>setcolor(c) / setbkcolor(c)</code><span>Current drawing color / background color.</span></div>
-          <div class="cheat-fn"><code>setfillstyle(pattern, color)</code><span>Fill used by bar, fillpoly, pieslice, floodfill…</span></div>
-          <div class="cheat-fn"><code>floodfill(x, y, border)</code><span>Flood-fill the region around (x,y) until the border color is met.</span></div>
-          <div class="cheat-fn"><code>getpixel(x, y)</code><span>Color value of one pixel — the heart of a Pixel Inspector.</span></div>
-          <div class="cheat-fn"><code>COLOR(r, g, b)</code><span>24-bit color macro (WinBGIM / SDL_bgi extension).</span></div>
-          <div class="cheat-fn"><code>SOLID_FILL LINE_FILL SLASH_FILL BKSLASH_FILL HATCH_FILL XHATCH_FILL INTERLEAVE_FILL WIDE_DOT_FILL CLOSE_DOT_FILL EMPTY_FILL</code><span>setfillstyle() pattern constants.</span></div>
-        </div>
-        <div class="cheat-cat">
-          <h4>Text</h4>
-          <div class="cheat-fn"><code>outtextxy(x, y, "text")</code><span>Print a string at a pixel position (use a char buffer for numbers).</span></div>
-          <div class="cheat-fn"><code>settextstyle(font, dir, size)</code><span>DEFAULT_FONT, TRIPLEX_FONT, SMALL_FONT, SANS_SERIF_FONT, GOTHIC_FONT; HORIZ_DIR / VERT_DIR.</span></div>
-          <div class="cheat-fn"><code>settextjustify(h, v)</code><span>How x,y anchor the string (LEFT_TEXT, CENTER_TEXT, …).</span></div>
-          <div class="cheat-fn"><code>textheight("t") / textwidth("t")</code><span>Pixel metrics of a string in the current font.</span></div>
-        </div>
-        <div class="cheat-cat">
-          <h4>Keyboard</h4>
-          <div class="cheat-fn"><code>getch()</code><span>Wait for one key — keep the window open at the end of main().</span></div>
-          <div class="cheat-fn"><code>kbhit()</code><span>True when a key is waiting: the non-blocking poll for animation loops.</span></div>
-          <div class="cheat-fn"><code>0 / 224, then 72 80 75 77</code><span>Arrow keys send a prefix (0 or 224), then UP=72 DOWN=80 LEFT=75 RIGHT=77.</span></div>
-        </div>
-        <div class="cheat-cat">
-          <h4>Mouse (WinBGIM / SDL_bgi)</h4>
-          <div class="cheat-fn"><code>ismouseclick(kind)</code><span>True when that mouse event is queued.</span></div>
-          <div class="cheat-fn"><code>getmouseclick(kind, &amp;x, &amp;y)</code><span>Pop the event and read the pixel position.</span></div>
-          <div class="cheat-fn"><code>clearmouseclick(kind)</code><span>Drop queued events you do not handle.</span></div>
-          <div class="cheat-fn"><code>WM_MOUSEMOVE WM_LBUTTONDOWN WM_LBUTTONUP WM_RBUTTONDOWN WM_RBUTTONUP</code><span>The mouse event kinds.</span></div>
-          <div class="cheat-fn"><code>getpixel(x, y)</code><span>Pair the mouse position with a color — instant Pixel Inspector.</span></div>
-        </div>
-        <div class="cheat-cat">
-          <h4>Animation</h4>
-          <div class="cheat-fn"><code>imagesize(l, t, r, b)</code><span>Bytes needed to snapshot a rectangle.</span></div>
-          <div class="cheat-fn"><code>getimage(l, t, r, b, bitmap)</code><span>Snapshot a rectangle into a buffer.</span></div>
-          <div class="cheat-fn"><code>putimage(l, t, bitmap, verb)</code><span>Stamp it back: COPY_PUT, XOR_PUT, AND_PUT, OR_PUT, NOT_PUT — the classic sprite trick.</span></div>
-          <div class="cheat-fn"><code>setactivepage(p) / setvisualpage(p)</code><span>Double buffering where pages are supported.</span></div>
-        </div>
-        <div class="cheat-cat">
-          <h4>Viewport</h4>
-          <div class="cheat-fn"><code>setviewport(l, t, r, b, clip)</code><span>Draw inside a sub-window; coordinates become relative to it.</span></div>
-          <div class="cheat-fn"><code>clearviewport()</code><span>Erase only the current viewport.</span></div>
-        </div>
-        <div id="cheat-empty">No functions match your search.</div>
-      </div>
-      <div class="cheat-foot">WinBGIM is the default on Windows; SDL_bgi on Linux/macOS. Press <span class="kbd">Esc</span> to close.</div>
-    </div>
-  </div>
-
+${cheatSheetHtml()}
 <script nonce="${nonce}">
   (function () {
     var vscode = acquireVsCodeApi();
@@ -622,11 +833,11 @@ export function buildPanelHtml(opts: PanelHtmlOptions): string {
     }
     applyLabState();
 
-    /* graphics.h cheat sheet: opens from the ? button, searchable,
-       Esc / backdrop / × closes it. The open state is persisted and
-       reported to the host (v1.5.8) so re-renders never destroy it. */
+    /* graphics.h cheat sheet: opens from the ? button in the VIEW TITLE
+       bar (the host sends {type:'cheat', open:true}), searchable, Esc /
+       backdrop / × closes it. The open state is persisted and reported
+       to the host (v1.5.8) so re-renders never destroy it. */
     var cheatOv = document.getElementById('cheat-overlay');
-    var helpBtn = document.getElementById('help-btn');
     /* v1.5.8: the sheet's open state is part of the persisted webview
        state (merged, never wiping the section toggles) AND reported to
        the host — while it is open the host DEFERS full re-renders, so a
@@ -659,12 +870,13 @@ export function buildPanelHtml(opts: PanelHtmlOptions): string {
         cats[j].style.display = any ? '' : 'none';
       }
       var empty = document.getElementById('cheat-empty');
-      if (empty) { empty.style.display = hits ? 'none' : ''; }
+      /* v1.5.9 fix: '' falls back to the stylesheet's display:none — the
+         empty-state row could never appear in 1.5.8; force block here */
+      if (empty) { empty.style.display = hits ? 'none' : 'block'; }
     }
     function openCheat() {
       if (!cheatOv) { return; }
       cheatOv.classList.add('open');
-      if (helpBtn) { helpBtn.setAttribute('aria-expanded', 'true'); }
       var q = document.getElementById('cheat-q');
       if (q) { q.value = ''; filterCheat(''); }
       var body = document.getElementById('cheat-body');
@@ -674,10 +886,8 @@ export function buildPanelHtml(opts: PanelHtmlOptions): string {
     function closeCheat() {
       if (!cheatOv) { return; }
       cheatOv.classList.remove('open');
-      if (helpBtn) { helpBtn.setAttribute('aria-expanded', 'false'); }
       setCheatState(false);
     }
-    if (helpBtn) { helpBtn.addEventListener('click', function (ev) { ev.stopPropagation(); openCheat(); }); }
     var cheatClose = document.getElementById('cheat-close');
     if (cheatClose) { cheatClose.addEventListener('click', closeCheat); }
     if (cheatOv) {
@@ -706,6 +916,9 @@ export function buildPanelHtml(opts: PanelHtmlOptions): string {
     window.addEventListener('message', function (e) {
       var m = e.data || {};
       if (m.type === 'ping') { vscode.postMessage({ type: 'pong' }); return; }
+      /* v1.5.9: the ? in the view TITLE bar opens/closes the sheet — the
+         host drives the page because the in-panel button is gone */
+      if (m.type === 'cheat') { if (m.open) { openCheat(); } else { closeCheat(); } return; }
       if (m.type === 'busy' && m.busy) {
         var pill = document.getElementById('env-pill');
         if (pill) {

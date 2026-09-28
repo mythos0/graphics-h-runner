@@ -1,5 +1,43 @@
 # ChangeLog
 
+## 1.5.9 — 2026-09-28
+
+The cheat sheet rebuild + a cleaner view title bar.
+
+### Fixed
+- **The cheat sheet is whole again** (the "cheatsheet just showing 'WinBGIM is
+  the default on Windows; SDL_bgi on Linux/macOS. Press Esc to close.'"
+  report): one stray `</div>` in the hand-written overlay closed the scroll
+  area after the third category, so the remaining eight categories became
+  stray children of the card (clipped invisible) and the footer line escaped
+  the card entirely — the only thing left on screen WAS the footer. The
+  overlay is now **rendered from a data source** (`CHEAT_SECTIONS`: 12
+  sections, 60 entries) by a three-template generator whose markup is
+  balanced by construction — this bug class is structurally impossible now.
+  The new **Common pitfalls** section documents the five mistakes that cost
+  students the most (setfillstyle before bar, outtextxy char buffers, getch()
+  at the end, the cleardevice→draw→delay rhythm, putpixel slowness), and the
+  Keyboard section gained the Esc-key code (27). Verified in a real Chromium:
+  all 12 sections laid out inside the scroll area, footer inside the card,
+  search/Esc/× all work — and the same checks FAIL on the shipped 1.5.8 page.
+  New `cheat-dom-tests.js` parses the rendered page with a browser-style
+  stack parser (16 checks) so no hand-edited markup can regress it.
+- **The "no search results" row could never appear**: it resets
+  `style.display = ''`, which falls back to the stylesheet's own
+  `display: none`. It now force-shows (`block`) when a query matches nothing.
+
+### Changed
+- **The view title bar is clean: one ? icon** (user request: "remove the 3
+  icons, and move there the ? icon from activity panel inside header"). The
+  setup / doctor / fireworks-simulator icons beside "Graphics.h CPP Program
+  Runner One-click setup" are gone, and the **? cheat-sheet button moved out
+  of the panel header into their place** — the new
+  `graphics.h: Cheat Sheet` command opens (and toggles) the sheet inside the
+  panel, parks the request until the webview has booted, and even restores
+  the real panel first when the fallback recovery page is showing. The panel
+  header itself now carries no buttons. The fallback list view keeps its
+  recovery actions.
+
 ## 1.5.8 — 2026-09-28
 
 The "?" cheat-sheet reliability release, from the report

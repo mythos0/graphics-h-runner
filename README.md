@@ -113,10 +113,8 @@ code --install-extension graphics-h-runner-*.vsix
 The **graphics.h Runner** icon in the Activity Bar opens the modern panel:
 
 1. **Hero + live status** — a Ready / Not ready / Checking pill with the
-   **version chip beside it** and a **"?" button that opens a searchable
-   graphics.h cheat sheet** (~50 functions: shapes, colors, fills, text,
-   keyboard, mouse, animation, viewport); while anything is missing, a
-   one-click **🚀 Complete Run Setup** button appears.
+   **version chip beside it**; while anything is missing, a one-click
+   **🚀 Complete Run Setup** button appears.
 2. **Actions grid** — Compile & Run, Complete Run Setup, Setup Doctor, Compile,
    Run Last Build, Stop Running Program, Copy Compile Command. The actions
    **stay put** while you browse programs.
@@ -132,6 +130,13 @@ The **graphics.h Runner** icon in the Activity Bar opens the modern panel:
    (tagged `lab`), each printing its algorithm's step table in the terminal.
 5. **Footer** — the **DIU badge sits on the exact right side** of the
    Powered-by credit line.
+
+The panel header is icon-free since v1.5.9: the **? cheat-sheet button moved
+to the view title bar** (the icons beside "Graphics.h CPP Program Runner
+One-click setup" — setup, doctor and fireworks simulator — were removed, and
+the single **?** icon in their place opens/toggles the searchable cheat sheet:
+12 sections, ~60 entries — coordinate system, shortcuts, setup, shapes, colors,
+text, keyboard, mouse, animation, viewport and common pitfalls).
 
 ## Extension settings
 

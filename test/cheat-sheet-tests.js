@@ -54,7 +54,7 @@ check('page persists sheet state on open (merged setState + host report)', () =>
 check('openCheat and closeCheat both report state', () => {
   const openBody = panelHtmlSrc.slice(panelHtmlSrc.indexOf('function openCheat()'), panelHtmlSrc.indexOf('function closeCheat()'));
   assert.ok(openBody.includes('setCheatState(true)'), 'openCheat does not persist');
-  const closeBody = panelHtmlSrc.slice(panelHtmlSrc.indexOf('function closeCheat()'), panelHtmlSrc.indexOf('if (helpBtn) { helpBtn.addEventListener'));
+  const closeBody = panelHtmlSrc.slice(panelHtmlSrc.indexOf('function closeCheat()'), panelHtmlSrc.indexOf("var cheatClose = document.getElementById"));
   assert.ok(closeBody.includes('setCheatState(false)'), 'closeCheat does not persist');
 });
 check('fresh page reopens the sheet from persisted state', () => {
@@ -100,6 +100,19 @@ check('health retry path bypasses the gate (recovery must always win)', () => {
   assert.ok(resolve.includes("view.webview.html = this.renderHtml()"), 'direct html set missing in resolve');
 });
 
+/* ---------- v1.5.9: the ? moved to the view title bar ---------- */
+check('v1.5.9: host drives the sheet from the view title (? action)', () => {
+  assert.ok(panelViewSrc.includes('async openCheatSheet()'), 'openCheatSheet missing');
+  assert.ok(panelViewSrc.includes('this.pendingCheatOpen'), 'parked-open flag missing');
+  assert.ok(panelViewSrc.includes("postMessage({ type: 'cheat', open: true })"), 'open delivery missing');
+  assert.ok(panelViewSrc.includes('this.pageAlive'), 'page liveness tracking missing');
+});
+check('v1.5.9: parked ? request is delivered on the page boot handshake', () => {
+  const handler = panelViewSrc.slice(panelViewSrc.indexOf('onDidReceiveMessage'), panelViewSrc.indexOf('view.onDidChangeVisibility'));
+  assert.ok(handler.includes('if (this.pendingCheatOpen)'), 'handshake delivery missing');
+  assert.ok(handler.indexOf("msg.type === 'cheat'") < handler.indexOf('this.onClick(msg)'), 'intercept must run before onClick');
+});
+
 /* ---------- compiled output carries the fix ---------- */
 check('compiled out/panelHtml.js + out/panelView.js carry the fix', () => {
   assert.ok(outPanelHtml.includes('cheatStateOpen'), 'compiled page missing boot restore');
@@ -123,7 +136,10 @@ check('buildPanelHtml output contains the persistence script', () => {
   });
   assert.ok(html.includes('cheatStateOpen'), 'rendered html missing boot restore');
   assert.ok(html.includes("type: 'cheat'"), 'rendered html missing host report');
-  assert.ok(html.includes("id=\"help-btn\""), 'rendered html missing ? button');
+  /* v1.5.9: the ? button moved to the view title bar — the panel page must
+     NOT render it anymore, and must answer the host's open message */
+  assert.ok(!html.includes('help-btn'), 'in-panel ? button must be gone (view title owns it now)');
+  assert.ok(html.includes("if (m.open) { openCheat(); } else { closeCheat(); }"), 'host-driven open missing');
   assert.ok(html.includes('id="cheat-overlay"'), 'rendered html missing overlay');
 });
 
