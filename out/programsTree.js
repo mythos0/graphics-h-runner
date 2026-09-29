@@ -3,11 +3,20 @@
  * programsTree.ts — native TreeView fallback for the graphics.h panel.
  *
  * If the webview fails to load (VS Code "Could not register service worker:
- * InvalidStateError" race) the extension reveals this plain list view
- * instantly, so every action and all 18 example programs stay reachable.
+ * InvalidStateError" race) the extension reveals two plain list views
+ * instantly, so every action and all example programs stay reachable.
  *
- * The tree model comes from programsTreeModel.ts (pure, unit-tested); the
- * provider below is a thin adapter that maps model entries to TreeItems.
+ * v1.5.15 — the single mixed tree became TWO SEPARATE views (user: "keep
+ * them separate and easy to understand"):
+ *
+ *   GhActionsTreeProvider   → view "Actions (Recovery)":
+ *     the panel's commands as a flat, icon-labelled list.
+ *   GhProgramsTreeProvider  → view "Example Programs (List)":
+ *     sections for the examples and the Computer Graphics Lab; clicking a
+ *     program opens, compiles and runs it in one step.
+ *
+ * The tree models come from programsTreeModel.ts (pure, unit-tested); the
+ * providers below are thin adapters that map model entries to TreeItems.
  *
  * v1.5.5: program items invoke STATIC per-node command ids
  * (graphics-h-runner.runSample.<id>) — never TreeItem.command arguments,
@@ -47,31 +56,65 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.GhFallbackTreeProvider = exports.TREE_RUN_COMMAND = exports.buildTreeModel = void 0;
+exports.GhProgramsTreeProvider = exports.GhActionsTreeProvider = exports.TREE_RUN_COMMAND = exports.buildProgramEntries = exports.buildActionEntries = void 0;
 const vscode = __importStar(require("vscode"));
 const programsTreeModel_1 = require("./programsTreeModel");
 var programsTreeModel_2 = require("./programsTreeModel");
-Object.defineProperty(exports, "buildTreeModel", { enumerable: true, get: function () { return programsTreeModel_2.buildTreeModel; } });
+Object.defineProperty(exports, "buildActionEntries", { enumerable: true, get: function () { return programsTreeModel_2.buildActionEntries; } });
+Object.defineProperty(exports, "buildProgramEntries", { enumerable: true, get: function () { return programsTreeModel_2.buildProgramEntries; } });
 Object.defineProperty(exports, "TREE_RUN_COMMAND", { enumerable: true, get: function () { return programsTreeModel_2.TREE_RUN_COMMAND; } });
-class GhFallbackTreeProvider {
+/** Native codicon per panel action (the tree renders native icons, not emoji). */
+const ACTION_ICONS = {
+    'graphics-h-runner.compileAndRun': 'play',
+    'graphics-h-runner.setupEverything': 'rocket',
+    'graphics-h-runner.doctor': 'pulse',
+    'graphics-h-runner.compile': 'tools',
+    'graphics-h-runner.run': 'terminal',
+    'graphics-h-runner.stopProgram': 'debug-stop',
+    'graphics-h-runner.copyCompileCommand': 'copy',
+    'graphics-h-runner.fireworks': 'sparkle'
+};
+/** Build the TreeItem for one panel action (shared by both providers). */
+function buildActionItem(entry) {
+    const item = new vscode.TreeItem(entry.label, vscode.TreeItemCollapsibleState.None);
+    item.id = entry.id;
+    item.description = entry.hint;
+    item.tooltip = new vscode.MarkdownString(`**${entry.label}** — ${entry.hint}\n\nRuns the same command as the matching panel button.`);
+    item.command = { command: entry.commandId, title: entry.label };
+    item.iconPath = new vscode.ThemeIcon(ACTION_ICONS[entry.commandId] || 'circle-large-outline');
+    item.contextValue = 'ghr-action';
+    return item;
+}
+/** Actions (Recovery) view: the panel commands, one flat labelled list. */
+class GhActionsTreeProvider {
+    constructor() {
+        this.entries = (0, programsTreeModel_1.buildActionEntries)();
+    }
+    getTreeItem(entry) {
+        return buildActionItem(entry);
+    }
+    getChildren() {
+        return this.entries;
+    }
+}
+exports.GhActionsTreeProvider = GhActionsTreeProvider;
+/** Example Programs (List) view: grouped sections of runnable programs. */
+class GhProgramsTreeProvider {
     constructor(programs) {
-        this.entries = (0, programsTreeModel_1.buildTreeModel)(programs);
+        this.entries = (0, programsTreeModel_1.buildProgramEntries)(programs);
     }
     getTreeItem(entry) {
         if (entry.kind === 'section') {
             const item = new vscode.TreeItem(entry.label, vscode.TreeItemCollapsibleState.Expanded);
             item.id = entry.id;
             item.contextValue = 'ghr-section';
+            item.iconPath = new vscode.ThemeIcon(entry.id === 'tree-section-lab' ? 'mortar-board' : 'library');
             return item;
         }
         if (entry.kind === 'action') {
-            const item = new vscode.TreeItem(entry.label, vscode.TreeItemCollapsibleState.None);
-            item.id = entry.id;
-            item.description = entry.hint;
-            item.tooltip = entry.label + ' — ' + entry.hint;
-            item.command = { command: entry.commandId, title: entry.label };
-            item.contextValue = 'ghr-action';
-            return item;
+            /* Actions never appear in the programs view's model; this branch only
+             * keeps the provider total over the TreeNode union. */
+            return buildActionItem(entry);
         }
         const item = new vscode.TreeItem(entry.label, vscode.TreeItemCollapsibleState.None);
         item.id = 'tree-program-' + entry.id;
@@ -83,6 +126,7 @@ class GhFallbackTreeProvider {
          * graphics-h-runner.runSample /N". Each program has its own static
          * command id instead (registered on every activation). */
         item.command = { command: entry.runCommandId, title: 'Run example program' };
+        item.iconPath = new vscode.ThemeIcon('file-code');
         item.contextValue = 'ghr-program';
         return item;
     }
@@ -91,10 +135,11 @@ class GhFallbackTreeProvider {
             return this.entries.filter((e) => e.kind === 'section');
         }
         if (element.kind === 'section') {
-            return this.entries.filter((e) => e.kind !== 'section');
+            const labSection = element.id === 'tree-section-lab';
+            return this.entries.filter((e) => e.kind === 'program' && e.lab === labSection);
         }
         return [];
     }
 }
-exports.GhFallbackTreeProvider = GhFallbackTreeProvider;
+exports.GhProgramsTreeProvider = GhProgramsTreeProvider;
 //# sourceMappingURL=programsTree.js.map

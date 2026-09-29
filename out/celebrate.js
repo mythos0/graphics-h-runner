@@ -105,6 +105,7 @@ function celebrationMediaPaths(extensionRoot) {
         fireworksCss: m('fireworks', 'fireworks.css'),
         fscreenJs: m('fireworks', 'fscreen.js'),
         myMathJs: m('fireworks', 'MyMath.js'),
+        fireworksAudioJs: m('fireworks', 'audio.js'),
         stageJs: m('fireworks', 'Stage.js'),
         scriptJs: m('fireworks', 'script.js')
     };
@@ -232,7 +233,7 @@ function buildCelebrationHtml(opts) {
  * adds the Stop button (top-right) and Esc handling.
  */
 function buildFireworksHtml(opts) {
-    const { nonce, cspSource, cssUri, fscreenJsUri, myMathJsUri, stageJsUri, scriptJsUri } = opts;
+    const { nonce, cspSource, cssUri, fscreenJsUri, myMathJsUri, fireworksAudioJsUri, stageJsUri, scriptJsUri } = opts;
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -251,6 +252,15 @@ function buildFireworksHtml(opts) {
   #ghr-stop:hover { background:linear-gradient(135deg, #f87171, #dc2626); }
   .ghr-credit { position:fixed; left:12px; bottom:10px; z-index:60;
     font-size:10.5px; color:rgba(255,255,255,.4); user-select:none; pointer-events:none; }
+  /* v1.5.15: discoverability hint for the sound toggle + click-to-burst */
+  .ghr-hint { position:fixed; left:50%; bottom:34px; transform:translateX(-50%);
+    z-index:60; font:600 12.5px 'Segoe UI', system-ui, sans-serif;
+    color:rgba(255,255,255,.8); background:rgba(10,14,22,.62);
+    border:1px solid rgba(255,255,255,.14); border-radius:999px;
+    padding:8px 16px; pointer-events:none; user-select:none;
+    max-width:92vw; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    animation:ghr-hint-fade 10s ease forwards; }
+  @keyframes ghr-hint-fade { 0%{opacity:0} 6%{opacity:1} 82%{opacity:1} 100%{opacity:0} }
 </style>
 </head>
 <body>
@@ -363,10 +373,12 @@ function buildFireworksHtml(opts) {
     </div>
 </div>
 <button id="ghr-stop" title="Stop the show (Esc)">⏹ Stop</button>
+<div class="ghr-hint">Click anywhere — the next firework bursts at that spot · Sound button enables realistic audio</div>
 <div class="ghr-credit">Fireworks Simulator · MIT · Caleb Miller (cmiller.tech) · troyxun/fireworks-simulator</div>
 <script nonce="${nonce}" src="${esc(fscreenJsUri)}"></script>
 <script nonce="${nonce}" src="${esc(stageJsUri)}"></script>
 <script nonce="${nonce}" src="${esc(myMathJsUri)}"></script>
+<script nonce="${nonce}" src="${esc(fireworksAudioJsUri)}"></script>
 <script nonce="${nonce}" src="${esc(scriptJsUri)}"></script>
 <script nonce="${nonce}">
   (function () {

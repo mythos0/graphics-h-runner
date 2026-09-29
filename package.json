@@ -2,7 +2,7 @@
   "name": "graphics-h-runner",
   "displayName": "graphics.h Runner — One-Click Setup",
   "description": "Compile and run C++ graphics.h (BGI/WinBGIm/SDL_bgi) programs with one keypress or F5. One command auto-installs the whole toolchain — compiler, graphics library and linker flags — then wires the native VS Code run options, shows compiler errors in the Problems panel, and ships 31 runnable examples with a Computer Graphics Lab, a searchable graphics.h reference and a Setup Doctor.",
-  "version": "1.5.14",
+  "version": "1.5.15",
   "publisher": "mythos0-labs",
   "author": {
     "name": "Department of CSE, Dhaka International University",
@@ -66,6 +66,7 @@
     "onLanguage:c",
     "onView:graphics-h-runner.programs",
     "onView:graphics-h-runner.fallback",
+    "onView:graphics-h-runner.fallbackPrograms",
     "onDebug:type:graphics-h"
   ],
   "main": "./dist/extension.js",
@@ -90,7 +91,13 @@
         {
           "type": "tree",
           "id": "graphics-h-runner.fallback",
-          "name": "graphics.h Programs (List)",
+          "name": "Actions (Recovery)",
+          "when": "graphics-h-runner.showFallback"
+        },
+        {
+          "type": "tree",
+          "id": "graphics-h-runner.fallbackPrograms",
+          "name": "Example Programs (List)",
           "when": "graphics-h-runner.showFallback"
         }
       ]
@@ -358,7 +365,7 @@
         },
         {
           "command": "graphics-h-runner.reloadPanel",
-          "when": "view == graphics-h-runner.fallback",
+          "when": "view == graphics-h-runner.fallback || view == graphics-h-runner.fallbackPrograms",
           "group": "navigation@0"
         },
         {
@@ -373,13 +380,13 @@
         },
         {
           "command": "graphics-h-runner.fireworks",
-          "when": "view == graphics-h-runner.fallback && !graphics-h-runner.fireworksRunning",
-          "group": "navigation@3"
+          "when": "view == graphics-h-runner.fallbackPrograms && !graphics-h-runner.fireworksRunning",
+          "group": "navigation@1"
         },
         {
           "command": "graphics-h-runner.stopFireworks",
-          "when": "view == graphics-h-runner.fallback && graphics-h-runner.fireworksRunning",
-          "group": "navigation@3"
+          "when": "view == graphics-h-runner.fallbackPrograms && graphics-h-runner.fireworksRunning",
+          "group": "navigation@1"
         }
       ]
     },

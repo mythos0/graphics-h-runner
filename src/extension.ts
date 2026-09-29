@@ -39,7 +39,7 @@ import {
 } from './setup';
 import { loadProgramCatalog, LoadedProgram, resolveProgramTarget } from './programs';
 import { GhPanelProvider, PanelClick } from './panelView';
-import { GhFallbackTreeProvider } from './programsTree';
+import { GhActionsTreeProvider, GhProgramsTreeProvider } from './programsTree';
 import { registerGraphicsHDebugger, LaunchOutcome } from './debugAdapter';
 import {
   normalizeCompilerPath,
@@ -1824,8 +1824,38 @@ async function copyCompileCommand(): Promise<void> {
 
 /* ---------------- activation ---------------- */
 
-/** Native TreeView shown (and focused) when the webview fails to load. */
+/** Native TreeViews shown (and focused) when the webview fails to load.
+ * v1.5.15: two SEPARATE views — recovery actions and the example programs. */
 const FALLBACK_VIEW_ID = 'graphics-h-runner.fallback';
+const FALLBACK_PROGRAMS_VIEW_ID = 'graphics-h-runner.fallbackPrograms';
+
+/** v1.5.15: one delayed self-repair attempt after the webview was declared
+ * unrecoverable. If the panel answers after it, the fallback views close
+ * again; if not, the fallback stays (sticky) until the user acts. */
+const WEBVIEW_SELF_REPAIR_DELAY_MS = 60_000;
+
+let webviewSelfRepairTimer: ReturnType<typeof setTimeout> | undefined;
+
+/** v1.5.15: 60 s after a fallback verdict, re-render the real panel ONCE —
+ * a later attempt often clears a stubborn service-worker race that beat the
+ * watchdog's two immediate retries. Guarded: cancelled when the webview
+ * answers first, and never stacked. */
+function scheduleWebviewSelfRepair(): void {
+  cancelWebviewSelfRepair();
+  webviewSelfRepairTimer = setTimeout(() => {
+    webviewSelfRepairTimer = undefined;
+    log('[panel] self-repair: re-rendering the webview one more time');
+    addExtensionBreadcrumb('panel', 'webview self-repair re-render');
+    panel?.reloadPanel();
+  }, WEBVIEW_SELF_REPAIR_DELAY_MS);
+}
+
+function cancelWebviewSelfRepair(): void {
+  if (webviewSelfRepairTimer !== undefined) {
+    clearTimeout(webviewSelfRepairTimer);
+    webviewSelfRepairTimer = undefined;
+  }
+}
 
 /** Panel click router: buttons in the webview land here. */
 async function handlePanelClick(msg: PanelClick): Promise<void> {
@@ -1919,13 +1949,14 @@ export function activate(context: vscode.ExtensionContext): void {
         return;
       }
       if (ev === 'fallback') {
-        log('[panel] webview failed to load — switching to the list view automatically');
+        log('[panel] webview failed to load — switching to the list views automatically');
         addExtensionBreadcrumb('panel', 'webview fallback engaged');
-        /* resilience WORKED here (automatic retry + list-view fallback):
+        /* resilience WORKED here (automatic retries + list-view fallback):
          * warning-level visibility, not an error issue */
-        captureExtensionWarning('webview failed to load (no pong after retry render)', {
+        captureExtensionWarning('webview failed to load (no pong after 2 retry renders)', {
           stage: 'webview-fallback'
         });
+        scheduleWebviewSelfRepair();
         void (async () => {
           await vscode.commands.executeCommand('setContext', 'graphics-h-runner.showFallback', true);
           await vscode.commands.executeCommand(FALLBACK_VIEW_ID + '.focus');
@@ -1933,7 +1964,8 @@ export function activate(context: vscode.ExtensionContext): void {
         return;
       }
       if (ev === 'alive') {
-        /* the webview answers again — the fallback list no longer needed */
+        /* the webview answers again — the fallback lists no longer needed */
+        cancelWebviewSelfRepair();
         void vscode.commands
           .executeCommand('setContext', 'graphics-h-runner.showFallback', false)
           .then(() => undefined, () => undefined);
@@ -1967,7 +1999,12 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
 
     vscode.window.createTreeView(FALLBACK_VIEW_ID, {
-      treeDataProvider: new GhFallbackTreeProvider(catalog),
+      treeDataProvider: new GhActionsTreeProvider(),
+      showCollapseAll: false
+    }),
+
+    vscode.window.createTreeView(FALLBACK_PROGRAMS_VIEW_ID, {
+      treeDataProvider: new GhProgramsTreeProvider(catalog),
       showCollapseAll: false
     }),
 
@@ -2203,6 +2240,8 @@ export function activate(context: vscode.ExtensionContext): void {
 }
 
 export async function deactivate(): Promise<void> {
+  /* v1.5.15: a pending self-repair must never re-render during teardown. */
+  cancelWebviewSelfRepair();
   /* v1.5.13 THE CLEAN EXIT: a real uninstall puts every setting back that
    * Complete Run Setup changed. deactivate() also fires on plain shutdowns
    * and on updates — isRealUninstall() tells those apart via the extensions

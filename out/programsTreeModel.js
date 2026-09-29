@@ -1,15 +1,25 @@
 "use strict";
 /**
  * programsTreeModel.ts — pure data model for the graphics.h fallback
- * TreeView (no vscode import — unit-testable in plain node).
+ * TreeViews (no vscode import — unit-testable in plain node).
  *
- * The list view mirrors the webview panel: the same 8 actions and the same
- * 18 example programs, so a webview failure costs the user zero features.
+ * v1.5.15 SPLIT — the single mixed list ("Actions" header + programs in
+ * one tree) became two SEPARATE tree views so each is easy to understand
+ * at a glance:
+ *
+ *   graphics-h-runner.fallback          → "Actions (Recovery)"
+ *     flat list of the panel's 8 commands, each with its hint.
+ *   graphics-h-runner.fallbackPrograms  → "Example Programs (List)"
+ *     sections for the example programs and the Computer Graphics Lab.
+ *
+ * The list views mirror the webview panel exactly, so a webview failure
+ * costs the user zero features.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.TREE_RUN_COMMAND_PREFIX = exports.TREE_RUN_COMMAND = void 0;
 exports.treeRunCommandId = treeRunCommandId;
-exports.buildTreeModel = buildTreeModel;
+exports.buildActionEntries = buildActionEntries;
+exports.buildProgramEntries = buildProgramEntries;
 const programs_1 = require("./programs");
 /** Generic "run an example program" command (palette + programmatic use;
  * takes the program id as its single argument). */
@@ -33,15 +43,25 @@ function treeRunCommandId(programId) {
     return exports.TREE_RUN_COMMAND_PREFIX + programId;
 }
 /**
- * Pure model: actions first, then every example program.
+ * Pure model for the ACTIONS view: the panel's commands as a flat list,
+ * in the same order as the panel buttons (primary Compile & Run first).
  */
-function buildTreeModel(programs) {
-    const entries = [
-        { kind: 'section', id: 'tree-section-actions', label: 'Actions' }
-    ];
-    for (const c of programs_1.COMMAND_META) {
-        entries.push({ kind: 'action', id: c.id, label: c.title, hint: c.hint, commandId: c.commandId });
-    }
+function buildActionEntries() {
+    return programs_1.COMMAND_META.map((c) => ({
+        kind: 'action',
+        id: c.id,
+        label: c.title,
+        hint: c.hint,
+        commandId: c.commandId
+    }));
+}
+/**
+ * Pure model for the EXAMPLE PROGRAMS view: a section header per group
+ * (main examples, then the Computer Graphics Lab when present), each
+ * followed by its program leaves.
+ */
+function buildProgramEntries(programs) {
+    const entries = [];
     const main = programs.filter((p) => !p.lab);
     const lab = programs.filter((p) => p.lab);
     entries.push({
@@ -56,6 +76,7 @@ function buildTreeModel(programs) {
             label: p.title,
             description: p.description,
             filename: p.filename,
+            lab: false,
             runCommandId: treeRunCommandId(p.id)
         });
     }
@@ -72,6 +93,7 @@ function buildTreeModel(programs) {
                 label: p.title,
                 description: p.description,
                 filename: p.filename,
+                lab: true,
                 runCommandId: treeRunCommandId(p.id)
             });
         }

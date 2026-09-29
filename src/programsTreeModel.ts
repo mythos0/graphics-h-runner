@@ -1,9 +1,18 @@
 /**
  * programsTreeModel.ts — pure data model for the graphics.h fallback
- * TreeView (no vscode import — unit-testable in plain node).
+ * TreeViews (no vscode import — unit-testable in plain node).
  *
- * The list view mirrors the webview panel: the same 8 actions and the same
- * 18 example programs, so a webview failure costs the user zero features.
+ * v1.5.15 SPLIT — the single mixed list ("Actions" header + programs in
+ * one tree) became two SEPARATE tree views so each is easy to understand
+ * at a glance:
+ *
+ *   graphics-h-runner.fallback          → "Actions (Recovery)"
+ *     flat list of the panel's 8 commands, each with its hint.
+ *   graphics-h-runner.fallbackPrograms  → "Example Programs (List)"
+ *     sections for the example programs and the Computer Graphics Lab.
+ *
+ * The list views mirror the webview panel exactly, so a webview failure
+ * costs the user zero features.
  */
 
 import { COMMAND_META, LoadedProgram } from './programs';
@@ -22,6 +31,8 @@ export interface TreeProgramEntry {
   label: string;
   description: string;
   filename: string;
+  /** True for Computer Graphics Lab programs (section grouping). */
+  lab: boolean;
   /** Command invoked on click — a STATIC per-node id (never with
    *  arguments; see TREE_RUN_COMMAND_PREFIX for why). */
   runCommandId: string;
@@ -63,17 +74,28 @@ export function treeRunCommandId(programId: string): string {
 }
 
 /**
- * Pure model: actions first, then every example program.
+ * Pure model for the ACTIONS view: the panel's commands as a flat list,
+ * in the same order as the panel buttons (primary Compile & Run first).
  */
-export function buildTreeModel(
+export function buildActionEntries(): TreeActionEntry[] {
+  return COMMAND_META.map((c) => ({
+    kind: 'action' as const,
+    id: c.id,
+    label: c.title,
+    hint: c.hint,
+    commandId: c.commandId
+  }));
+}
+
+/**
+ * Pure model for the EXAMPLE PROGRAMS view: a section header per group
+ * (main examples, then the Computer Graphics Lab when present), each
+ * followed by its program leaves.
+ */
+export function buildProgramEntries(
   programs: Array<Pick<LoadedProgram, 'id' | 'title' | 'description' | 'filename' | 'lab'>>
 ): TreeEntry[] {
-  const entries: TreeEntry[] = [
-    { kind: 'section', id: 'tree-section-actions', label: 'Actions' }
-  ];
-  for (const c of COMMAND_META) {
-    entries.push({ kind: 'action', id: c.id, label: c.title, hint: c.hint, commandId: c.commandId });
-  }
+  const entries: TreeEntry[] = [];
   const main = programs.filter((p) => !p.lab);
   const lab = programs.filter((p) => p.lab);
   entries.push({
@@ -88,6 +110,7 @@ export function buildTreeModel(
       label: p.title,
       description: p.description,
       filename: p.filename,
+      lab: false,
       runCommandId: treeRunCommandId(p.id)
     });
   }
@@ -104,6 +127,7 @@ export function buildTreeModel(
         label: p.title,
         description: p.description,
         filename: p.filename,
+        lab: true,
         runCommandId: treeRunCommandId(p.id)
       });
     }

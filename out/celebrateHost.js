@@ -99,6 +99,7 @@ class Celebrator {
                         cssUri: uri(media.fireworksCss),
                         fscreenJsUri: uri(media.fscreenJs),
                         myMathJsUri: uri(media.myMathJs),
+                        fireworksAudioJsUri: uri(media.fireworksAudioJs),
                         stageJsUri: uri(media.stageJs),
                         scriptJsUri: uri(media.scriptJs)
                     })

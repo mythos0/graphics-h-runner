@@ -10,9 +10,11 @@
  *
  *   1. After every render the extension "pings" the webview on a timer; a
  *      healthy page answers with a pong as soon as its script executes.
- *   2. If several pings go unanswered the HTML is re-set once — re-navigating
+ *   2. If several pings go unanswered the HTML is re-set — re-navigating
  *      the webview clears the service-worker race in the vast majority of
- *      cases.
+ *      cases. v1.5.15: up to TWO retry renders (maxRetryRounds) before
+ *      giving up — production telemetry (Sentry GRAPHICS-H-RUNNER-E) showed
+ *      a real machine where one retry was not enough.
  *   3. If pings still go unanswered the provider raises `fallback()` and the
  *      extension instantly reveals a native TreeView copy of the panel so
  *      the user is never blocked.
@@ -36,12 +38,17 @@ class WebviewHealth {
             pingIntervalMs: o.pingIntervalMs ?? 1000,
             pingsBeforeRetry: o.pingsBeforeRetry ?? 4,
             pingsBeforeFallback: o.pingsBeforeFallback ?? 4,
+            maxRetryRounds: o.maxRetryRounds ?? 2,
             setTimer: o.setTimer,
             clearTimer: o.clearTimer
         });
     }
     getState() {
         return this.state;
+    }
+    /** Retry renders used so far (telemetry detail for the fallback verdict). */
+    getRetriesUsed() {
+        return this.retriesUsed;
     }
     /** Begin (or re-begin) watching a freshly rendered webview. */
     start() {
@@ -90,20 +97,25 @@ class WebviewHealth {
         }
         this.hooks.ping();
         this.unanswered++;
-        if (this.retriesUsed === 0 && this.unanswered >= this.opts.pingsBeforeRetry) {
-            this.retriesUsed++;
-            this.unanswered = 0;
-            this.hooks.onEvent?.('retry');
-            this.hooks.retry(); /* re-set html -> clears the service-worker race */
-            this.scheduleTick(); /* self-rearm: the machine reaches fallback on its own */
-            return;
-        }
-        if (this.retriesUsed > 0 && this.unanswered >= this.opts.pingsBeforeFallback) {
-            this.state = 'fallback';
-            this.stopTimer();
-            this.hooks.onEvent?.('fallback');
-            this.hooks.fallback();
-            return;
+        /* v1.5.15: give the re-render TWO chances (maxRetryRounds) before the
+         * fallback verdict — the second re-render clears the service-worker
+         * race on machines where the first did not. */
+        if (this.unanswered >= this.opts.pingsBeforeRetry) {
+            if (this.retriesUsed < this.opts.maxRetryRounds) {
+                this.retriesUsed++;
+                this.unanswered = 0;
+                this.hooks.onEvent?.('retry');
+                this.hooks.retry(); /* re-set html -> clears the service-worker race */
+                this.scheduleTick(); /* self-rearm: the machine reaches fallback on its own */
+                return;
+            }
+            if (this.unanswered >= this.opts.pingsBeforeFallback) {
+                this.state = 'fallback';
+                this.stopTimer();
+                this.hooks.onEvent?.('fallback');
+                this.hooks.fallback();
+                return;
+            }
         }
         this.scheduleTick();
     }

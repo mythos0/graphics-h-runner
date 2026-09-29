@@ -1,11 +1,14 @@
 #!/usr/bin/env node
 /**
- * tree-model-tests.js — unit tests for the fallback TreeView model
- * (src/programsTree.ts -> out/programsTree.js) — no vscode needed.
+ * tree-model-tests.js — unit tests for the fallback TreeView models
+ * (src/programsTreeModel.ts -> out/programsTreeModel.js) — no vscode needed.
  *
- * Contract: the list view mirrors the webview panel — the same 8 actions,
- * the same 23 example programs and the 8 Computer Graphics Lab programs —
- * and every program click runs through its own STATIC per-node command id
+ * Contract (v1.5.15 SPLIT): the fallback is TWO separate views so each is
+ * easy to understand at a glance —
+ *   - buildActionEntries():  the 8 panel commands as a flat list;
+ *   - buildProgramEntries(): the 23 example programs + 8 Computer Graphics
+ *     Lab programs grouped under their own section headers.
+ * Every program click runs through its own STATIC per-node command id
  * (graphics-h-runner.runSample.<id>). TreeItem.command must never carry
  * `arguments`: VS Code caches argument-carrying tree commands under a
  * throwaway id and clicks fail with "Actual command not found, wanted to
@@ -17,7 +20,11 @@ const path = require('path');
 const assert = require('assert');
 
 const ROOT = path.join(__dirname, '..');
-const { buildTreeModel, TREE_RUN_COMMAND } = require(path.join(ROOT, 'out', 'programsTreeModel'));
+const {
+  buildActionEntries,
+  buildProgramEntries,
+  TREE_RUN_COMMAND
+} = require(path.join(ROOT, 'out', 'programsTreeModel'));
 const { loadProgramCatalog, COMMAND_META } = require(path.join(ROOT, 'out', 'programs'));
 
 let failures = 0;
@@ -33,26 +40,15 @@ function check(name, fn) {
 
 const catalog = loadProgramCatalog(ROOT);
 
-console.log('tree-model-tests — fallback list view model\n');
+console.log('tree-model-tests — fallback list view models\n');
 
-check('model = 3 sections + 8 actions + 31 programs', () => {
-  const m = buildTreeModel(catalog);
-  const sections = m.filter((e) => e.kind === 'section');
-  const actions = m.filter((e) => e.kind === 'action');
-  const programs = m.filter((e) => e.kind === 'program');
-  assert.strictEqual(sections.length, 3, 'section count ' + sections.length);
-  assert.strictEqual(actions.length, COMMAND_META.length, 'action count ' + actions.length);
-  assert.strictEqual(programs.length, 31, 'program count ' + programs.length);
-  assert.strictEqual(sections[0].label, 'Actions');
-  assert.ok(/Example Programs \(23\)/.test(sections[1].label), 'programs section label wrong: ' + sections[1].label);
-  assert.ok(/Computer Graphics Lab \(8\)/.test(sections[2].label), 'lab section label wrong: ' + sections[2].label);
-});
-
-check('actions mirror COMMAND_META ids and command ids 1:1', () => {
-  const m = buildTreeModel(catalog);
-  const actions = m.filter((e) => e.kind === 'action');
+check('actions model = exactly the 8 panel commands, flat (no sections)', () => {
+  const a = buildActionEntries();
+  assert.strictEqual(a.length, COMMAND_META.length, 'action count');
+  assert.ok(a.every((e) => e.kind === 'action'), 'every entry must be an action');
+  assert.strictEqual(a[0].id, 'cmd-compileAndRun', 'Compile & Run must lead the actions view');
   for (const c of COMMAND_META) {
-    const hit = actions.find((a) => a.id === c.id);
+    const hit = a.find((e) => e.id === c.id);
     assert.ok(hit, 'action missing from tree: ' + c.id);
     assert.strictEqual(hit.commandId, c.commandId, 'command id mismatch for ' + c.id);
     assert.strictEqual(hit.label, c.title, 'label mismatch for ' + c.id);
@@ -60,8 +56,18 @@ check('actions mirror COMMAND_META ids and command ids 1:1', () => {
   }
 });
 
+check('programs model = 2 sections + 31 programs (23 examples + 8 lab)', () => {
+  const m = buildProgramEntries(catalog);
+  const sections = m.filter((e) => e.kind === 'section');
+  const programs = m.filter((e) => e.kind === 'program');
+  assert.strictEqual(sections.length, 2, 'section count ' + sections.length);
+  assert.strictEqual(programs.length, 31, 'program count ' + programs.length);
+  assert.ok(/Example Programs \(23\)/.test(sections[0].label), 'programs section label wrong: ' + sections[0].label);
+  assert.ok(/Computer Graphics Lab \(8\)/.test(sections[1].label), 'lab section label wrong: ' + sections[1].label);
+});
+
 check('every program carries its own STATIC per-node run command (no arguments)', () => {
-  const m = buildTreeModel(catalog);
+  const m = buildProgramEntries(catalog);
   const programs = m.filter((e) => e.kind === 'program');
   const ids = new Set();
   for (const p of programs) {
@@ -80,29 +86,45 @@ check('every program carries its own STATIC per-node run command (no arguments)'
   }
 });
 
+check('lab flag matches the section a program belongs to', () => {
+  const m = buildProgramEntries(catalog);
+  let inLab = false;
+  for (const e of m) {
+    if (e.kind === 'section') {
+      inLab = /Computer Graphics Lab/.test(e.label);
+      continue;
+    }
+    if (e.kind === 'program') {
+      assert.strictEqual(e.lab, inLab, 'lab flag mismatch for ' + e.id);
+    }
+  }
+  const labCount = m.filter((e) => e.kind === 'program' && e.lab).length;
+  assert.strictEqual(labCount, 8, 'lab program count ' + labCount);
+});
+
 check('per-node command ids are unique across the whole catalog', () => {
-  const m = buildTreeModel(catalog);
-  const runIds = m.filter((e) => e.kind === 'program').map((e) => e.runCommandId);
+  const runIds = buildProgramEntries(catalog)
+    .filter((e) => e.kind === 'program')
+    .map((e) => e.runCommandId);
   assert.strictEqual(new Set(runIds).size, runIds.length, 'duplicate per-node command ids');
 });
 
-check('sections come first, actions before programs (fallback UX order)', () => {
-  const m = buildTreeModel(catalog);
+check('programs model opens with its section header (view title is the label)', () => {
+  const m = buildProgramEntries(catalog);
   assert.strictEqual(m[0].kind, 'section');
-  assert.strictEqual(m[1].kind, 'action');
   assert.strictEqual(m[m.length - 1].kind, 'program');
 });
 
-check('model tolerates an empty catalog (broken install still gets actions)', () => {
-  const m = buildTreeModel([]);
-  const actions = m.filter((e) => e.kind === 'action');
-  assert.strictEqual(actions.length, COMMAND_META.length, 'actions must exist even with no programs');
+check('models tolerate an empty catalog (broken install still gets actions + 0 section)', () => {
+  const a = buildActionEntries();
+  assert.strictEqual(a.length, COMMAND_META.length, 'actions must exist even with no programs');
+  const m = buildProgramEntries([]);
   const programs = m.filter((e) => e.kind === 'program');
   assert.strictEqual(programs.length, 0);
   const section = m.find((e) => e.kind === 'section' && /Example Programs/.test(e.label));
   assert.ok(/Example Programs \(0\)/.test(section.label));
   /* no lab section when there are no lab programs */
-  assert.strictEqual(m.filter((e) => e.kind === 'section').length, 2, 'lab section should be absent for an empty catalog');
+  assert.strictEqual(m.filter((e) => e.kind === 'section').length, 1, 'lab section should be absent for an empty catalog');
 });
 
 console.log(failures === 0 ? '\nTREE MODEL TESTS ALL PASS' : `\n${failures} FAILURES`);

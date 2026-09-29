@@ -4,6 +4,18 @@ All notable changes to this extension are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.15] — 2026-09-29
+
+The Fireworks Simulator gets sound and direct control; the fallback list becomes two clear views.
+
+### Added
+- **Realistic fireworks audio.** The sound toggle in the Fireworks Simulator now works: launch whooshes, deep burst booms and crackling tails are synthesized offline with the WebAudio API — five sound slots (lift, burst, small burst, crackle, small crackle) rendered as real audio buffers, with per-launch volume and pitch variation exactly like the original engine. No network access, no downloads: audio is generated on your machine during the loading screen and works under the strict webview security policy.
+- **Click-to-burst.** Click anywhere inside the running show and the next firework launches toward that spot and bursts exactly where you clicked — low clicks included (bursts are clamped only to a sensible sky band near the very top and bottom edges). A brief on-screen hint explains both features on first open.
+- The example-program list is easier to understand: the webview's fallback is now **two separate tree views** — "Actions (Recovery)" with the panel commands and native icons, and "Example Programs (List)" with the examples and the Computer Graphics Lab in their own sections.
+
+### Fixed
+- A webview that fails to load now gets **two** automatic re-render attempts (previously one) before the extension switches to the list views, plus one delayed self-repair re-render a minute later; production telemetry showed machines where a single retry was not enough. If the panel answers after either attempt, the fallback views close again automatically.
+
 ## [1.5.14] — 2026-09-28
 
 Documentation and listing refresh.

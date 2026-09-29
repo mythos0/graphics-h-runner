@@ -241,21 +241,71 @@ const fwHtml = buildFireworksHtml({
   cssUri: CSP + '/media/fireworks/fireworks.css',
   fscreenJsUri: CSP + '/media/fireworks/fscreen.js',
   myMathJsUri: CSP + '/media/fireworks/MyMath.js',
+  fireworksAudioJsUri: CSP + '/media/fireworks/audio.js',
   stageJsUri: CSP + '/media/fireworks/Stage.js',
   scriptJsUri: CSP + '/media/fireworks/script.js'
 });
 
-check('fireworks page: CSP + 5 nonce scripts in engine order', () => {
+check('fireworks page: CSP + 6 nonce scripts in engine order', () => {
   assert.ok(fwHtml.includes(`script-src 'nonce-fw456' ${CSP};`), 'script CSP wrong');
-  assert.ok((fwHtml.match(/<script /g) || []).length === 5, 'expected 5 script tags (4 libs + boot)');
-  const order = ['fscreen.js', 'Stage.js', 'MyMath.js', 'script.js'];
+  assert.ok((fwHtml.match(/<script /g) || []).length === 6, 'expected 6 script tags (5 libs + boot)');
+  const order = ['fscreen.js', 'Stage.js', 'MyMath.js', 'audio.js', 'script.js'];
   let last = -1;
   for (const f of order) {
     const at = fwHtml.indexOf(f);
     assert.ok(at > last, f + ' out of order');
     last = at;
   }
+  /* audio.js MUST boot before script.js so the synth exists when preload runs */
+  assert.ok(fwHtml.indexOf('audio.js') < fwHtml.indexOf('script.js'), 'audio.js must load before script.js');
   assert.ok(fwHtml.includes('rel="stylesheet"'), 'fireworks.css must be linked');
+});
+
+check('v1.5.15: fireworks audio is synthesized offline (CSP-safe, no remote fetch)', () => {
+  const audioPath = media.fireworksAudioJs;
+  assert.ok(fs.existsSync(audioPath), 'media/fireworks/audio.js is not bundled');
+  const src = fs.readFileSync(audioPath, 'utf8');
+  assert.ok(src.includes('__ghrFireworksSynth'), 'audio.js must expose the synth hook');
+  assert.ok(src.includes('OfflineAudioContext'), 'buffers must be rendered offline');
+  /* every engine sound slot must be covered */
+  for (const slot of ['lift', 'burst', 'burstSmall', 'crackle', 'crackleSmall']) {
+    assert.ok(new RegExp('"?' + slot + '"?\\s*:').test(src), 'synth missing sound slot: ' + slot);
+  }
+  /* CSP discipline: no network, no remote URLs, no eval */
+  assert.ok(!/\bfetch\s*\(/.test(src), 'audio.js must not fetch');
+  assert.ok(!/XMLHttpRequest/.test(src), 'audio.js must not use XHR');
+  assert.ok(!/\beval\s*\(|new Function\s*\(/.test(src), 'audio.js must not eval');
+  assert.ok(!/https?:\/\//.test(src), 'audio.js must not reference remote URLs');
+  new Function(src); /* syntax check */
+});
+
+check('v1.5.15: script.js preload prefers the synth and playSound stays guarded', () => {
+  const src = fs.readFileSync(media.scriptJs, 'utf8');
+  assert.ok(src.includes('__ghrFireworksSynth'), 'preload must call the synth provider');
+  assert.ok(
+    src.indexOf('__ghrFireworksSynth') < src.indexOf("fetch(fileURL)"),
+    'the synth branch must come before the (failing) network path'
+  );
+  assert.ok(src.includes('skip silently'), 'the empty-buffer guard must stay');
+  new Function(src); /* syntax check */
+});
+
+check('v1.5.15: click-to-burst targets the clicked spot exactly', () => {
+  const src = fs.readFileSync(media.scriptJs, 'utf8');
+  /* launch() accepts an explicit burst target and clamps it to a sky band */
+  assert.ok(/launch\(position, launchHeight, targetY\)/.test(src), 'Shell.launch must accept targetY');
+  assert.ok(/Math\.min\(Math\.max\(targetY/.test(src), 'targetY must be clamped');
+  /* clicks convert the stage event into a drawing-space burst target */
+  assert.ok(/\(event\.y \/ h\) \* stageH/.test(src), 'clicks must pass an exact burst target');
+  /* the no-event path still uses the random position mapping */
+  assert.ok(/getRandomShellPositionH\(\), getRandomShellPositionV\(\)/.test(src), 'random path must stay');
+});
+
+check('v1.5.15: discoverability hint names the click + sound features', () => {
+  assert.ok(fwHtml.includes('class="ghr-hint"'), 'no hint element');
+  assert.ok(/Click anywhere/.test(fwHtml), 'hint must explain click-to-burst');
+  assert.ok(/realistic audio/.test(fwHtml), 'hint must explain the sound toggle');
+  assert.ok(fwHtml.includes('ghr-hint-fade'), 'hint must fade out on its own');
 });
 
 check('fireworks page satisfies EVERY selector the vendored engine queries', () => {
@@ -398,7 +448,8 @@ check('routing: extension sends confetti/schoolpride to the PANEL, error/firewor
   const overlay = fs.readFileSync(media.celebrateJs, 'utf8');
   assert.ok(overlay.includes("'error'"), 'error overlay controller must stay');
   const fw = buildFireworksHtml({
-    nonce: 'x', cspSource: CSP, cssUri: 'a', fscreenJsUri: 'b', myMathJsUri: 'c', stageJsUri: 'd', scriptJsUri: 'e'
+    nonce: 'x', cspSource: CSP, cssUri: 'a', fscreenJsUri: 'b', myMathJsUri: 'c',
+    fireworksAudioJsUri: 'd', stageJsUri: 'e', scriptJsUri: 'f'
   });
   assert.ok(fw.includes('ghr-stop'), 'fireworks page must stay');
 });

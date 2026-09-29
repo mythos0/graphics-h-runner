@@ -1655,8 +1655,34 @@ async function copyCompileCommand() {
     }
 }
 /* ---------------- activation ---------------- */
-/** Native TreeView shown (and focused) when the webview fails to load. */
+/** Native TreeViews shown (and focused) when the webview fails to load.
+ * v1.5.15: two SEPARATE views — recovery actions and the example programs. */
 const FALLBACK_VIEW_ID = 'graphics-h-runner.fallback';
+const FALLBACK_PROGRAMS_VIEW_ID = 'graphics-h-runner.fallbackPrograms';
+/** v1.5.15: one delayed self-repair attempt after the webview was declared
+ * unrecoverable. If the panel answers after it, the fallback views close
+ * again; if not, the fallback stays (sticky) until the user acts. */
+const WEBVIEW_SELF_REPAIR_DELAY_MS = 60000;
+let webviewSelfRepairTimer;
+/** v1.5.15: 60 s after a fallback verdict, re-render the real panel ONCE —
+ * a later attempt often clears a stubborn service-worker race that beat the
+ * watchdog's two immediate retries. Guarded: cancelled when the webview
+ * answers first, and never stacked. */
+function scheduleWebviewSelfRepair() {
+    cancelWebviewSelfRepair();
+    webviewSelfRepairTimer = setTimeout(() => {
+        webviewSelfRepairTimer = undefined;
+        log('[panel] self-repair: re-rendering the webview one more time');
+        (0, instrument_1.addExtensionBreadcrumb)('panel', 'webview self-repair re-render');
+        panel?.reloadPanel();
+    }, WEBVIEW_SELF_REPAIR_DELAY_MS);
+}
+function cancelWebviewSelfRepair() {
+    if (webviewSelfRepairTimer !== undefined) {
+        clearTimeout(webviewSelfRepairTimer);
+        webviewSelfRepairTimer = undefined;
+    }
+}
 /** Panel click router: buttons in the webview land here. */
 async function handlePanelClick(msg) {
     if (msg.type === 'pong') {
@@ -1742,13 +1768,14 @@ function activate(context) {
                 return;
             }
             if (ev === 'fallback') {
-                log('[panel] webview failed to load — switching to the list view automatically');
+                log('[panel] webview failed to load — switching to the list views automatically');
                 (0, instrument_1.addExtensionBreadcrumb)('panel', 'webview fallback engaged');
-                /* resilience WORKED here (automatic retry + list-view fallback):
+                /* resilience WORKED here (automatic retries + list-view fallback):
                  * warning-level visibility, not an error issue */
-                (0, instrument_1.captureExtensionWarning)('webview failed to load (no pong after retry render)', {
+                (0, instrument_1.captureExtensionWarning)('webview failed to load (no pong after 2 retry renders)', {
                     stage: 'webview-fallback'
                 });
+                scheduleWebviewSelfRepair();
                 void (async () => {
                     await vscode.commands.executeCommand('setContext', 'graphics-h-runner.showFallback', true);
                     await vscode.commands.executeCommand(FALLBACK_VIEW_ID + '.focus');
@@ -1756,7 +1783,8 @@ function activate(context) {
                 return;
             }
             if (ev === 'alive') {
-                /* the webview answers again — the fallback list no longer needed */
+                /* the webview answers again — the fallback lists no longer needed */
+                cancelWebviewSelfRepair();
                 void vscode.commands
                     .executeCommand('setContext', 'graphics-h-runner.showFallback', false)
                     .then(() => undefined, () => undefined);
@@ -1784,7 +1812,10 @@ function activate(context) {
     context.subscriptions.push(vscode.window.registerWebviewViewProvider(panelView_1.GhPanelProvider.VIEW_ID, panelProvider, {
         webviewOptions: { retainContextWhenHidden: true }
     }), vscode.window.createTreeView(FALLBACK_VIEW_ID, {
-        treeDataProvider: new programsTree_1.GhFallbackTreeProvider(catalog),
+        treeDataProvider: new programsTree_1.GhActionsTreeProvider(),
+        showCollapseAll: false
+    }), vscode.window.createTreeView(FALLBACK_PROGRAMS_VIEW_ID, {
+        treeDataProvider: new programsTree_1.GhProgramsTreeProvider(catalog),
         showCollapseAll: false
     }), vscode.commands.registerCommand('graphics-h-runner.runSample', trackedCommand('runSample', async (programId) => {
         /* used by the fallback tree: open + compile + run in one click */
@@ -1931,6 +1962,8 @@ function activate(context) {
     (0, instrument_1.addExtensionBreadcrumb)('lifecycle', 'activated');
 }
 async function deactivate() {
+    /* v1.5.15: a pending self-repair must never re-render during teardown. */
+    cancelWebviewSelfRepair();
     /* v1.5.13 THE CLEAN EXIT: a real uninstall puts every setting back that
      * Complete Run Setup changed. deactivate() also fires on plain shutdowns
      * and on updates — isRealUninstall() tells those apart via the extensions
