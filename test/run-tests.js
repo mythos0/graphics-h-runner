@@ -61,20 +61,9 @@ function cleanStaleSockets() {
   }
 }
 const SHOT_AT = {
-  '01_hello_graphics.cpp': 1.4,
-  '02_shapes_showcase.cpp': 1.6,
-  '03_bouncing_ball.cpp': 1.2,
-  '04_moving_car.cpp': 1.4,
-  '05_tricolor_flag.cpp': 1.6,
-  '06_fractal_tree.cpp': 8.0,
-  '07_mandelbrot.cpp': 7.5,
-  '08_mouse_paint.cpp': 2.0,
-  '09_keyboard_paddle.cpp': 2.0,
-  '12_fireworks.cpp': 3.4
+  '01_snake_game.cpp': 3.0   /* demo AI is already crawling by then   */
 };
-const TIMEOUT_MS = {
-  '07_mandelbrot.cpp': 90000
-};
+const TIMEOUT_MS = {};
 const GRAB_SIZE = '800x600';
 
 function sh(cmd, args, opts = {}) {

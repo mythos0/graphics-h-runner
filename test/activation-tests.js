@@ -14,7 +14,7 @@
 const assert = require('assert');
 const fs = require('fs');
 
-const SAMPLE = '/home/z/my-project/graphics-h-runner/samples/01_hello_graphics.cpp';
+const SAMPLE = '/home/z/my-project/push-work/clone/samples/01_snake_game.cpp';
 
 exports.run = async function () {
   const vscode = require('vscode');
@@ -75,11 +75,11 @@ exports.run = async function () {
   /* 5. PANEL CARD FLOW — "▶ Run" on a program card:
    * open the sample without any workspace folder (the new private-storage
    * path hands back a REAL file), compile, run, then stop it. */
-  const program = { filename: '01_hello_graphics.cpp', source: fs.readFileSync(SAMPLE, 'utf8') };
+  const program = { filename: '01_snake_game.cpp', source: fs.readFileSync(SAMPLE, 'utf8') };
   await vscode.commands.executeCommand('graphics-h-runner.openProgram', program); /* handler is awaitable now */
   await new Promise((r) => setTimeout(r, 500));
   const editor = vscode.window.activeTextEditor;
-  assert.ok(editor && editor.document.fileName.endsWith('01_hello_graphics.cpp'),
+  assert.ok(editor && editor.document.fileName.endsWith('01_snake_game.cpp'),
     'sample not opened as a real file (got ' + (editor ? editor.document.fileName : 'no editor') +
     '; tabs: ' + JSON.stringify(vscode.window.tabGroups.all.map((g) => g.tabs.map((t) => (t.input && t.input.uri) ? t.input.uri.toString(true) : t.label))) + ')');
   assert.ok(!editor.document.isDirty, 'opened sample document should be clean');
@@ -124,7 +124,7 @@ exports.run = async function () {
   await vscode.commands.executeCommand('setContext', 'graphics-h-runner.showFallback', true);
   await vscode.commands.executeCommand('graphics-h-runner.fallback.focus');
   await new Promise((r) => setTimeout(r, 1200));
-  await vscode.commands.executeCommand('graphics-h-runner.runSample', 'hello');
+  await vscode.commands.executeCommand('graphics-h-runner.runSample', 'snake');
   await new Promise((r) => setTimeout(r, 5000)); /* compile + launch */
   assert.ok(fs.existsSync(binPath), 'runSample (tree click path) did not compile the sample');
   await vscode.commands.executeCommand('graphics-h-runner.stopProgram');
@@ -138,9 +138,9 @@ exports.run = async function () {
    * wanted to execute graphics-h-runner.runSample /N" fix: the tree now
    * invokes static per-node ids; execute a main and a lab one directly
    * (exactly what a real click does — no arguments involved). */
-  await vscode.commands.executeCommand('graphics-h-runner.runSample.hello');
+  await vscode.commands.executeCommand('graphics-h-runner.runSample.snake');
   await new Promise((r) => setTimeout(r, 5000)); /* compile + launch */
-  assert.ok(fs.existsSync(binPath), 'per-node tree command (hello) did not compile the sample');
+  assert.ok(fs.existsSync(binPath), 'per-node tree command (snake) did not compile the sample');
   await vscode.commands.executeCommand('graphics-h-runner.stopProgram');
   await new Promise((r) => setTimeout(r, 800));
   await vscode.commands.executeCommand('graphics-h-runner.runSample.ddalab');
@@ -167,7 +167,7 @@ exports.run = async function () {
   assert.ok(fs.existsSync(labBin), 'per-node tree command (ddalab) did not compile the lab sample');
   await vscode.commands.executeCommand('graphics-h-runner.stopProgram');
   await new Promise((r) => setTimeout(r, 800));
-  console.log('activation-tests: per-node tree click path OK — runSample.hello + runSample.ddalab compiled and launched');
+  console.log('activation-tests: per-node tree click path OK — runSample.snake + runSample.ddalab compiled and launched');
 
   /* 9. v1.5.5 FIREWORKS SIMULATOR — the toggle command opens the full-
    * screen overlay, the same command stops it, and Stop is idempotent. */

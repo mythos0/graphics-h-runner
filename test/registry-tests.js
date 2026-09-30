@@ -105,7 +105,7 @@ check('fallback view when-clause context keys are produced somewhere in the bund
 
 check('tree model: one static per-node id per program, prefix registered', () => {
   const catalog = loadProgramCatalog(ROOT);
-  assert.ok(catalog.length >= 31, 'catalog shrank: ' + catalog.length);
+  assert.ok(catalog.length >= 9, 'catalog shrank: ' + catalog.length);
   const ids = new Set();
   for (const p of catalog) {
     const id = treeRunCommandId(p.id);

@@ -3,6 +3,11 @@
  * extension (samples/*.cpp inside the .vsix) plus the command list
  * shown in the graphics.h webview panel.
  *
+ * v1.5.16: the Example Programs section is a single showpiece — the
+ * Snake Game (WASD/arrow keys, bonus apples, difficulty levels, a
+ * file-based high-score database). The classic course algorithms
+ * remain as their own Computer Graphics Lab section below.
+ *
  * Clicking a program card opens it in the editor as a real
  * filename.cpp (created under <workspace>/graphics-h-programs/ when a
  * folder is open, or as an untitled document otherwise); the card's
@@ -42,31 +47,12 @@ export function resolveProgramTarget(
 }
 
 const SAMPLE_META: ProgramMeta[] = [
-  /* v1.5.8: the fireworks simulation leads the list — the requested
-   * showpiece first (shells, rockets, particle physics), rest unchanged */
-  { id: 'fireworks',  kind: 'sample', filename: '12_fireworks.cpp',       title: 'Fireworks Show',      description: 'Shells, rockets & particle physics over a night city', emoji: '🎆', tag: 'fun' },
-  { id: 'hello',      kind: 'sample', filename: '01_hello_graphics.cpp',  title: 'Hello, graphics.h!',  description: 'First window — shapes, colors, text',   emoji: '👋', tag: 'classic' },
-  { id: 'shapes',     kind: 'sample', filename: '02_shapes_showcase.cpp', title: 'Shapes Showcase',     description: 'Bars, circles, ellipses, polygons',     emoji: '🔷', tag: 'classic' },
-  { id: 'ball',       kind: 'sample', filename: '03_bouncing_ball.cpp',   title: 'Bouncing Ball',       description: 'delay()-based animation loop',          emoji: '🔴', tag: 'classic' },
-  { id: 'car',        kind: 'sample', filename: '04_moving_car.cpp',      title: 'Moving Car',          description: 'Scene animation with scrolling road',   emoji: '🚗', tag: 'fun' },
-  { id: 'flag',       kind: 'sample', filename: '05_tricolor_flag.cpp',   title: 'Tricolor Flag',       description: 'Filled rectangles + flag pole',         emoji: '🚩', tag: 'classic' },
-  { id: 'tree',       kind: 'sample', filename: '06_fractal_tree.cpp',    title: 'Fractal Tree',        description: 'Recursive line drawing showcase',       emoji: '🌳', tag: 'math' },
-  { id: 'mandel',     kind: 'sample', filename: '07_mandelbrot.cpp',      title: 'Mandelbrot Set',      description: 'putpixel() math showcase',              emoji: '🌀', tag: 'math' },
-  { id: 'paint',      kind: 'sample', filename: '08_mouse_paint.cpp',     title: 'Mouse Paint',         description: 'ismouseclick() drawing program',        emoji: '🖌️', tag: 'interactive' },
-  { id: 'paddle',     kind: 'sample', filename: '09_keyboard_paddle.cpp', title: 'Keyboard Paddle',     description: 'kbhit()/getch() mini game',             emoji: '🏓', tag: 'interactive' },
-  { id: 'smiley',     kind: 'sample', filename: '10_smiley_wink.cpp',     title: 'Winking Smiley',      description: 'Giant bobbing smiley that winks at you',emoji: '😊', tag: 'fun' },
-  { id: 'balls',      kind: 'sample', filename: '11_bouncing_balls.cpp',  title: 'Bouncing Balls',      description: 'Seven colorful balls with ghost trails',emoji: '🎱', tag: 'fun' },
-  { id: 'solar',      kind: 'sample', filename: '13_solar_system.cpp',    title: 'Solar System',        description: 'Orbiting planets, moon and a comet',    emoji: '🪐', tag: 'fun' },
-  { id: 'aquarium',   kind: 'sample', filename: '14_aquarium.cpp',        title: 'Aquarium',            description: 'Swimming fish, bubbles and seaweed',    emoji: '🐠', tag: 'fun' },
-  { id: 'spiral',     kind: 'sample', filename: '15_rainbow_spiral.cpp',  title: 'Rainbow Spiral',      description: 'Ever-growing rotating rainbow spiral',  emoji: '🌈', tag: 'fun' },
-  { id: 'heli',       kind: 'sample', filename: '16_helicopter.cpp',      title: 'Helicopter',          description: 'Heli over a night city, spinning rotor',emoji: '🚁', tag: 'fun' },
-  { id: 'sunset',     kind: 'sample', filename: '17_sunset.cpp',          title: 'Sunset Scene',        description: 'Sun sinks, stars come out, moon rises', emoji: '🌅', tag: 'fun' },
-  { id: 'starfield',  kind: 'sample', filename: '18_starfield.cpp',       title: 'Warp Starfield',      description: 'Fly through space at warp speed',       emoji: '✨', tag: 'fun' },
-  { id: 'dda',        kind: 'sample', filename: '19_dda_line.cpp',        title: 'DDA Line (Terminal Input)', description: 'Type endpoints in the terminal, see every DDA step', emoji: '📏', tag: 'math' },
-  { id: 'turbos',     kind: 'sample', filename: '20_turbo_tour.cpp',      title: 'Turbo C++ Graphics Tour',   description: 'bar3d, pieslice, sector, floodfill, fill patterns',  emoji: '🏛️', tag: 'classic' },
-  { id: 'viewport',   kind: 'sample', filename: '21_viewport_bounce.cpp', title: 'Viewport & Clipping',       description: 'Two clipped panes with bouncing balls inside',       emoji: '🖼️', tag: 'classic' },
-  { id: 'sprite',     kind: 'sample', filename: '22_sprite_ride.cpp',     title: 'Sprite Animation',          description: 'getimage/putimage rocket over a starfield',          emoji: '🚀', tag: 'fun' },
-  { id: 'coniopaint', kind: 'sample', filename: '23_conio_paint.cpp',     title: 'Conio Keyboard Paint',      description: 'conio.h kbhit/getch drawing pad with a menu bar',    emoji: '⌨️', tag: 'interactive' }
+  /* v1.5.16: the example section is now exactly one program — the best
+   * designed graphics.h game, playable with W A S D and the arrow keys,
+   * with a tiny file database for the high scores. */
+  { id: 'snake', kind: 'sample', filename: '01_snake_game.cpp', title: 'Snake Game',
+    description: 'WASD/arrows, bonus apples, levels & a saved high-score table',
+    emoji: '🐍', tag: 'fun' }
 ];
 
 /** v1.5.0 — the Computer Graphics Lab: the classic course algorithms as

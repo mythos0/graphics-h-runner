@@ -779,7 +779,7 @@ function buildPanelHtml(opts) {
     <div class="sec sec-toggle" id="programs-sec" role="button" tabindex="0" aria-expanded="false"
          title="Show / hide the example programs">
       <h2>Example Programs<span class="chev" id="programs-chev">▶</span></h2>
-      <span class="count" id="programs-count">${programs.length} programs · tap to expand</span>
+      <span class="count" id="programs-count">${programs.length} ${programs.length === 1 ? 'program' : 'programs'} · tap to expand</span>
     </div>
     <div id="programs" class="collapsed">
       ${programCards(programs)}

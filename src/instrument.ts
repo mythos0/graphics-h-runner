@@ -176,6 +176,33 @@ function installNavigatorGuard(): void {
 }
 
 /**
+ * The bundled Sentry SDK's own uncaught-exception OBSERVER frame.
+ *
+ * The SDK handler is bundled into dist/extension.js, so on every uncaught
+ * error in the shared host its frame — "Object.assign._errorHandler" —
+ * appears INSIDE the reported stack (the host's error path runs through the
+ * registered process handlers, including ours). Without excluding it, every
+ * third-party crash in the host process looks "attributable" because the
+ * observer that CAUGHT it lives in our bundle.
+ *
+ * Seen live (GRAPHICS-H-RUNNER-H, v1.5.16): "Oracle Java SE Language Server
+ * not enabled" — thrown by the host for the Java extension, captured by our
+ * observer; the ONLY frame in our files was that observer frame.
+ *
+ * The name is specific on purpose: our own code never defines or calls a
+ * bare `_errorHandler` (grep'd), and real errors thrown by our code carry
+ * our real function frames (throw site) in addition to — or instead of —
+ * the observer.
+ */
+function isObserverFrame(funcName: string | undefined): boolean {
+  if (typeof funcName !== 'string') {
+    return false;
+  }
+  const fn = funcName.toLowerCase();
+  return fn === '_errorhandler' || (fn.startsWith('object.assign.') && fn.includes('errorhandler'));
+}
+
+/**
  * VS Code's extension host is a SHARED process: every installed extension and
  * the workbench itself run inside it. Our OnUncaughtException integration is a
  * process-wide last-resort handler, so without filtering it captures crashes
@@ -186,10 +213,15 @@ function installNavigatorGuard(): void {
  * an extension folder whose name contains the extension id ("graphics-h-runner",
  * true for installed `~/.vscode/extensions/mythos0-labs.graphics-h-runner-x/`
  * on all platforms and for dev/E2E checkouts) or in our bundled dist output.
- * Events captured deliberately through captureExtensionError() carry the
- * `ghr.source: handled` tag and always pass.
+ * Observer frames (see isObserverFrame) never count — they are appended to
+ * every stack our handler happens to catch. Events captured deliberately
+ * through captureExtensionError() carry the `ghr.source: handled` tag and
+ * always pass.
+ *
+ * Exported for unit tests (test/instrument-tests.js); the second parameter
+ * overrides the module-level extensionRoot so tests need no VS Code context.
  */
-function isAttributableToUs(event: Sentry.Event): boolean {
+export function isAttributableToUs(event: Sentry.Event, extensionRootOverride?: string): boolean {
   const values = event.exception?.values || [];
   for (const ex of values) {
     const tags = (event.tags || {}) as Record<string, string>;
@@ -197,10 +229,21 @@ function isAttributableToUs(event: Sentry.Event): boolean {
       return true;
     }
   }
-  const frames: Array<{ filename?: string; abs_path?: string }> = [];
+  const frames: Array<{
+    function?: string;
+    filename?: string;
+    abs_path?: string;
+  }> = [];
   for (const ex of values) {
     for (const f of ex.stacktrace?.frames || []) {
-      frames.push({ filename: f.filename || undefined, abs_path: f.abs_path || undefined });
+      if (isObserverFrame(f.function)) {
+        continue; /* the bundled observer — attribution-neutral */
+      }
+      frames.push({
+        function: f.function || undefined,
+        filename: f.filename || undefined,
+        abs_path: f.abs_path || undefined
+      });
     }
   }
   if (frames.length === 0) {
@@ -217,8 +260,9 @@ function isAttributableToUs(event: Sentry.Event): boolean {
       }
     }
   }
-  if (extensionRoot) {
-    const root = extensionRoot.replace(/\\/g, '/').toLowerCase();
+  const root0 = extensionRootOverride !== undefined ? extensionRootOverride : extensionRoot;
+  if (root0) {
+    const root = root0.replace(/\\/g, '/').toLowerCase();
     for (const f of frames) {
       for (const p of [f.abs_path, f.filename]) {
         if (typeof p === 'string' && p.replace(/\\/g, '/').toLowerCase().startsWith(root)) {

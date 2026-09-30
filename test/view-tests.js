@@ -36,11 +36,11 @@ function check(name, fn) {
 
 console.log('view-tests — catalog + package.json wiring\n');
 
-check('catalog loads 31 samples (23 + 8 lab), 0 templates', () => {
+check('catalog loads 9 samples (1 snake example + 8 lab, 0 templates)', () => {
   const catalog = loadProgramCatalog(ROOT);
-  assert.strictEqual(catalog.filter((p) => p.kind === 'sample').length, 31, 'sample count');
+  assert.strictEqual(catalog.filter((p) => p.kind === 'sample').length, 9, 'sample count');
   assert.strictEqual(catalog.filter((p) => p.kind === 'template').length, 0, 'template count');
-  assert.strictEqual(catalog.length, 31, 'total count');
+  assert.strictEqual(catalog.length, 9, 'total count');
 });
 
 check('every sample source includes <graphics.h>', () => {
@@ -58,15 +58,19 @@ check('catalog sources match bundled samples byte-for-byte', () => {
   }
 });
 
-check('filenames unique + sorted numbering 01..31', () => {
+check('filenames unique + the exact v1.5.16 catalog (snake + lab 24..31)', () => {
   const catalog = loadProgramCatalog(ROOT);
   const names = catalog.map((p) => p.filename);
   assert.strictEqual(new Set(names).size, names.length, 'duplicate filenames');
   names.forEach((n) => assert.ok(n.endsWith('.cpp'), n + ' not .cpp'));
-  for (let i = 1; i <= 31; i++) {
-    const prefix = String(i).padStart(2, '0') + '_';
-    assert.ok(names.some((n) => n.startsWith(prefix)), 'missing sample #' + prefix);
+  /* v1.5.16: the example section is exactly ONE program — the Snake Game;
+   * the Computer Graphics Lab keeps its 24..31 numbering. */
+  const expected = ['01_snake_game.cpp'];
+  for (let i = 24; i <= 31; i++) { expected.push(String(i).padStart(2, '0') + '_'); }
+  for (const e of expected) {
+    assert.ok(names.some((n) => n === e || n.startsWith(e)), 'missing sample #' + e);
   }
+  assert.strictEqual(names.length, 9, 'catalog size drifted: ' + names.length);
 });
 
 check('every program card has emoji + valid tag', () => {
@@ -78,14 +82,15 @@ check('every program card has emoji + valid tag', () => {
   }
 });
 
-check('at least 10 funny (tag=fun) programs after v1.4.0 additions', () => {
-  const fun = loadProgramCatalog(ROOT).filter((p) => p.tag === 'fun');
-  assert.ok(fun.length >= 10, 'fun count = ' + fun.length);
-  const newOnes = ['smiley', 'fireworks', 'solar', 'aquarium', 'spiral', 'heli', 'sunset', 'starfield', 'balls'];
-  const ids = new Set(fun.map((f) => f.id));
-  for (const id of newOnes) {
-    assert.ok(ids.has(id), 'missing fun program: ' + id);
-  }
+check('v1.5.16 catalog shape: one Snake Game example + 8 lab programs', () => {
+  const catalog = loadProgramCatalog(ROOT);
+  const main = catalog.filter((p) => !p.lab);
+  const lab = catalog.filter((p) => p.lab);
+  assert.strictEqual(main.length, 1, 'example count = ' + main.length);
+  assert.strictEqual(main[0].id, 'snake', 'the example must be the snake game');
+  assert.strictEqual(main[0].filename, '01_snake_game.cpp', 'snake filename drifted');
+  assert.strictEqual(main[0].tag, 'fun', 'snake tag');
+  assert.strictEqual(lab.length, 8, 'lab count = ' + lab.length);
 });
 
 check('resolveProgramTarget places files under graphics-h-programs/', () => {

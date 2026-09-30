@@ -5,7 +5,8 @@
  *
  * Validates:
  *  1. all three environment states render the right pill + CTA
- *  2. 31 program cards (23 + 8 lab) with Run + Open buttons, split into
+ *  2. 9 program cards (1 Snake Game example + 8 lab) with Run + Open
+ *     buttons, split into their sections
  *     the Example Programs list and the Computer Graphics Lab section
  *  3. 7 action buttons wired to COMMAND_META ids (Open Examples Folder
  *     removed in v1.4.9), exactly one green accent
@@ -87,20 +88,20 @@ check('checking state: amber pill', () => {
   assert.ok(h.includes('Checking environment'), 'no checking copy');
 });
 
-check('31 program cards (23 + 8 lab), each with Run + Open', () => {
+check('9 program cards (1 example + 8 lab), each with Run + Open', () => {
   const h = html({});
   const runs = (h.match(/data-run="/g) || []).length;
   const opens = (h.match(/data-open="/g) || []).length;
-  assert.strictEqual(runs, 31, 'data-run count ' + runs);
-  assert.strictEqual(opens, 31, 'data-open count ' + opens);
-  assert.ok(h.includes('Winking Smiley') && h.includes('Fireworks Show') && h.includes('Warp Starfield'), 'fun programs missing');
-  assert.ok(h.includes('Turbo C++ Graphics Tour') && h.includes('Conio Keyboard Paint') && h.includes('Sprite Animation'), 'new v1.4.7 programs missing');
+  assert.strictEqual(runs, 9, 'data-run count ' + runs);
+  assert.strictEqual(opens, 9, 'data-open count ' + opens);
+  assert.ok(h.includes('Snake Game'), 'the Snake Game example is missing');
+  assert.ok(h.includes('Computer Graphics Lab'), 'lab section missing');
   /* split: the classic list first, the lab list below it */
   const labAt = h.indexOf('id="lab-sec"');
   assert.ok(labAt > 0, 'lab section missing');
   const main = h.slice(0, labAt);
   const lab = h.slice(labAt);
-  assert.strictEqual((main.match(/data-run="/g) || []).length, 23, 'main list should carry 23 cards');
+  assert.strictEqual((main.match(/data-run="/g) || []).length, 1, 'main list should carry 1 card (the Snake Game)');
   assert.strictEqual((lab.match(/data-run="/g) || []).length, 8, 'lab list should carry 8 cards');
   for (const t of ['Coordinate Viewer', 'Pixel Inspector', 'DDA Line Lab', 'Bresenham Line Lab', 'Bresenham Circle Lab', 'Midpoint Ellipse Lab', '2D Transformations Lab', 'Cohen-Sutherland Clipping']) {
     assert.ok(lab.includes(t), 'lab program missing: ' + t);
@@ -356,8 +357,8 @@ check('cheat sheet: searchable overlay + full data content (? button moved to th
 
 check('program count lives in the section header (per-button hint gone)', () => {
   const h = html({});
-  assert.ok(!h.includes('all 23 programs'), 'old per-button count hint still rendered');
-  assert.ok(h.includes('23 programs · tap to expand'), 'section count header wrong');
+  assert.ok(!h.includes('all 9 programs'), 'old per-button count hint still rendered');
+  assert.ok(h.includes('1 program · tap to expand'), 'section count header wrong');
   assert.ok(h.includes('8 lab programs · tap to expand'), 'lab count header wrong');
 });
 

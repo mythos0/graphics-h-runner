@@ -76,7 +76,19 @@ const path = __importStar(require("path"));
 /* ------------------------------------------------------------------ */
 /* constants                                                           */
 /* ------------------------------------------------------------------ */
+/**
+ * SDL_bgi source, PINNED to the exact upstream commit the extension's
+ * patch set is developed and validated against (2023-12-20 "Fix build
+ * issues."). A pinned commit keeps every user's library bit-identical:
+ * upstream main is a moving target (it flip-flops between kbhit/k_bhit
+ * spellings and presentation internals), and a fresh main checkout in
+ * September 2026 produced libraries whose rendering the patch set could
+ * not vouch for. The moving refs stay as FALLBACKS only — if the pinned
+ * URL ever disappears, setup still works, and the patcher's skip-log
+ * lines make any variant drift visible in the setup output.
+ */
 exports.SDL_BGI_TARBALL_URLS = [
+    'https://codeload.github.com/sergev/SDL_bgi/tar.gz/217057ec5727a74b34adf29738a9ebcb52324e21',
     'https://codeload.github.com/sergev/SDL_bgi/tar.gz/refs/heads/main',
     'https://codeload.github.com/sergev/SDL_bgi/tar.gz/refs/heads/master',
     'https://api.github.com/repos/sergev/SDL_bgi/tarball'
@@ -910,6 +922,151 @@ void clearmouseclick (int btn)
 } // clearmouseclick ()
 $1`);
         log.push('source: clearmouseclick implementation added');
+    }
+    /* 6. v1.5.16: kbhit () must not swallow the keyboard event it reports.
+     * The mirror polled the KEYDOWN out of the SDL queue and returned YEAH
+     * without re-queueing it, so the following getch() blocked until yet
+     * another key arrived: every classic  while (kbhit ()) { k = getch (); }
+     * game loop (this extension's own examples included) ate keys and froze
+     * between keystrokes on Linux/macOS. The patched kbhit () only PEEKS at
+     * the key event — it stays at the head of the queue, so getch() delivers
+     * exactly the key kbhit() reported, in order. */
+    const kbhitMatch = /int kbhit \(void\)[\s\S]*?\n\} \/\/ kbhit \(\)/.exec(c);
+    if (kbhitMatch && !/PATCHED \(6\)/.test(c)) {
+        const present = kbhitMatch[0].includes('poll_refresh ()') ? 'poll_refresh' : 'update';
+        const patched = `int kbhit (void)
+{
+  // Returns 1 when a key is pressed, or QUIT if the user asked to close
+  // the window.
+  //
+  // PATCHED (6): the mirror polled the KEYDOWN event out of the queue
+  // and returned YEAH without re-queueing it, so the following getch()
+  // had to wait for yet another keypress - classic game loops written
+  // as  while (kbhit ()) { k = getch (); }  swallowed keys and froze
+  // between keystrokes. The key event is now only PEEKED at: it stays
+  // at the head of the queue and getch() delivers exactly the key
+  // kbhit() reported, in order.
+
+  SDL_Event event;
+  SDL_Keycode key;
+
+  ${present} ();
+
+  if (YEAH == key_pressed) { // a key was pressed during delay()
+    key_pressed = NOPE;
+    return YEAH;
+  }
+
+  SDL_PumpEvents (); // peeking does not pump; look at fresh events
+
+  if (SDL_PeepEvents (&event, 1, SDL_PEEKEVENT,
+                      SDL_FIRSTEVENT, SDL_LASTEVENT) <= 0)
+    return NOPE; // queue empty
+
+  if (SDL_KEYDOWN == event.type) {
+    key = event.key.keysym.sym;
+    if (key != SDLK_LCTRL &&
+        key != SDLK_RCTRL &&
+        key != SDLK_LSHIFT &&
+        key != SDLK_RSHIFT &&
+        key != SDLK_LGUI &&
+        key != SDLK_RGUI &&
+        key != SDLK_LALT &&
+        key != SDLK_RALT &&
+        key != SDLK_PAGEUP &&
+        key != SDLK_PAGEDOWN &&
+        key != SDLK_CAPSLOCK &&
+        key != SDLK_MENU &&
+        key != SDLK_APPLICATION)
+      return YEAH; // peeked: the event is still queued for getch()
+    else {
+      SDL_PeepEvents (&event, 1, SDL_GETEVENT,
+                      SDL_FIRSTEVENT, SDL_LASTEVENT); // drop the modifier
+      return NOPE;
+    }
+  } // if (SDL_KEYDOWN == event.type)
+  else
+    if (SDL_WINDOWEVENT == event.type) {
+      if (SDL_WINDOWEVENT_CLOSE == event.window.event)
+        return QUIT; // peeked: getevent() reports QUIT to getch()
+    }
+  else {
+    // not a keyboard event: requeue at the tail (don't disrupt the
+    // mouse) and report "no key", exactly like the mirror did
+    SDL_PeepEvents (&event, 1, SDL_GETEVENT,
+                    SDL_FIRSTEVENT, SDL_LASTEVENT);
+    SDL_PushEvent (&event);
+  }
+
+  return NOPE;
+
+} // kbhit ()`;
+        c = c.replace(kbhitMatch[0], patched);
+        log.push('source: kbhit() only PEEKS at the key event (getch no longer swallows keys)');
+    }
+    /* 6b. xkbhit () has the identical swallow bug — and delay() calls it in
+     * the same polling loop as kbhit(), so even with 6 alone the FIRST key
+     * pressed during delay() was eaten by xkbhit () before kbhit ()'s client
+     * ever called getch (). Same fix: peek, never swallow. */
+    const xkbhitMatch = /int xkbhit \(void\)[\s\S]*?\n\} \/\/ xkbhit \(\)/.exec(c);
+    if (xkbhitMatch && !/PATCHED \(6b\)/.test(c)) {
+        const present = xkbhitMatch[0].includes('poll_refresh ()') ? 'poll_refresh' : 'update';
+        const patched = `int xkbhit (void)
+{
+  // Returns 1 when any key is pressed, or QUIT if the user asked to
+  // close the window.
+  //
+  // PATCHED (6b): same swallow bug as kbhit () — and delay() calls this
+  // in the same polling loop, so the FIRST key pressed during delay()
+  // was eaten here before getch() could ever see it. Peek instead: the
+  // event stays queued for getch()/getevent().
+
+  SDL_Event event;
+
+  ${present} ();
+
+  if (YEAH == xkey_pressed) { // a key was pressed during delay()
+    xkey_pressed = NOPE;
+    return YEAH;
+  }
+
+  SDL_PumpEvents (); // peeking does not pump; look at fresh events
+
+  if (SDL_PeepEvents (&event, 1, SDL_PEEKEVENT,
+                      SDL_FIRSTEVENT, SDL_LASTEVENT) <= 0)
+    return NOPE; // queue empty
+
+  if (SDL_KEYDOWN == event.type)
+    return YEAH; // peeked: the event is still queued for getch()
+  else
+    if (SDL_WINDOWEVENT == event.type) {
+      if (SDL_WINDOWEVENT_CLOSE == event.window.event)
+        return QUIT; // peeked: getevent() reports QUIT to getch()
+    }
+  else {
+    // not a keyboard event: requeue at the tail (don't disrupt the
+    // mouse) and report "no key", exactly like the mirror did
+    SDL_PeepEvents (&event, 1, SDL_GETEVENT,
+                    SDL_FIRSTEVENT, SDL_LASTEVENT);
+    SDL_PushEvent (&event);
+  }
+  return NOPE;
+
+} // xkbhit ()`;
+        c = c.replace(xkbhitMatch[0], patched);
+        log.push('source: xkbhit() only PEEKS at the key event (delay() no longer loses keys)');
+    }
+    if (!kbhitMatch) {
+        /* Upstream flip-flops between two spellings of the same function:
+         * `int kbhit (void)` (patched above when present) and `int k_bhit (void)`
+         * reached through the header's `#define kbhit k_bhit`. The k_bhit
+         * revisions seen so far store the key for getch() themselves, so the
+         * peek patch is unnecessary there — say so instead of skipping silently,
+         * so a future regression upstream is visible in the setup log. */
+        log.push('source: kbhit peek patch skipped (this upstream revision stores the key itself — no swallow bug)');
+    }
+    if (!xkbhitMatch) {
+        log.push('source: xkbhit peek patch skipped (this upstream revision stores the key itself — no swallow bug)');
     }
     fs.writeFileSync(cPath, c);
 }

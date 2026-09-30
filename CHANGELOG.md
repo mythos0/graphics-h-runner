@@ -4,6 +4,20 @@ All notable changes to this extension are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.16] — 2026-09-30
+
+The example section becomes the Snake Game; the Linux library pipeline is pinned and more honest.
+
+### Changed
+- **The example section is now the Snake Game.** All previous example programs were removed and replaced by a single, complete graphics.h game: play with **W A S D or the arrow keys**, choose one of three difficulties (Easy wraps around the walls, Medium/Hard are deadly), chase red apples and timed 5× yellow bonuses, level up every five apples, pause with P or Space, and read the built-in help screen. Your name, the top-5 high scores, games played and apples eaten are saved after every game into a small, human-readable file (`snake_scores.db`, created next to your program).
+- **The Computer Graphics Lab is unchanged** — the 8 classic course-algorithm programs (Coordinate Viewer, Pixel Inspector, DDA, Bresenham line & circle, Midpoint Ellipse, 2D Transformations, Cohen–Sutherland Clipping) keep their own section in the panel and the list views.
+
+### Fixed
+- **The SDL_bgi download is pinned.** Complete Run Setup now downloads the exact upstream commit the extension's patch set is validated against, instead of whatever the upstream `main` branch happens to contain that day. A fresh `main` checkout in late September produced libraries whose on-screen rendering could not be vouched for; a pinned commit guarantees every user gets the same, verified library. The moving refs remain only as fallbacks.
+- The setup patcher now says what it does: when the downloaded SDL_bgi revision already stores keyboard events itself (the `k_bhit` variant), the kbhit-peek patch is skipped **with a visible log line** instead of silently. If the patch applies (the `kbhit` spelling), `kbhit()`/`xkbhit()` only peek at the key event, so classic `while (kbhit()) { k = getch(); }` game loops no longer lose keys or freeze between keystrokes.
+- The Fireworks Simulator's error reporting no longer attributes unrelated extension-host crashes to this extension: a stack frame that merely *observed* an error (the bundled uncaught-exception handler) no longer counts as evidence that the extension caused it.
+- A "play again" on the Snake Game's game-over card now actually restarts the game instead of returning to the menu.
+
 ## [1.5.15] — 2026-09-29
 
 The Fireworks Simulator gets sound and direct control; the fallback list becomes two clear views.

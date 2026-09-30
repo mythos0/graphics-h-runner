@@ -6,8 +6,8 @@
  * Contract (v1.5.15 SPLIT): the fallback is TWO separate views so each is
  * easy to understand at a glance —
  *   - buildActionEntries():  the 8 panel commands as a flat list;
- *   - buildProgramEntries(): the 23 example programs + 8 Computer Graphics
- *     Lab programs grouped under their own section headers.
+ *   - buildProgramEntries(): the single Snake Game example + the 8 Computer
+ *     Graphics Lab programs grouped under their own section headers.
  * Every program click runs through its own STATIC per-node command id
  * (graphics-h-runner.runSample.<id>). TreeItem.command must never carry
  * `arguments`: VS Code caches argument-carrying tree commands under a
@@ -56,13 +56,13 @@ check('actions model = exactly the 8 panel commands, flat (no sections)', () => 
   }
 });
 
-check('programs model = 2 sections + 31 programs (23 examples + 8 lab)', () => {
+check('programs model = 2 sections + 9 programs (1 example + 8 lab)', () => {
   const m = buildProgramEntries(catalog);
   const sections = m.filter((e) => e.kind === 'section');
   const programs = m.filter((e) => e.kind === 'program');
   assert.strictEqual(sections.length, 2, 'section count ' + sections.length);
-  assert.strictEqual(programs.length, 31, 'program count ' + programs.length);
-  assert.ok(/Example Programs \(23\)/.test(sections[0].label), 'programs section label wrong: ' + sections[0].label);
+  assert.strictEqual(programs.length, 9, 'program count ' + programs.length);
+  assert.ok(/Example Programs \(1\)/.test(sections[0].label), 'programs section label wrong: ' + sections[0].label);
   assert.ok(/Computer Graphics Lab \(8\)/.test(sections[1].label), 'lab section label wrong: ' + sections[1].label);
 });
 
@@ -80,7 +80,7 @@ check('every program carries its own STATIC per-node run command (no arguments)'
     assert.ok(/\.cpp$/.test(p.filename), 'filename not a .cpp for ' + p.id);
     ids.add(p.id);
   }
-  assert.strictEqual(ids.size, 31, 'duplicate program ids in the tree model');
+  assert.strictEqual(ids.size, 9, 'duplicate program ids in the tree model');
   for (const loaded of catalog) {
     assert.ok(ids.has(loaded.id), 'catalog program missing from tree: ' + loaded.id);
   }
