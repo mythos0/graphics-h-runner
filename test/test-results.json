@@ -13,130 +13,40 @@
       "exitCode": 0,
       "shot": "/home/z/my-project/push-work/clone/docs/screenshots/01_snake_game.png",
       "analysis": {
-        "nonblack": 0.0278,
+        "nonblack": 0.0199,
         "unique_colors": 10
       },
       "cmd": "g++ -I/home/z/my-project/bgi-env/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include/x86_64-linux-gnu /home/z/my-project/push-work/clone/samples/01_snake_game.cpp -o /home/z/my-project/push-work/clone/build/01_snake_game -L/home/z/my-project/bgi-env/usr/lib -Wl,-rpath,/home/z/my-project/bgi-env/usr/lib -L/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -Wl,-rpath,/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -lSDL_bgi -lSDL2 -lm",
       "stderrTail": ""
     },
     {
-      "sample": "24_coordinate_viewer.cpp",
+      "sample": "02_football_game.cpp",
       "detected": true,
       "library": "sdl_bgi",
       "compileOk": true,
       "runOk": true,
       "exitCode": 0,
-      "shot": "/home/z/my-project/push-work/clone/docs/screenshots/24_coordinate_viewer.png",
+      "shot": "/home/z/my-project/push-work/clone/docs/screenshots/02_football_game.png",
       "analysis": {
-        "nonblack": 0.1451,
-        "unique_colors": 8
+        "nonblack": 0.0232,
+        "unique_colors": 10
       },
-      "cmd": "g++ -I/home/z/my-project/bgi-env/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include/x86_64-linux-gnu /home/z/my-project/push-work/clone/samples/24_coordinate_viewer.cpp -o /home/z/my-project/push-work/clone/build/24_coordinate_viewer -L/home/z/my-project/bgi-env/usr/lib -Wl,-rpath,/home/z/my-project/bgi-env/usr/lib -L/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -Wl,-rpath,/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -lSDL_bgi -lSDL2 -lm",
+      "cmd": "g++ -I/home/z/my-project/bgi-env/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include/x86_64-linux-gnu /home/z/my-project/push-work/clone/samples/02_football_game.cpp -o /home/z/my-project/push-work/clone/build/02_football_game -L/home/z/my-project/bgi-env/usr/lib -Wl,-rpath,/home/z/my-project/bgi-env/usr/lib -L/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -Wl,-rpath,/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -lSDL_bgi -lSDL2 -lm",
       "stderrTail": ""
     },
     {
-      "sample": "25_pixel_inspector.cpp",
+      "sample": "03_bounce_game.cpp",
       "detected": true,
       "library": "sdl_bgi",
       "compileOk": true,
       "runOk": true,
       "exitCode": 0,
-      "shot": "/home/z/my-project/push-work/clone/docs/screenshots/25_pixel_inspector.png",
+      "shot": "/home/z/my-project/push-work/clone/docs/screenshots/03_bounce_game.png",
       "analysis": {
-        "nonblack": 0.469,
-        "unique_colors": 16
+        "nonblack": 0.053,
+        "unique_colors": 10
       },
-      "cmd": "g++ -I/home/z/my-project/bgi-env/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include/x86_64-linux-gnu /home/z/my-project/push-work/clone/samples/25_pixel_inspector.cpp -o /home/z/my-project/push-work/clone/build/25_pixel_inspector -L/home/z/my-project/bgi-env/usr/lib -Wl,-rpath,/home/z/my-project/bgi-env/usr/lib -L/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -Wl,-rpath,/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -lSDL_bgi -lSDL2 -lm",
-      "stderrTail": ""
-    },
-    {
-      "sample": "26_dda_lab.cpp",
-      "detected": true,
-      "library": "sdl_bgi",
-      "compileOk": true,
-      "runOk": true,
-      "exitCode": 0,
-      "shot": "/home/z/my-project/push-work/clone/docs/screenshots/26_dda_lab.png",
-      "analysis": {
-        "nonblack": 0.0101,
-        "unique_colors": 5
-      },
-      "cmd": "g++ -I/home/z/my-project/bgi-env/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include/x86_64-linux-gnu /home/z/my-project/push-work/clone/samples/26_dda_lab.cpp -o /home/z/my-project/push-work/clone/build/26_dda_lab -L/home/z/my-project/bgi-env/usr/lib -Wl,-rpath,/home/z/my-project/bgi-env/usr/lib -L/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -Wl,-rpath,/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -lSDL_bgi -lSDL2 -lm",
-      "stderrTail": ""
-    },
-    {
-      "sample": "27_bresenham_line_lab.cpp",
-      "detected": true,
-      "library": "sdl_bgi",
-      "compileOk": true,
-      "runOk": true,
-      "exitCode": 0,
-      "shot": "/home/z/my-project/push-work/clone/docs/screenshots/27_bresenham_line_lab.png",
-      "analysis": {
-        "nonblack": 0.0104,
-        "unique_colors": 5
-      },
-      "cmd": "g++ -I/home/z/my-project/bgi-env/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include/x86_64-linux-gnu /home/z/my-project/push-work/clone/samples/27_bresenham_line_lab.cpp -o /home/z/my-project/push-work/clone/build/27_bresenham_line_lab -L/home/z/my-project/bgi-env/usr/lib -Wl,-rpath,/home/z/my-project/bgi-env/usr/lib -L/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -Wl,-rpath,/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -lSDL_bgi -lSDL2 -lm",
-      "stderrTail": ""
-    },
-    {
-      "sample": "28_bresenham_circle_lab.cpp",
-      "detected": true,
-      "library": "sdl_bgi",
-      "compileOk": true,
-      "runOk": true,
-      "exitCode": 0,
-      "shot": "/home/z/my-project/push-work/clone/docs/screenshots/28_bresenham_circle_lab.png",
-      "analysis": {
-        "nonblack": 0.0121,
-        "unique_colors": 5
-      },
-      "cmd": "g++ -I/home/z/my-project/bgi-env/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include/x86_64-linux-gnu /home/z/my-project/push-work/clone/samples/28_bresenham_circle_lab.cpp -o /home/z/my-project/push-work/clone/build/28_bresenham_circle_lab -L/home/z/my-project/bgi-env/usr/lib -Wl,-rpath,/home/z/my-project/bgi-env/usr/lib -L/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -Wl,-rpath,/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -lSDL_bgi -lSDL2 -lm",
-      "stderrTail": ""
-    },
-    {
-      "sample": "29_midpoint_ellipse_lab.cpp",
-      "detected": true,
-      "library": "sdl_bgi",
-      "compileOk": true,
-      "runOk": true,
-      "exitCode": 0,
-      "shot": "/home/z/my-project/push-work/clone/docs/screenshots/29_midpoint_ellipse_lab.png",
-      "analysis": {
-        "nonblack": 0.0117,
-        "unique_colors": 5
-      },
-      "cmd": "g++ -I/home/z/my-project/bgi-env/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include/x86_64-linux-gnu /home/z/my-project/push-work/clone/samples/29_midpoint_ellipse_lab.cpp -o /home/z/my-project/push-work/clone/build/29_midpoint_ellipse_lab -L/home/z/my-project/bgi-env/usr/lib -Wl,-rpath,/home/z/my-project/bgi-env/usr/lib -L/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -Wl,-rpath,/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -lSDL_bgi -lSDL2 -lm",
-      "stderrTail": ""
-    },
-    {
-      "sample": "30_2d_transforms_lab.cpp",
-      "detected": true,
-      "library": "sdl_bgi",
-      "compileOk": true,
-      "runOk": true,
-      "exitCode": 0,
-      "shot": "/home/z/my-project/push-work/clone/docs/screenshots/30_2d_transforms_lab.png",
-      "analysis": {
-        "nonblack": 0.0567,
-        "unique_colors": 7
-      },
-      "cmd": "g++ -I/home/z/my-project/bgi-env/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include/x86_64-linux-gnu /home/z/my-project/push-work/clone/samples/30_2d_transforms_lab.cpp -o /home/z/my-project/push-work/clone/build/30_2d_transforms_lab -L/home/z/my-project/bgi-env/usr/lib -Wl,-rpath,/home/z/my-project/bgi-env/usr/lib -L/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -Wl,-rpath,/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -lSDL_bgi -lSDL2 -lm",
-      "stderrTail": ""
-    },
-    {
-      "sample": "31_cohen_sutherland_clipping.cpp",
-      "detected": true,
-      "library": "sdl_bgi",
-      "compileOk": true,
-      "runOk": true,
-      "exitCode": 0,
-      "shot": "/home/z/my-project/push-work/clone/docs/screenshots/31_cohen_sutherland_clipping.png",
-      "analysis": {
-        "nonblack": 0.0199,
-        "unique_colors": 5
-      },
-      "cmd": "g++ -I/home/z/my-project/bgi-env/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include/x86_64-linux-gnu /home/z/my-project/push-work/clone/samples/31_cohen_sutherland_clipping.cpp -o /home/z/my-project/push-work/clone/build/31_cohen_sutherland_clipping -L/home/z/my-project/bgi-env/usr/lib -Wl,-rpath,/home/z/my-project/bgi-env/usr/lib -L/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -Wl,-rpath,/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -lSDL_bgi -lSDL2 -lm",
+      "cmd": "g++ -I/home/z/my-project/bgi-env/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include/x86_64-linux-gnu /home/z/my-project/push-work/clone/samples/03_bounce_game.cpp -o /home/z/my-project/push-work/clone/build/03_bounce_game -L/home/z/my-project/bgi-env/usr/lib -Wl,-rpath,/home/z/my-project/bgi-env/usr/lib -L/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -Wl,-rpath,/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -lSDL_bgi -lSDL2 -lm",
       "stderrTail": ""
     }
   ]

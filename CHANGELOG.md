@@ -18,6 +18,46 @@ The example section becomes the Snake Game; the Linux library pipeline is pinned
 - The Fireworks Simulator's error reporting no longer attributes unrelated extension-host crashes to this extension: a stack frame that merely *observed* an error (the bundled uncaught-exception handler) no longer counts as evidence that the extension caused it.
 - A "play again" on the Snake Game's game-over card now actually restarts the game instead of returning to the menu.
 
+## [1.5.17] — 2026-10-01
+
+The example section becomes a full three-game suite, the Snake game gets every reported window and text fix, and fresh SDL_bgi builds learn resizable windows.
+
+This release extends the Snake-only 1.5.16: two more complete games join the example section, the remaining teaching samples retire, and the library pipeline gains the resizable-window patch.
+
+### Added
+- **Snake** (`01_snake_game.cpp`) replaces the old teaching-sample list as example 1: arrows or
+  W A S D, three difficulties (Easy's walls wrap, Medium/Hard are deadly), timed yellow bonus
+  apples worth 5x points, level-ups every five apples, pause/help screens, a top-5 score table
+  and a tiny human-readable `snake_scores.db` that remembers your name, statistics and window
+  size. Sound effects are synthesized live and can be toggled in the menu.
+- **2-Player Football** (`02_football_game.cpp`) — a street-rules derby for two players on one
+  keyboard. The pitch is drawn **without a single built-in shape call**: no `rectangle()`, no
+  `circle()`, no `bar()`, no `line()` — every line, circle, arc, net and board is rasterized by
+  hand from `putpixel()` (Bresenham lines, midpoint circles, herringbone net hatching). Ball
+  physics carry momentum, spin-visible rolling, wall and post bounces; kick types (tap pass,
+  charged shot), AI keepers, two halves with sides swapping, a 90-second match clock, shots
+  counter and a persistent derby record.
+- **Bounce** (`03_bounce_game.cpp`) — the Nokia rubber-ball classic: charge jumps, yellow rings
+  to collect, spikes, springs, moving platforms and red herring boards, six levels with door
+  exits, diamonds banked for the score database, lives, checkpoint restarts — and a full
+  synthesized sound engine (pitch-by-impact bounces, ring chimes, spring boings, the door
+  jingle) with a toggle persisted next to your progress.
+
+### Fixed
+- **Snake window feel** (all three reported issues): rendering is double-buffered, so the
+  window no longer flickers; the window is resizable — drag its borders on SDL_bgi and the
+  board re-fits instantly, or pick S/M/L/XL in the menu; every font got bigger and
+  higher-contrast; and the selected menu row now shows a bright bar with black text plus
+  `> <` markers and an underline, so the selection is unmistakable on every platform.
+- Help, high-score and footer screens re-flow themselves: text wraps or the font steps down
+  instead of clipping, and score columns space themselves by their widest content, so nothing
+  merges or truncates at any window size.
+
+### Changed
+- The old 31 teaching samples (Hello graphics.h through Cohen–Sutherland Clipping) are no
+  longer bundled; the example section is exactly the three games. Their screenshots and README
+  references were updated accordingly.
+
 ## [1.5.15] — 2026-09-29
 
 The Fireworks Simulator gets sound and direct control; the fallback list becomes two clear views.

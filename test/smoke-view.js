@@ -5,8 +5,7 @@
  *
  * Validates:
  *  1. all three environment states render the right pill + CTA
- *  2. 9 program cards (1 Snake Game example + 8 lab) with Run + Open
- *     buttons, split into their sections
+ *  2. 3 game program cards (Snake / Football / Bounce) with Run + Open
  *     the Example Programs list and the Computer Graphics Lab section
  *  3. 7 action buttons wired to COMMAND_META ids (Open Examples Folder
  *     removed in v1.4.9), exactly one green accent
@@ -88,25 +87,18 @@ check('checking state: amber pill', () => {
   assert.ok(h.includes('Checking environment'), 'no checking copy');
 });
 
-check('9 program cards (1 example + 8 lab), each with Run + Open', () => {
+check('3 game program cards, each with Run + Open (v1.5.16 game suite)', () => {
   const h = html({});
   const runs = (h.match(/data-run="/g) || []).length;
   const opens = (h.match(/data-open="/g) || []).length;
-  assert.strictEqual(runs, 9, 'data-run count ' + runs);
-  assert.strictEqual(opens, 9, 'data-open count ' + opens);
-  assert.ok(h.includes('Snake Game'), 'the Snake Game example is missing');
-  assert.ok(h.includes('Computer Graphics Lab'), 'lab section missing');
-  /* split: the classic list first, the lab list below it */
-  const labAt = h.indexOf('id="lab-sec"');
-  assert.ok(labAt > 0, 'lab section missing');
-  const main = h.slice(0, labAt);
-  const lab = h.slice(labAt);
-  assert.strictEqual((main.match(/data-run="/g) || []).length, 1, 'main list should carry 1 card (the Snake Game)');
-  assert.strictEqual((lab.match(/data-run="/g) || []).length, 8, 'lab list should carry 8 cards');
-  for (const t of ['Coordinate Viewer', 'Pixel Inspector', 'DDA Line Lab', 'Bresenham Line Lab', 'Bresenham Circle Lab', 'Midpoint Ellipse Lab', '2D Transformations Lab', 'Cohen-Sutherland Clipping']) {
-    assert.ok(lab.includes(t), 'lab program missing: ' + t);
+  assert.strictEqual(runs, 3, 'data-run count ' + runs);
+  assert.strictEqual(opens, 3, 'data-open count ' + opens);
+  for (const t of ['Snake', '2-Player Football', 'Bounce']) {
+    assert.ok(h.includes(t), 'game program missing: ' + t);
   }
-  assert.strictEqual((h.match(/tag tag-lab/g) || []).length, 8, 'lab tag count wrong');
+  /* the old sections are gone for good */
+  assert.ok(!h.includes('id="lab-sec"'), 'lab section still rendered');
+  assert.ok(!h.includes('Winking Smiley'), 'old program card leaked');
 });
 
 check('8 action buttons carrying COMMAND_META ids (no Open Examples Folder)', () => {
@@ -313,19 +305,14 @@ check('example programs: collapsed by default, remembered, scroll inside their z
   assert.ok(h.includes('margin-top:auto'), 'footer not pinned to the bottom');
 });
 
-check('Computer Graphics Lab: own section below Example Programs, collapsed + persisted', () => {
+check('v1.5.16: the Computer Graphics Lab section is fully removed', () => {
   const h = html({});
-  assert.ok(h.includes('id="lab-sec"'), 'lab section header missing');
-  assert.ok(h.includes('Computer Graphics Lab'), 'lab section title missing');
-  assert.ok(h.includes('id="lab-programs" class="collapsed"'), 'lab list not collapsed by default');
-  assert.ok(h.includes('8 lab programs · tap to expand'), 'lab count header wrong');
-  assert.ok(h.indexOf('id="programs-sec"') < h.indexOf('id="lab-sec"'), 'lab section must sit below Example Programs');
-  assert.ok(h.indexOf('id="lab-programs"') < h.indexOf('class="foot"'), 'lab list must stay above the footer');
-  assert.ok(h.includes('vscode.getState().labOpen'), 'lab expanded state not persisted');
-  assert.ok(h.includes('st.labOpen = !labOpen(); vscode.setState(st)'), 'lab toggle does not merge persisted state');
+  assert.ok(!h.includes('id="lab-sec"'), 'lab section header still rendered');
+  assert.ok(!h.includes('Computer Graphics Lab'), 'lab section title still rendered');
+  assert.ok(!h.includes('lab-programs'), 'lab list still rendered');
+  /* the Example Programs toggle keeps its persisted-state behaviour */
   assert.ok(h.includes('st.programsOpen = !programsOpen(); vscode.setState(st)'), 'programs toggle does not merge persisted state');
-  assert.ok(h.includes("labSec.addEventListener('click', toggleLab)"), 'lab toggle click not wired');
-  assert.ok(h.includes("labSec.addEventListener('keydown'"), 'lab toggle keyboard support missing');
+  assert.ok(h.includes("progSec.addEventListener('click', togglePrograms)"), 'programs toggle click not wired');
 });
 
 check('cheat sheet: searchable overlay + full data content (? button moved to the view title in v1.5.9)', () => {
@@ -357,9 +344,9 @@ check('cheat sheet: searchable overlay + full data content (? button moved to th
 
 check('program count lives in the section header (per-button hint gone)', () => {
   const h = html({});
-  assert.ok(!h.includes('all 9 programs'), 'old per-button count hint still rendered');
-  assert.ok(h.includes('1 program · tap to expand'), 'section count header wrong');
-  assert.ok(h.includes('8 lab programs · tap to expand'), 'lab count header wrong');
+  assert.ok(!h.includes('all 23 programs'), 'old per-button count hint still rendered');
+  assert.ok(h.includes('3 programs · tap to expand'), 'section count header wrong');
+  assert.ok(!h.includes('lab programs'), 'lab count header still rendered');
 });
 
 check('liveness: page pongs on load and answers pings (service-worker watchdog)', () => {

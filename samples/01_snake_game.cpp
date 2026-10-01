@@ -13,6 +13,11 @@
  *   - A tiny file "database" (snake_scores.db, right next to the program)
  *     that keeps your name, the top-5 scores, games played and apples
  *     eaten — human-readable, saved after every game
+ *   - Sound effects (short synthesized tones, toggle in the menu)
+ *   - Double-buffered, flicker-free rendering on every platform
+ *   - The window is RESIZABLE: drag its borders (SDL_bgi) and the board
+ *     re-fits instantly, or pick S / M / L / XL sizes in the menu
+ *   - Bigger, high-contrast text everywhere — readable on any display
  *
  * Everything here is beginner-readable on purpose: the file is organised
  * as a sequence of short commented sections you can study one at a time.
@@ -27,6 +32,8 @@
  *
  * Headless test batteries set BGI_AUTOEXIT_MS: the game then plays
  * itself with a small demo AI and exits cleanly (no scores are saved).
+ * BGI_SCREENSHOT=menu|difficulty|scores|help|game renders one screen,
+ * presents it and exits 0 — used by the visual regression battery.
  * ==========================================================================
  */
 #include <graphics.h>
@@ -35,26 +42,64 @@
 #include <cstring>
 #include <cctype>
 #include <ctime>
+#include <cmath>
 
 /* ==========================================================================
  * SECTION 1 — board geometry and tuning constants
+ * --------------------------------------------------------------------------
+ * The board is a COLS x ROWS grid. The window can be resized (drag its
+ * borders on SDL_bgi, or pick a preset in the menu), so the PIXEL size
+ * of a cell is COMPUTED every frame — see cellPx()/arenaX()/arenaY()
+ * below. Nothing here depends on a fixed window size.
  * ========================================================================== */
 
-static const int WIN_W = 800;          /* window size in pixels            */
-static const int WIN_H = 600;
+/* window size presets, indexed by the winsize= value in the database */
+struct WinSize { const char* label; int w, h; };
+static const WinSize SIZES[4] = {
+    { "S  640x480",  640, 480 },
+    { "M  800x600",  800, 600 },
+    { "L  960x640",  960, 640 },
+    { "XL 1200x800", 1200, 800 }
+};
+static const int SIZE_DEFAULT = 2;              /* L 960x640          */
 
-static const int CELL   = 24;          /* one grid cell, pixels            */
 static const int COLS   = 32;          /* playfield = COLS x ROWS cells    */
 static const int ROWS   = 21;
-static const int ARENA_X = 16;         /* top-left pixel of the playfield  */
-static const int ARENA_Y = 72;
-static const int ARENA_W = COLS * CELL;/* 768                              */
-static const int ARENA_H = ROWS * CELL;/* 504                              */
 static const int HUD_H   = 64;         /* score bar above the playfield    */
+static const int FOOT_H  = 36;         /* hint line below the playfield    */
 
 static const int MAX_LEN  = COLS * ROWS + 1;   /* theoretical snake limit  */
-static const int NAME_LEN = 10;        /* high-score name length           */
+static const int SNAKE_NAME_MAX = 10;        /* high-score name length           */
 static const char* DB_FILENAME = "snake_scores.db";
+
+/* ---- responsive layout -------------------------------------------------
+ * cellPx() picks the biggest cell size that still fits the CURRENT
+ * window; arenaX()/arenaY() centre the board in the space below the
+ * HUD. Call them fresh every frame — they follow window resizes.     */
+static int cellPx ( void )
+{
+    int cw = (getmaxx() + 1 - 24) / COLS;
+    int ch = (getmaxy() + 1 - HUD_H - FOOT_H - 20) / ROWS;
+    int c = cw < ch ? cw : ch;
+    if (c < 12) { c = 12; }
+    if (c > 30) { c = 30; }
+    return c;
+}
+static int arenaX ( void ) { return (getmaxx() + 1 - COLS * cellPx()) / 2; }
+static int arenaY ( void )
+{
+    return HUD_H + (getmaxy() + 1 - HUD_H - FOOT_H - ROWS * cellPx()) / 2;
+}
+
+/* font size helper: scales a base bitmap-font size with the window
+ * height (base 2 stays >= 2), so text stays readable on any window */
+static int fsz ( int base )
+{
+    int s = base * (getmaxy() + 240) / 640;
+    if (s < base) { s = base; }
+    if (s < 2)    { s = 2; }
+    return s;
+}
 
 /* Difficulty table — indexed by the DIFF_* constants below. */
 enum { DIFF_EASY = 0, DIFF_MEDIUM = 1, DIFF_HARD = 2, DIFF_COUNT = 3 };
@@ -76,9 +121,9 @@ static const Difficulty DIFFS[DIFF_COUNT] = {
 };
 
 static const char* DIFF_HINTS[DIFF_COUNT] = {
-    "Easy - the snake wraps around the walls",
-    "Medium - walls are deadly",
-    "Hard - walls are deadly, and fast"
+    "the snake wraps around walls",
+    "walls are deadly",
+    "walls are deadly, and fast"
 };
 
 /* ==========================================================================
@@ -92,7 +137,7 @@ static const char* DIFF_HINTS[DIFF_COUNT] = {
 enum {
     K_NONE = 0, K_UP, K_DOWN, K_LEFT, K_RIGHT,
     K_ENTER, K_ESC, K_SPACE, K_BACKSPACE, K_QUIT,
-    K_LETTER, K_DIGIT
+    K_LETTER, K_DIGIT, K_PLUS, K_MINUS
 };
 
 static int readKeyLetter = 0;   /* set when readKey() returns K_LETTER/DIGIT */
@@ -134,6 +179,8 @@ static int readKey ( )
         case 27:  return K_ESC;            /* Esc        */
         case 32:  return K_SPACE;          /* Space      */
         case 8:   return K_BACKSPACE;      /* Backspace  */
+        case 43:  return K_PLUS;           /* + resize   */
+        case 45:  return K_MINUS;          /* - resize   */
     }
 
     if (key >= 'A' && key <= 'Z') { key = tolower(key); }
@@ -148,6 +195,153 @@ static int pollKey ( )
     if (!kbhit()) { return K_NONE; }
     return readKey();
 }
+
+/* ==========================================================================
+ * SECTION 2b — tiny sound effects (optional, off switch in the menu)
+ * --------------------------------------------------------------------------
+ * playSfx() fires a short synthesized tone and returns AT ONCE, so the
+ * game loop never stalls. The same five effects are built on both
+ * platforms from one envelope table:
+ *   - Windows: PlaySoundA() from winmm.dll, loaded at RUNTIME (no extra
+ *     link flags needed) on pre-built in-memory WAV buffers
+ *   - SDL_bgi (Linux/macOS): SDL_OpenAudioDevice() + SDL_QueueAudio()
+ *     (SDL2 is already linked into every graphics.h program)
+ * If the menu switch is OFF or a device is missing, everything is a
+ * silent no-op. This section is a self-contained mini lesson in making
+ * noise without any sound library.
+ * ========================================================================== */
+
+static bool soundOn = true;            /* menu toggle, stored in the db    */
+
+enum { SFX_TICK = 0, SFX_EAT, SFX_BONUS, SFX_LEVEL, SFX_OVER, SFX_COUNT };
+
+/* one effect = a frequency sweep (Hz) + duration (ms) + decay shape:
+ *   0 steady blip, 1 fast decay, 2 rising swell, 3 long fade          */
+struct SfxSpec { int f0, f1, ms, shape; };
+static const SfxSpec SFX[SFX_COUNT] = {
+    { 1250, 1150,  30, 0 },    /* menu tick: short high blip            */
+    {  880,  620,  70, 1 },    /* eat: bright downward pop              */
+    {  660, 1320, 170, 2 },    /* bonus apple: rising two-tone chime    */
+    {  520, 1040, 180, 2 },    /* level up: rising fanfare-ish          */
+    {  420,  100, 450, 3 }     /* game over: long falling tone          */
+};
+
+#define SFX_RATE 22050          /* samples per second, both platforms */
+
+/* Synthesize one effect into a raw 16-bit mono sample buffer.
+ * Square-ish wave (half sine + half square mix) with an envelope that
+ * follows the effect's shape — retro and pleasant at low volume.     */
+static int buildSfxSamples ( int id, signed short* out, int maxSamples )
+{
+    const SfxSpec& s = SFX[id];
+    int n = s.ms * SFX_RATE / 1000;
+    int i;
+    if (n > maxSamples) { n = maxSamples; }
+    for (i = 0; i < n; i++) {
+        double t = (double) i / n;                     /* 0..1        */
+        double f = s.f0 + (s.f1 - s.f0) * t;           /* sweep       */
+        double phase = 2.0 * 3.14159265358979 * f * i / SFX_RATE;
+        double wave = 0.65 * sin(phase) + 0.35 * ((sin(phase) >= 0.0) ? 0.8 : -0.8);
+        double env;
+        switch (s.shape) {
+            case 1:  env = (1.0 - t) * (1.0 - t); break;          /* fast decay */
+            case 2:  env = 0.25 + 0.75 * sin(3.14159265358979 * t); break;
+            case 3:  env = (1.0 - t) * (1.0 - t) * (1.0 - t); break;
+            default: env = (t < 0.15) ? t / 0.15 : 1.0 - (t - 0.15) / 0.85;
+        }
+        double v = wave * env * 0.42;                  /* master volume */
+        out[i] = (signed short) (v * 32000);
+    }
+    return n;
+}
+
+#ifdef _WIN32
+
+/* Windows: build WAV files in memory, hand them to PlaySoundA with
+ * SND_ASYNC. LoadLibraryA at runtime means the compile line stays
+ * exactly the same as for any other graphics.h program.              */
+static unsigned char  sfxWav[SFX_COUNT][SFX_RATE];      /* 1 s cap, plenty */
+static int            sfxWavLen[SFX_COUNT] = { 0 };
+static int (WINAPI *sfxPlay)(const char*, void*, unsigned long) = NULL;
+
+static void sfxWriteWav ( int id, int samples )
+{
+    unsigned char* w = sfxWav[id];
+    int dataLen = samples * 2;
+    int chunk = 16;
+    /* 44-byte canonical PCM WAV header, 22050 Hz mono 16-bit */
+    memcpy(w,      "RIFF", 4);
+    w[4] = (36 + dataLen); w[5] = (36 + dataLen) >> 8;
+    w[6] = (36 + dataLen) >> 16; w[7] = (36 + dataLen) >> 24;
+    memcpy(w + 8,  "WAVEfmt ", 8);
+    w[16] = chunk; w[17] = 0; w[18] = 0; w[19] = 0;
+    w[20] = 1; w[21] = 0;                 /* PCM            */
+    w[22] = 1; w[23] = 0;                 /* mono           */
+    w[24] = (unsigned char)(SFX_RATE & 0xFF); w[25] = 0;   /* sample rate    */
+    w[26] = (unsigned char)((SFX_RATE * 2) & 0xFF);
+    w[27] = (unsigned char)(((SFX_RATE * 2) >> 8) & 0xFF);
+    w[28] = 2; w[29] = 0;                 /* block align    */
+    w[30] = 16; w[31] = 0;                /* bits           */
+    memcpy(w + 36, "data", 4);
+    w[40] = dataLen; w[41] = dataLen >> 8;
+    w[42] = dataLen >> 16; w[43] = dataLen >> 24;
+    sfxWavLen[id] = 44 + dataLen;
+}
+
+static void sfxInit ( void )
+{
+    int i;
+    HMODULE mm = LoadLibraryA("winmm.dll");
+    if (!mm) { return; }
+    sfxPlay = (int (WINAPI *)(const char*, void*, unsigned long))
+              GetProcAddress(mm, "PlaySoundA");
+    if (!sfxPlay) { return; }
+    for (i = 0; i < SFX_COUNT; i++) {
+        int n = buildSfxSamples(i, (signed short*)(sfxWav[i] + 44),
+                                sizeof(sfxWav[i]) - 44);
+        sfxWriteWav(i, n);
+    }
+}
+
+static void playSfx ( int id )
+{
+    /* 0x2003 = SND_ASYNC | SND_MEMORY | SND_NODEFAULT: fire, don't wait,
+     * and a new effect simply replaces the previous one                */
+    if (soundOn && sfxPlay) { sfxPlay((const char*) sfxWav[id], NULL, 0x2003); }
+}
+
+#else
+
+/* SDL_bgi: queue pre-built sample buffers on an SDL audio device */
+static SDL_AudioDeviceID sfxDev = 0;
+static signed short sfxBuf[SFX_COUNT][SFX_RATE];
+static int          sfxBufLen[SFX_COUNT] = { 0 };
+
+static void sfxInit ( void )
+{
+    SDL_AudioSpec want, have;
+    int i;
+    memset(&want, 0, sizeof(want));
+    want.freq = SFX_RATE;
+    want.format = AUDIO_S16SYS;
+    want.channels = 1;
+    want.samples = 512;
+    sfxDev = SDL_OpenAudioDevice(NULL, 0, &want, &have, 0);
+    if (!sfxDev) { return; }             /* no audio device: stay silent  */
+    for (i = 0; i < SFX_COUNT; i++) {
+        sfxBufLen[i] = buildSfxSamples(i, sfxBuf[i], SFX_RATE) * 2;
+    }
+    SDL_PauseAudioDevice(sfxDev, 0);     /* start playing queued data     */
+}
+
+static void playSfx ( int id )
+{
+    if (!soundOn || !sfxDev) { return; }
+    SDL_ClearQueuedAudio(sfxDev);        /* latest effect wins            */
+    SDL_QueueAudio(sfxDev, sfxBuf[id], sfxBufLen[id]);
+}
+
+#endif
 
 /* ==========================================================================
  * SECTION 3 — the tiny "database" (snake_scores.db)
@@ -168,18 +362,20 @@ static int pollKey ( )
  * ========================================================================== */
 
 struct ScoreRow {
-    char name[NAME_LEN + 1];
+    char name[SNAKE_NAME_MAX + 1];
     int  score;
     int  level;
     char when[20];        /* "YYYY-MM-DD HH:MM" */
 };
 
 struct GameDB {
-    char name[NAME_LEN + 1];  /* last name used, offered again next time */
+    char name[SNAKE_NAME_MAX + 1];  /* last name used, offered again next time */
     int  gamesPlayed;
     int  applesEaten;
     int  count;               /* rows actually stored (0..5) */
     ScoreRow top[5];
+    int  winSize;             /* window preset index into SIZES[]       */
+    /* soundOn (SECTION 2b) is stored too — loaded right below */
 };
 
 /* Where is the database? Next to the executable when possible (that is
@@ -210,16 +406,9 @@ static void resolveDbPath ( const char* argv0 )
     snprintf(probe, sizeof(probe), "%s/%s", dir, DB_FILENAME);
     dbPath[0] = '\0';
 
-    /* is that folder writable? (cheap append-open test; an empty probe
-     * file created on the very first run is cleaned up again — the real
-     * database is written after the first finished game) */
-    FILE* t = fopen(probe, "rb");
-    bool existed = (t != NULL);
-    if (t) { fclose(t); }
-
+    /* is that folder writable? (cheap append-open test) */
     FILE* f = fopen(probe, "ab");
     if (f) { fclose(f); }
-    if (!existed) { remove(probe); }
     strncpy(dbPath, probe, sizeof(dbPath) - 1);
     dbPath[sizeof(dbPath) - 1] = '\0';
 }
@@ -232,7 +421,7 @@ static void parseRankLine ( GameDB& db, const char* line )
     const char* p = strchr(line, '|');
     if (!p) { return; }
     size_t n = (size_t)(p - line);
-    if (n == 0 || n > (size_t)NAME_LEN) { return; }
+    if (n == 0 || n > (size_t)SNAKE_NAME_MAX) { return; }
     memcpy(row.name, line, n);
     row.name[n] = '\0';
     row.score = atoi(p + 1);
@@ -250,8 +439,10 @@ static void parseRankLine ( GameDB& db, const char* line )
 static void loadDatabase ( GameDB& db )
 {
     memset(&db, 0, sizeof(db));
-    strncpy(db.name, "PLAYER", NAME_LEN);
-    db.name[NAME_LEN] = '\0';
+    strncpy(db.name, "PLAYER", SNAKE_NAME_MAX);
+    db.name[SNAKE_NAME_MAX] = '\0';
+    db.winSize = SIZE_DEFAULT;
+    soundOn = true;
 
     FILE* f = fopen(dbPath, "r");
     if (!f) { return; }                       /* first run: clean defaults */
@@ -260,14 +451,19 @@ static void loadDatabase ( GameDB& db )
     while (fgets(line, sizeof(line), f)) {
         for (char* c = line; *c; c++) { if (*c == '\n' || *c == '\r') { *c = '\0'; } }
         if (strncmp(line, "name=", 5) == 0) {
-            strncpy(db.name, line + 5, NAME_LEN);
-            db.name[NAME_LEN] = '\0';
+            strncpy(db.name, line + 5, SNAKE_NAME_MAX);
+            db.name[SNAKE_NAME_MAX] = '\0';
         } else if (strncmp(line, "games=", 6) == 0) {
             db.gamesPlayed = atoi(line + 6);
             if (db.gamesPlayed < 0) { db.gamesPlayed = 0; }
         } else if (strncmp(line, "food=", 5) == 0) {
             db.applesEaten = atoi(line + 5);
             if (db.applesEaten < 0) { db.applesEaten = 0; }
+        } else if (strncmp(line, "sound=", 6) == 0) {
+            soundOn = (strncmp(line + 6, "ON", 2) == 0);
+        } else if (strncmp(line, "winsize=", 8) == 0) {
+            db.winSize = atoi(line + 8);
+            if (db.winSize < 0 || db.winSize > 3) { db.winSize = SIZE_DEFAULT; }
         } else if (strncmp(line, "rank=", 5) == 0) {
             parseRankLine(db, line + 5);
         }
@@ -295,10 +491,12 @@ static void saveDatabase ( const GameDB& db )
     if (!f) { return; }                       /* read-only folder: skip quietly */
 
     fprintf(f, "# graphics.h Snake Game save data\n");
-    fprintf(f, "version=1\n");
+    fprintf(f, "version=2\n");
     fprintf(f, "name=%s\n", db.name);
     fprintf(f, "games=%d\n", db.gamesPlayed);
     fprintf(f, "food=%d\n", db.applesEaten);
+    fprintf(f, "sound=%s\n", soundOn ? "ON" : "OFF");
+    fprintf(f, "winsize=%d\n", db.winSize);
     for (int i = 0; i < db.count && i < 5; i++) {
         fprintf(f, "rank=%s|%d|%d|%s\n", db.top[i].name, db.top[i].score,
                 db.top[i].level, db.top[i].when);
@@ -328,8 +526,8 @@ static void insertScore ( GameDB& db, const char* name, int score, int level )
 {
     ScoreRow row;
     memset(&row, 0, sizeof(row));
-    strncpy(row.name, name, NAME_LEN);
-    row.name[NAME_LEN] = '\0';
+    strncpy(row.name, name, SNAKE_NAME_MAX);
+    row.name[SNAKE_NAME_MAX] = '\0';
     row.score = score;
     row.level = level;
 
@@ -461,13 +659,14 @@ static void tick ( Game& g )
         if (hy < 0) { hy = ROWS - 1; } else if (hy >= ROWS) { hy = 0; }
     } else if (hx < 0 || hx >= COLS || hy < 0 || hy >= ROWS) {
         g.alive = false;
+        playSfx(SFX_OVER);
         return;
     }
 
     /* self collision — the tail cell is safe when it will move away */
     int last = g.growPending > 0 ? g.len : g.len - 1;
     for (int i = 0; i < last; i++) {
-        if (g.bodyX[i] == hx && g.bodyY[i] == hy) { g.alive = false; return; }
+        if (g.bodyX[i] == hx && g.bodyY[i] == hy) { g.alive = false; playSfx(SFX_OVER); return; }
     }
 
     /* move: shift the body towards the tail, then plant the new head */
@@ -492,8 +691,9 @@ static void tick ( Game& g )
         g.score += d.pointsPerApple;
         g.growPending += 2;
         spawnFood(g);
+        playSfx(SFX_EAT);
         if (g.apples % 4 == 0) { spawnBonus(g); }         /* bonus appears */
-        if (g.apples % 5 == 0) { levelUp(g); }            /* speed up      */
+        if (g.apples % 5 == 0) { levelUp(g); playSfx(SFX_LEVEL); }
     }
 
     /* yellow bonus apple eaten */
@@ -501,6 +701,7 @@ static void tick ( Game& g )
         g.score += d.pointsPerApple * 5;
         g.growPending += 4;
         g.bonusOn = false;
+        playSfx(SFX_BONUS);
     }
 
     if (g.bonusOn && --g.bonusTimer <= 0) { g.bonusOn = false; }
@@ -517,6 +718,21 @@ static void textCentered ( int y, const char* s, int color, int font, int size )
     setcolor(color);
     int w = textwidth((char*)s);
     outtextxy((getmaxx() - w) / 2, y, (char*)s);
+}
+
+/* centred text that automatically drops a font size when the string
+ * would be wider than the window — keeps the menu footers intact even
+ * on the smallest (S 640x480) size */
+static void textCenteredFit ( int y, const char* s, int color, int size )
+{
+    int use = size;
+    settextstyle(DEFAULT_FONT, HORIZ_DIR, use);
+    while (use > 1 && textwidth((char*)s) > getmaxx() - 24) {
+        use--;
+        settextstyle(DEFAULT_FONT, HORIZ_DIR, use);
+    }
+    setcolor(color);
+    outtextxy((getmaxx() - textwidth((char*)s)) / 2, y, (char*)s);
 }
 
 /* centred text with a drop shadow — used for big titles */
@@ -544,10 +760,18 @@ static void panel ( int left, int top, int right, int bottom, int borderCol )
     rectangle(left + 4, top + 4, right - 4, bottom - 4);
 }
 
+/* Presents the frame that was just drawn. Every screen function calls
+ * this at the end — combined with the double-buffered window setup in
+ * main() it is what makes the game flicker-free on both platforms. */
+static void present ( )
+{
+    swapbuffers();
+}
+
 static void cellPixel ( int cx, int cy, int& px, int& py )
 {
-    px = ARENA_X + cx * CELL;
-    py = ARENA_Y + cy * CELL;
+    px = arenaX() + cx * cellPx();
+    py = arenaY() + cy * cellPx();
 }
 
 /* one snake segment: a block with a 1px gap that gives the classic
@@ -556,22 +780,23 @@ static void cellPixel ( int cx, int cy, int& px, int& py )
 static void drawSegment ( int cx, int cy, int color, bool head, int dirX, int dirY )
 {
     int px, py;
+    int cell = cellPx();
     cellPixel(cx, cy, px, py);
     setfillstyle(SOLID_FILL, color);
-    bar(px + 1, py + 1, px + CELL - 2, py + CELL - 2);
+    bar(px + 1, py + 1, px + cell - 2, py + cell - 2);
 
     if (head) {
-        int e = CELL / 5;
+        int e = cell / 5;
         if (e < 3) { e = 3; }
-        int mx = px + CELL / 2, my = py + CELL / 2;
-        int face = 5;                          /* eyes pushed towards the face */
+        int face = cell / 5;
+        int mx = px + cell / 2, my = py + cell / 2;
         int x1, y1, x2, y2;                    /* the two eye centres          */
         if (dirX != 0) {
-            x1 = mx + dirX * face; y1 = my - 6;
-            x2 = mx + dirX * face; y2 = my + 6;
+            x1 = mx + dirX * face; y1 = my - cell / 4;
+            x2 = mx + dirX * face; y2 = my + cell / 4;
         } else {
-            x1 = mx - 6; y1 = my + dirY * face;
-            x2 = mx + 6; y2 = my + dirY * face;
+            x1 = mx - cell / 4; y1 = my + dirY * face;
+            x2 = mx + cell / 4; y2 = my + dirY * face;
         }
         setfillstyle(SOLID_FILL, BLACK);
         bar(x1 - e / 2, y1 - e / 2, x1 - e / 2 + e, y1 - e / 2 + e);
@@ -582,23 +807,29 @@ static void drawSegment ( int cx, int cy, int color, bool head, int dirX, int di
 static void drawApple ( int cx, int cy )
 {
     int px, py;
+    int cell = cellPx();
     cellPixel(cx, cy, px, py);
-    int mx = px + CELL / 2, my = py + CELL / 2;
+    int mx = px + cell / 2, my = py + cell / 2;
+    int r = cell / 3;
+    if (r < 6) { r = 6; }
     setfillstyle(SOLID_FILL, RED);
-    fillellipse(mx, my + 1, 8, 8);
+    fillellipse(mx, my + 1, r, r);
     setfillstyle(SOLID_FILL, GREEN);                 /* stem */
-    bar(mx - 1, my - 10, mx + 1, my - 6);
+    bar(mx - 1, my - r - 4, mx + 1, my - r + 1);
     setcolor(WHITE);                                  /* shine */
-    putpixel(mx - 3, my - 2, WHITE);
-    putpixel(mx - 4, my - 1, WHITE);
+    putpixel(mx - r / 3, my - r / 3, WHITE);
+    putpixel(mx - r / 3 - 1, my - r / 3 + 1, WHITE);
 }
 
 static void drawBonus ( int cx, int cy, bool bright )
 {
     int px, py;
+    int cell = cellPx();
     cellPixel(cx, cy, px, py);
-    int mx = px + CELL / 2, my = py + CELL / 2;
-    int r = bright ? 10 : 8;
+    int mx = px + cell / 2, my = py + cell / 2;
+    int r = cell / 2 - 1;
+    if (r < 8) { r = bright ? 10 : 8; }
+    else if (bright) { r += 2; }
     int pts[8] = { mx, my - r, mx + r, my, mx, my + r, mx - r, my };
     setcolor(bright ? WHITE : YELLOW);
     setfillstyle(SOLID_FILL, YELLOW);
@@ -607,76 +838,80 @@ static void drawBonus ( int cx, int cy, bool bright )
 
 static void drawArenaFrame ( )
 {
+    int ax = arenaX(), ay = arenaY();
+    int aw = COLS * cellPx(), ah = ROWS * cellPx();
+    int cell = cellPx();
     /* playfield background + the dotted grid */
     setfillstyle(SOLID_FILL, BLACK);
-    bar(ARENA_X, ARENA_Y, ARENA_X + ARENA_W, ARENA_Y + ARENA_H);
+    bar(ax, ay, ax + aw, ay + ah);
+    setcolor(DARKGRAY);
     for (int cx = 1; cx < COLS; cx++) {
         for (int cy = 1; cy < ROWS; cy++) {
-            putpixel(ARENA_X + cx * CELL, ARENA_Y + cy * CELL, DARKGRAY);
+            putpixel(ax + cx * cell, ay + cy * cell, DARKGRAY);
         }
     }
     /* double border: bright inner frame, dim outer glow */
     setcolor(WHITE);
     setlinestyle(SOLID_LINE, 0, 2);
-    rectangle(ARENA_X - 2, ARENA_Y - 2, ARENA_X + ARENA_W + 2, ARENA_Y + ARENA_H + 2);
+    rectangle(ax - 2, ay - 2, ax + aw + 2, ay + ah + 2);
     setcolor(DARKGRAY);
-    rectangle(ARENA_X - 5, ARENA_Y - 5, ARENA_X + ARENA_W + 5, ARENA_Y + ARENA_H + 5);
+    rectangle(ax - 5, ay - 5, ax + aw + 5, ay + ah + 5);
     setlinestyle(SOLID_LINE, 0, 1);
 }
 
 static void drawHud ( const Game& g, const GameDB& db )
 {
     char buf[64];
+    int labelSize = fsz(2);
+    int valueSize = fsz(3);
     setfillstyle(SOLID_FILL, BLACK);
     bar(0, 0, getmaxx(), HUD_H);
-    settextstyle(DEFAULT_FONT, HORIZ_DIR, 2);
 
-    setcolor(LIGHTGRAY); outtextxy(18, 8,  (char*)"SCORE");
+    settextstyle(DEFAULT_FONT, HORIZ_DIR, labelSize);
+    setcolor(LIGHTGRAY); outtextxy(18, 6,  (char*)"SCORE");
+    settextstyle(DEFAULT_FONT, HORIZ_DIR, valueSize);
     setcolor(YELLOW);
     snprintf(buf, sizeof(buf), "%d", g.score);
-    outtextxy(18, 28, (char*)buf);
+    outtextxy(18, 6 + textheight((char*)"SCORE") + 4, (char*)buf);
 
-    setcolor(LIGHTGRAY); outtextxy(170, 8,  (char*)"LEVEL");
+    settextstyle(DEFAULT_FONT, HORIZ_DIR, labelSize);
+    setcolor(LIGHTGRAY); outtextxy((int)(getmaxx() * 0.26), 6,  (char*)"LEVEL");
+    settextstyle(DEFAULT_FONT, HORIZ_DIR, valueSize);
     setcolor(LIGHTCYAN);
     snprintf(buf, sizeof(buf), "%d", g.level);
-    outtextxy(170, 28, (char*)buf);
+    outtextxy((int)(getmaxx() * 0.26), 6 + textheight((char*)"LEVEL") + 4, (char*)buf);
 
-    setcolor(LIGHTGRAY); outtextxy(300, 8,  (char*)"LENGTH");
+    settextstyle(DEFAULT_FONT, HORIZ_DIR, labelSize);
+    setcolor(LIGHTGRAY); outtextxy((int)(getmaxx() * 0.45), 6,  (char*)"LENGTH");
+    settextstyle(DEFAULT_FONT, HORIZ_DIR, valueSize);
     setcolor(LIGHTMAGENTA);
     snprintf(buf, sizeof(buf), "%d", g.len);
-    outtextxy(300, 28, (char*)buf);
+    outtextxy((int)(getmaxx() * 0.45), 6 + textheight((char*)"LENGTH") + 4, (char*)buf);
 
-    setcolor(LIGHTGRAY); outtextxy(450, 8,  (char*)"HI-SCORE");
+    settextstyle(DEFAULT_FONT, HORIZ_DIR, labelSize);
+    setcolor(LIGHTGRAY); outtextxy((int)(getmaxx() * 0.62), 6,  (char*)"HI-SCORE");
+    settextstyle(DEFAULT_FONT, HORIZ_DIR, valueSize);
     setcolor(LIGHTGREEN);
     snprintf(buf, sizeof(buf), "%d", highScore(db));
-    outtextxy(450, 28, (char*)buf);
+    outtextxy((int)(getmaxx() * 0.62), 6 + textheight((char*)"HI-SCORE") + 4, (char*)buf);
 
+    settextstyle(DEFAULT_FONT, HORIZ_DIR, labelSize);
     setcolor(LIGHTGRAY);
-    outtextxy(getmaxx() - textwidth((char*)DIFFS[g.diff].label) - 18, 8,
+    outtextxy(getmaxx() - textwidth((char*)DIFFS[g.diff].label) - 18, 6,
               (char*)DIFFS[g.diff].label);
 
     /* bonus timer bar on the right, shrinking as it expires */
     if (g.bonusOn) {
         setfillstyle(SOLID_FILL, YELLOW);
-        int w = 90 * g.bonusTimer / 40;
+        int w = 100 * g.bonusTimer / 40;
         if (w < 2) { w = 2; }
-        bar(getmaxx() - 108, 30, getmaxx() - 108 + w, 36);
+        bar(getmaxx() - 118, 34, getmaxx() - 118 + w, 42);
     }
 
     setcolor(DARKGRAY);
     setlinestyle(SOLID_LINE, 0, 2);
     line(0, HUD_H + 2, getmaxx(), HUD_H + 2);
     setlinestyle(SOLID_LINE, 0, 1);
-}
-
-static void drawFooterHint ( const char* hint )
-{
-    setfillstyle(SOLID_FILL, BLACK);
-    bar(0, ARENA_Y + ARENA_H + 6, getmaxx(), getmaxy());
-    settextstyle(DEFAULT_FONT, HORIZ_DIR, 1);
-    setcolor(LIGHTGRAY);
-    int w = textwidth((char*)hint);
-    outtextxy((getmaxx() - w) / 2, ARENA_Y + ARENA_H + 9, (char*)hint);
 }
 
 static void drawGame ( const Game& g, const GameDB& db )
@@ -696,12 +931,14 @@ static void drawGame ( const Game& g, const GameDB& db )
     drawSegment(g.bodyX[0], g.bodyY[0], LIGHTGREEN, true, g.dirX, g.dirY);
 
     if (g.paused) {
-        panel(getmaxx() / 2 - 170, getmaxy() / 2 - 64,
-              getmaxx() / 2 + 170, getmaxy() / 2 + 64, YELLOW);
-        textCentered(getmaxy() / 2 - 44, "PAUSED", YELLOW, GOTHIC_FONT, 6);
-        textCentered(getmaxy() / 2 + 14, "P / Space - resume", WHITE, DEFAULT_FONT, 1);
-        textCentered(getmaxy() / 2 + 30, "Q - back to the menu", WHITE, DEFAULT_FONT, 1);
+        panel(getmaxx() / 2 - 190, getmaxy() / 2 - 74,
+              getmaxx() / 2 + 190, getmaxy() / 2 + 74, YELLOW);
+        textCentered(getmaxy() / 2 - 56, "PAUSED", YELLOW, GOTHIC_FONT, fsz(5));
+        textCentered(getmaxy() / 2 + 16, "P / Space - resume", WHITE, DEFAULT_FONT, fsz(2));
+        textCentered(getmaxy() / 2 + 38, "Q - back to the menu", WHITE, DEFAULT_FONT, fsz(2));
     }
+
+    present();
 }
 
 /* ==========================================================================
@@ -764,60 +1001,110 @@ static bool demoTimeUp ( )
  * SECTION 8 — screens (menu, difficulty, help, scores, game over, name)
  * ========================================================================== */
 
-static void drawMenuSnakeDeco ( )
+static void drawMenuDeco ( int boxBottom )
 {
     /* a little decorative snake chasing an apple under the menu panel
-     * (cell row 16 sits nicely between the panel and the footer text) */
+     * (pure pixel anchors — stays put at any window size) */
+    int cell = 12;
+    int y = boxBottom + 8;
+    int x = getmaxx() / 2 - 110;
+    if (y + cell + 8 > getmaxy() - 56) { return; }   /* no room: skip */
     for (int i = 0; i < 6; i++) {
-        drawSegment(7 + i, 16, i == 5 ? LIGHTGREEN : GREEN, i == 5, 1, 0);
+        setfillstyle(SOLID_FILL, i == 5 ? LIGHTGREEN : GREEN);
+        bar(x + i * cell, y, x + i * cell + cell - 2, y + cell - 2);
     }
-    drawApple(16, 16);
+    setfillstyle(SOLID_FILL, RED);
+    fillellipse(x + 6 * cell + 16, y + cell / 2, 6, 6);
 }
 
 static void drawMenu ( int selection, int diff, const GameDB& db )
 {
-    static const char* ITEMS[5] = {
-        "Start Game", "Difficulty", "High Scores", "Help", "Quit"
-    };
+    char diffRow[64], sizeRow[64], soundRow[64];
+    const char* ITEMS[7];
+    int fontSize = fsz(3);
+    int rowH = fontSize * 8 + 20;
+    int boxItems = 7;
+    int maxHalf = 0, barHalf, i;
+
+    snprintf(diffRow, sizeof(diffRow), "Difficulty:  %s", DIFFS[diff].label);
+    snprintf(sizeRow, sizeof(sizeRow), "Window:  %s", SIZES[db.winSize].label);
+    snprintf(soundRow, sizeof(soundRow), "Sound:  %s", soundOn ? "ON" : "OFF");
+    ITEMS[0] = "Start Game"; ITEMS[1] = diffRow; ITEMS[2] = sizeRow;
+    ITEMS[3] = soundRow; ITEMS[4] = "High Scores"; ITEMS[5] = "Help";
+    ITEMS[6] = "Quit";
 
     cleardevice();
 
-    shadowCentered(34, "SNAKE", GREEN, GOTHIC_FONT, 10);
-    textCentered(176, "the graphics.h game", DARKGRAY, DEFAULT_FONT, 1);
+    /* fit the title + 7-row box between the top edge and the footer on
+     * every window size: shrink the item font (and its row gap) until
+     * the whole stack clears getmaxy() - 96; S 640x480 needs this */
+    int titleSize = fsz(7);
+    int boxTop, boxH;
+    for (;;) {
+        settextstyle(GOTHIC_FONT, HORIZ_DIR, titleSize);
+        boxTop = 20 + textheight((char*)"SNAKE") + 24;
+        int gap = (fontSize >= 3) ? 20 : 12;
+        boxH = boxItems * (fontSize * 8 + gap) + 20;
+        if (boxTop + boxH <= getmaxy() - 96) { break; }
+        if (fontSize <= 2) { break; }        /* clamp below as last resort */
+        fontSize--;
+    }
+    rowH = fontSize * 8 + ((fontSize >= 3) ? 20 : 12);
+    if (boxTop + boxH > getmaxy() - 96) {
+        boxTop = getmaxy() - 96 - boxH;
+        if (boxTop < 10) { boxTop = 10; }
+    }
+    shadowCentered(26, "SNAKE", GREEN, GOTHIC_FONT, titleSize);
 
-    setcolor(DARKGRAY);
-    line(220, 190, getmaxx() - 220, 190);
+    /* the selection bar wraps the widest row, but never the screen */
+    for (i = 0; i < boxItems; i++) {
+        int w = textwidth((char*)ITEMS[i]);
+        if (w > maxHalf) { maxHalf = w; }
+    }
+    barHalf = maxHalf / 2 + 56;
+    if (barHalf > getmaxx() / 2 - 28) { barHalf = getmaxx() / 2 - 28; }
 
-    int boxTop = 200, boxH = 5 * 44 + 16;
-    panel(getmaxx() / 2 - 210, boxTop, getmaxx() / 2 + 210, boxTop + boxH, DARKGRAY);
+    panel(getmaxx() / 2 - barHalf - 20, boxTop,
+          getmaxx() / 2 + barHalf + 20, boxTop + boxH, DARKGRAY);
 
-    for (int i = 0; i < 5; i++) {
-        int y = boxTop + 12 + i * 44;
+    for (i = 0; i < boxItems; i++) {
+        int y = boxTop + 12 + i * rowH;
         bool sel = (i == selection);
         if (sel) {
+            /* the three-way selection: bright bar + black text + white
+             * underline. Any ONE of them surviving a platform quirk is
+             * enough to show exactly which row is selected. */
             setfillstyle(SOLID_FILL, GREEN);
-            bar(getmaxx() / 2 - 190, y - 6, getmaxx() / 2 + 190, y + 26);
+            bar(getmaxx() / 2 - barHalf, y - 6,
+                getmaxx() / 2 + barHalf, y + fontSize * 8 + 6);
+            setfillstyle(SOLID_FILL, WHITE);
+            bar(getmaxx() / 2 - barHalf, y + fontSize * 8 + 6,
+                getmaxx() / 2 + barHalf, y + fontSize * 8 + 9);
+            setfillstyle(SOLID_FILL, BLACK);   /* bar() borrows the fill */
         }
-        settextstyle(DEFAULT_FONT, HORIZ_DIR, 2);
+        settextstyle(DEFAULT_FONT, HORIZ_DIR, fontSize);
         setcolor(sel ? BLACK : WHITE);
-        const char* label = ITEMS[i];
-        char buf[48];
-        if (i == 1) {                                 /* difficulty row   */
-            snprintf(buf, sizeof(buf), "Difficulty:  %s", DIFFS[diff].label);
-            label = buf;
+        int w = textwidth((char*)ITEMS[i]);
+        outtextxy(getmaxx() / 2 - w / 2, y, (char*)ITEMS[i]);
+        if (sel) {
+            setcolor(BLACK);
+            outtextxy(getmaxx() / 2 - barHalf + 10, y, (char*)">");
+            outtextxy(getmaxx() / 2 + barHalf - 10
+                      - textwidth((char*)"<"), y, (char*)"<");
         }
-        int w = textwidth((char*)label);
-        outtextxy((getmaxx() - w) / 2, y, (char*)label);
     }
 
-    drawMenuSnakeDeco();
+    drawMenuDeco(boxTop + boxH);
 
-    char hi[64];
-    snprintf(hi, sizeof(hi), "hi-score %d  |  games played %d", highScore(db), db.gamesPlayed);
-    textCentered(getmaxy() - 64, hi, LIGHTGRAY, DEFAULT_FONT, 1);
-    textCentered(getmaxy() - 44,
-        "Up/Down or W/S - choose   Enter - select   Left/Right on Difficulty - change",
-        DARKGRAY, DEFAULT_FONT, 1);
+    char hi[96];
+    snprintf(hi, sizeof(hi), "hi-score %d   |   games played %d",
+             highScore(db), db.gamesPlayed);
+    textCenteredFit(getmaxy() - 64, hi, LIGHTGRAY, fsz(2));
+    textCenteredFit(getmaxy() - 40,
+        "W/S choose   Enter select   <-/-> change   +/- size",
+        DARKGRAY, fsz(2));
+
+    present();
 }
 
 static void cycleDifficulty ( int& diff, int dir )
@@ -827,140 +1114,294 @@ static void cycleDifficulty ( int& diff, int dir )
 
 static void drawDifficulty ( int selection )
 {
+    int fontSize = fsz(3);
+    int hintSize = fsz(2);
+    int rowH = fontSize * 8 + hintSize * 8 + 20;
     cleardevice();
-    shadowCentered(80, "DIFFICULTY", LIGHTCYAN, GOTHIC_FONT, 7);
+    shadowCentered(64, "DIFFICULTY", LIGHTCYAN, GOTHIC_FONT, fsz(6));
 
-    int boxTop = 200;
-    panel(getmaxx() / 2 - 260, boxTop, getmaxx() / 2 + 260, boxTop + 3 * 56 + 20, DARKGRAY);
+    settextstyle(GOTHIC_FONT, HORIZ_DIR, fsz(6));
+    int boxTop = 56 + textheight((char*)"DIFFICULTY") + 30;
+    int boxH = DIFF_COUNT * rowH + 24;
+    if (boxTop + boxH > getmaxy() - 96) { boxTop = getmaxy() - 96 - boxH; }
+
+    panel(getmaxx() / 2 - 280, boxTop, getmaxx() / 2 + 280, boxTop + boxH, DARKGRAY);
 
     for (int i = 0; i < DIFF_COUNT; i++) {
-        int y = boxTop + 16 + i * 56;
+        int y = boxTop + 14 + i * rowH;
         bool sel = (i == selection);
         if (sel) {
             setfillstyle(SOLID_FILL, LIGHTCYAN);
-            bar(getmaxx() / 2 - 240, y - 8, getmaxx() / 2 + 240, y + 30);
+            bar(getmaxx() / 2 - 260, y - 7,
+                getmaxx() / 2 + 260, y + fontSize * 8 + hintSize * 8 + 7);
+            setfillstyle(SOLID_FILL, WHITE);
+            bar(getmaxx() / 2 - 260, y + fontSize * 8 + hintSize * 8 + 7,
+                getmaxx() / 2 + 260, y + fontSize * 8 + hintSize * 8 + 10);
+            setfillstyle(SOLID_FILL, BLACK);
         }
-        settextstyle(DEFAULT_FONT, HORIZ_DIR, 2);
+        settextstyle(DEFAULT_FONT, HORIZ_DIR, fontSize);
         setcolor(sel ? BLACK : WHITE);
-        outtextxy(getmaxx() / 2 - 220, y, (char*)DIFFS[i].label);
-        int lw = textwidth((char*)DIFFS[i].label);   /* measure in font 2! */
-        settextstyle(DEFAULT_FONT, HORIZ_DIR, 1);
+        outtextxy(getmaxx() / 2 - 240, y, (char*)DIFFS[i].label);
+        settextstyle(DEFAULT_FONT, HORIZ_DIR, hintSize);
         setcolor(sel ? BLACK : LIGHTGRAY);
-        outtextxy(getmaxx() / 2 - 220 + lw + 24, y + 8, (char*)DIFF_HINTS[i]);
+        outtextxy(getmaxx() / 2 - 240, y + fontSize * 8 + 2,
+                  (char*)DIFF_HINTS[i]);
     }
-    textCentered(getmaxy() - 64, "Up/Down or W/S - choose   Enter - play", DARKGRAY, DEFAULT_FONT, 1);
-    textCentered(getmaxy() - 44, "Esc - back", DARKGRAY, DEFAULT_FONT, 1);
+    textCentered(getmaxy() - 64, "W/S choose   Enter play",
+                 LIGHTGRAY, DEFAULT_FONT, fsz(2));
+    textCentered(getmaxy() - 40, "Esc - back", DARKGRAY, DEFAULT_FONT, fsz(2));
+
+    present();
+}
+
+/* The window-size picker. Changing the size here (or pressing + / - in
+ * the menu) re-creates the window; dragging the borders works too — the
+ * whole layout recomputes itself from getmaxx()/getmaxy() every frame. */
+static void drawWindowSizes ( int selection )
+{
+    int fontSize = fsz(3);
+    int rowH = fontSize * 8 + 24;
+    cleardevice();
+    shadowCentered(64, "WINDOW SIZE", LIGHTGREEN, GOTHIC_FONT, fsz(6));
+
+    settextstyle(GOTHIC_FONT, HORIZ_DIR, fsz(6));
+    int boxTop = 56 + textheight((char*)"WINDOW SIZE") + 30;
+    int boxH = 4 * rowH + 24;
+    if (boxTop + boxH > getmaxy() - 96) { boxTop = getmaxy() - 96 - boxH; }
+
+    panel(getmaxx() / 2 - 280, boxTop, getmaxx() / 2 + 280, boxTop + boxH, DARKGRAY);
+
+    static const char* HINTS[4] = {
+        "big on any screen",
+        "classic graphics.h size",
+        "recommended - roomy",
+        "for large displays"
+    };
+
+    for (int i = 0; i < 4; i++) {
+        int y = boxTop + 16 + i * rowH;
+        bool sel = (i == selection);
+        if (sel) {
+            setfillstyle(SOLID_FILL, LIGHTGREEN);
+            bar(getmaxx() / 2 - 260, y - 7,
+                getmaxx() / 2 + 260, y + fontSize * 8 + 7);
+            setfillstyle(SOLID_FILL, WHITE);
+            bar(getmaxx() / 2 - 260, y + fontSize * 8 + 7,
+                getmaxx() / 2 + 260, y + fontSize * 8 + 10);
+            setfillstyle(SOLID_FILL, BLACK);
+        }
+        settextstyle(DEFAULT_FONT, HORIZ_DIR, fontSize);
+        setcolor(sel ? BLACK : WHITE);
+        outtextxy(getmaxx() / 2 - 240, y, (char*)SIZES[i].label);
+        settextstyle(DEFAULT_FONT, HORIZ_DIR, fsz(2));
+        setcolor(sel ? BLACK : LIGHTGRAY);
+        outtextxy(getmaxx() / 2 - 240 + textwidth((char*)SIZES[i].label) + 28,
+                  y + (fontSize * 8 - 8) / 2 + 1, (char*)HINTS[i]);
+    }
+    textCentered(getmaxy() - 64,
+                 "Enter - apply, or just drag the borders",
+                 LIGHTGRAY, DEFAULT_FONT, fsz(2));
+    textCentered(getmaxy() - 40, "W/S - choose   Esc - back", DARKGRAY, DEFAULT_FONT, fsz(2));
+
+    present();
+}
+
+/* Word-wrap "src" into at most two lines of at most maxCh characters
+ * (breaking at a space when one is near the edge). Shared by the help
+ * and score screens so long captions survive every window size. */
+static void wrapTwoLines ( const char* src, int maxCh, char* l1, char* l2 )
+{
+    size_t n = strlen(src);
+    l1[0] = l2[0] = '\0';
+    if ((int) n <= maxCh) { strcpy(l1, src); return; }
+    int cut = maxCh;
+    while (cut > maxCh / 3 && src[cut] != ' ') { cut--; }
+    if (src[cut] == ' ') {
+        strncpy(l1, src, (size_t) cut); l1[cut] = '\0';
+        strncpy(l2, src + cut + 1, (size_t) maxCh); l2[maxCh] = '\0';
+    } else {
+        strncpy(l1, src, (size_t) maxCh); l1[maxCh] = '\0';
+        strncpy(l2, src + maxCh, (size_t) maxCh); l2[maxCh] = '\0';
+    }
 }
 
 static void drawHelp ( )
 {
     cleardevice();
-    shadowCentered(56, "HOW TO PLAY", YELLOW, GOTHIC_FONT, 7);
+    shadowCentered(48, "HOW TO PLAY", YELLOW, GOTHIC_FONT, fsz(6));
 
-    int l = 90, t = 150, r = getmaxx() - 90, b = getmaxy() - 110;
+    int l = 60, t = 60 + textheight((char*)"HOW TO PLAY") + 20, r = getmaxx() - 60;
+    int b = getmaxy() - 96;
     panel(l, t, r, b, DARKGRAY);
 
+    /* short, self-contained rows: every value fits two wrapped lines on
+     * the smallest window (S 640x480) and one line everywhere else */
     struct Row { const char* k; const char* v; };
     static const Row ROWS[] = {
-        { "Move",           "Arrow keys or W A S D" },
-        { "Pause / resume", "P or Space"            },
-        { "Back to menu",   "Q (while paused), Esc" },
-        { "Red apple",      "points + 2 segments of growth" },
-        { "Yellow bonus",   "5x points - it expires fast!" },
-        { "Level up",       "every 5 apples the snake speeds up" },
-        { "Walls",          "Easy wraps around; Medium and Hard are deadly" },
-        { "High scores",    "the top 5 are saved in snake_scores.db" }
+        { "Move",         "Arrow keys or W A S D"   },
+        { "Pause",        "P or Space"              },
+        { "Back to menu", "Q while paused, or Esc"  },
+        { "Red apple",    "+10-25 points, +2 growth" },
+        { "Yellow bonus", "5x points, expires fast" },
+        { "Level up",     "every 5 apples = faster" },
+        { "Walls",        "Easy wraps; M and H kill" },
+        { "Window size",  "drag borders, +/- changes" },
+        { "Sound",        "ON/OFF in the menu"      },
+        { "High scores",  "top 5 -> snake_scores.db" }
     };
-    int y = t + 24;
-    for (size_t i = 0; i < sizeof(ROWS) / sizeof(ROWS[0]); i++) {
-        settextstyle(DEFAULT_FONT, HORIZ_DIR, 2);
-        setcolor(YELLOW);
-        outtextxy(l + 30, y, (char*)ROWS[i].k);
-        setcolor(WHITE);
-        outtextxy(l + 250, y, (char*)ROWS[i].v);
-        y += 34;
+    const int NROWS = (int) (sizeof(ROWS) / sizeof(ROWS[0]));
+
+    int valueX = l + 260;
+    int avail  = (r - 14) - valueX;
+    if (avail < 120) { avail = 120; }      /* absolute floor for wrapping */
+    int innerT = t + 16, innerB = b - 12;
+
+    /* biggest font whose wrapped layout fits the panel; if nothing fits
+     * the render loop below still stops cleanly at size 1 */
+    int keySize = 1;
+    for (int s = fsz(2); s >= 1; s--) {
+        int lineH = 9 * s + 2, gap = (s >= 2 ? 10 : 8);
+        int maxCh = avail / (8 * s);
+        if (maxCh < 10) { continue; }
+        int total = 0;
+        bool fits = true;
+        for (int i = 0; i < NROWS; i++) {
+            int len = (int) strlen(ROWS[i].v);
+            int lines = (len + maxCh - 1) / maxCh;
+            if (lines > 2) { fits = false; break; }
+            total += lines * lineH + gap;
+        }
+        if (fits && total <= innerB - innerT) { keySize = s; break; }
     }
-    textCentered(getmaxy() - 64, "Esc / Enter / Q - back", DARKGRAY, DEFAULT_FONT, 1);
+
+    int lineH = 9 * keySize + 2, gap = (keySize >= 2 ? 10 : 8);
+    int maxCh = avail / (8 * keySize);
+    if (maxCh < 10) { maxCh = 10; }
+    int y = innerT;
+    for (int i = 0; i < NROWS; i++) {
+        char v1[64], v2[64];
+        wrapTwoLines(ROWS[i].v, maxCh, v1, v2);
+        int lines = v2[0] ? 2 : 1;
+        if (y + lines * lineH > innerB) { break; }   /* panel full: stop */
+        settextstyle(DEFAULT_FONT, HORIZ_DIR, keySize);
+        setcolor(YELLOW);
+        outtextxy(l + 28, y, (char*)ROWS[i].k);
+        setcolor(WHITE);
+        outtextxy(valueX, y, v1);
+        if (v2[0]) { outtextxy(valueX, y + lineH, v2); }
+        y += lines * lineH + gap;
+    }
+    textCentered(getmaxy() - 64, "Esc / Enter / Q - back", LIGHTGRAY, DEFAULT_FONT, fsz(2));
+
+    present();
 }
 
 static void drawScores ( const GameDB& db )
 {
     cleardevice();
-    shadowCentered(56, "HIGH SCORES", LIGHTGREEN, GOTHIC_FONT, 7);
+    shadowCentered(48, "HIGH SCORES", LIGHTGREEN, GOTHIC_FONT, fsz(6));
 
-    int l = 110, t = 150, r = getmaxx() - 110, b = getmaxy() - 130;
+    int l = 70, t = 60 + textheight((char*)"HIGH SCORES") + 20;
+    int r = getmaxx() - 70, b = getmaxy() - 118;
     panel(l, t, r, b, DARKGRAY);
 
-    settextstyle(DEFAULT_FONT, HORIZ_DIR, 2);
-    setcolor(LIGHTGRAY);
-    outtextxy(l + 34, t + 20, (char*)"#");
-    outtextxy(l + 80, t + 20, (char*)"NAME");
-    outtextxy(l + 260, t + 20, (char*)"SCORE");
-    outtextxy(l + 380, t + 20, (char*)"LEVEL");
-    outtextxy(l + 480, t + 20, (char*)"WHEN");
+    /* columns are spaced by their widest content (header or value) plus
+     * one character of breathing room: NAME 8, SCORE 5, LEVEL 5 and the
+     * 16-char "YYYY-MM-DD HH:MM" stamp. The font shrinks until that row
+     * clears the right edge, so no window size can merge columns. */
+    int nameX = l + 76, scoreX, levelX, whenX;
+    int fontSize = fsz(2);
+    for (;;) {
+        int cw = 8 * fontSize, gap = 8 * fontSize;
+        scoreX = nameX + 8 * cw + gap;
+        levelX = scoreX + 5 * cw + gap;
+        whenX  = levelX + 5 * cw + gap;
+        if (whenX + 16 * cw <= r - 10 || fontSize <= 1) { break; }
+        fontSize--;
+    }
 
-    int y = t + 56;
+    settextstyle(DEFAULT_FONT, HORIZ_DIR, fontSize);
+    setcolor(LIGHTGRAY);
+    outtextxy(l + 28, t + 18, (char*)"#");
+    outtextxy(l + 76, t + 18, (char*)"NAME");
+    outtextxy(scoreX, t + 18, (char*)"SCORE");
+    outtextxy(levelX, t + 18, (char*)"LEVEL");
+    outtextxy(whenX, t + 18, (char*)"WHEN");
+
+    int y = t + 18 + fontSize * 8 + 18;
+    int rowStep = fontSize * 8 + 16;
     if (db.count == 0) {
         setcolor(DARKGRAY);
-        settextstyle(DEFAULT_FONT, HORIZ_DIR, 1);
-        outtextxy(l + 34, y + 20, (char*)"no scores yet - play a game and claim the first rank!");
+        settextstyle(DEFAULT_FONT, HORIZ_DIR, fontSize);
+        char e1[64], e2[64];
+        wrapTwoLines("no scores yet - play a game and claim the first rank!",
+                     (r - 10 - (l + 28)) / (8 * fontSize), e1, e2);
+        outtextxy(l + 28, y + 16, e1);
+        if (e2[0]) { outtextxy(l + 28, y + 16 + fontSize * 9 + 2, e2); }
     }
     for (int i = 0; i < db.count; i++) {
-        settextstyle(DEFAULT_FONT, HORIZ_DIR, 2);
+        settextstyle(DEFAULT_FONT, HORIZ_DIR, fontSize);
         setcolor(i == 0 ? YELLOW : WHITE);
-        char buf[8];
+        char buf[16];
         snprintf(buf, sizeof(buf), "%d", i + 1);
-        outtextxy(l + 34, y, (char*)buf);
-        outtextxy(l + 80, y, (char*)db.top[i].name);
+        outtextxy(l + 28, y, (char*)buf);
+        snprintf(buf, sizeof(buf), "%.*s", 8, db.top[i].name);  /* 8-char column */
+        outtextxy(nameX, y, buf);
         snprintf(buf, sizeof(buf), "%d", db.top[i].score);
-        outtextxy(l + 260, y, (char*)buf);
+        outtextxy(scoreX, y, (char*)buf);
         snprintf(buf, sizeof(buf), "%d", db.top[i].level);
-        outtextxy(l + 380, y, (char*)buf);
-        settextstyle(DEFAULT_FONT, HORIZ_DIR, 1);
+        outtextxy(levelX, y, (char*)buf);
         setcolor(LIGHTGRAY);
-        outtextxy(l + 480, y + 8, (char*)db.top[i].when);
-        y += 40;
+        outtextxy(whenX, y, (char*)db.top[i].when);
+        y += rowStep;
     }
 
     char stats[96];
-    snprintf(stats, sizeof(stats), "games played %d  |  apples eaten %d", db.gamesPlayed, db.applesEaten);
-    textCentered(b + 18, stats, LIGHTGRAY, DEFAULT_FONT, 1);
-    textCentered(getmaxy() - 64, "C C - clear the table (press C twice)", DARKGRAY, DEFAULT_FONT, 1);
-    textCentered(getmaxy() - 44, "Esc - back", DARKGRAY, DEFAULT_FONT, 1);
+    snprintf(stats, sizeof(stats), "games played %d  |  apples eaten %d",
+             db.gamesPlayed, db.applesEaten);
+    textCentered(b + 16, stats, LIGHTGRAY, DEFAULT_FONT, fsz(2));
+    textCentered(getmaxy() - 64, "C C - clear the table (press C twice)", DARKGRAY, DEFAULT_FONT, fsz(2));
+    textCentered(getmaxy() - 40, "Esc - back", DARKGRAY, DEFAULT_FONT, fsz(2));
+
+    present();
 }
 
 /* Name entry after a top-5 score. Mutates nothing until Enter. */
 static void drawNameEntry ( const char* name, int score, int rank )
 {
     cleardevice();
-    shadowCentered(120, "NEW HIGH SCORE!", YELLOW, GOTHIC_FONT, 7);
+    shadowCentered(96, "NEW HIGH SCORE!", YELLOW, GOTHIC_FONT, fsz(6));
 
     char buf[64];
     snprintf(buf, sizeof(buf), "rank #%d  |  %d points", rank, score);
-    textCentered(210, buf, WHITE, DEFAULT_FONT, 2);
+    textCentered(96 + textheight((char*)"NEW HIGH SCORE!") + 22, buf, WHITE, DEFAULT_FONT, fsz(2));
 
-    int l = getmaxx() / 2 - 260, t = 280, r = getmaxx() / 2 + 260, b = 470;
+    int l = getmaxx() / 2 - 280, t = 96 + textheight((char*)"NEW HIGH SCORE!") + 78;
+    int r = getmaxx() / 2 + 280, b = t + 190;
+    if (b > getmaxy() - 20) { b = getmaxy() - 20; t = b - 190; }
     panel(l, t, r, b, YELLOW);
 
-    settextstyle(DEFAULT_FONT, HORIZ_DIR, 2);
+    settextstyle(DEFAULT_FONT, HORIZ_DIR, fsz(2));
     setcolor(LIGHTGRAY);
-    outtextxy(l + 30, t + 30, (char*)"type your name, then press Enter");
+    outtextxy(l + 30, t + 26, (char*)"type your name, then press Enter");
 
     /* the name itself, big, with a block cursor at the end */
     static int blink = 0;
-    char shown[NAME_LEN + 3];
+    char shown[SNAKE_NAME_MAX + 3];
     snprintf(shown, sizeof(shown), "%s", name);
     if ((blink++ / 8) % 2 == 0) {
         int n = (int)strlen(name);
-        if (n < NAME_LEN) { shown[n] = '_'; shown[n + 1] = '\0'; }
+        if (n < SNAKE_NAME_MAX) { shown[n] = '_'; shown[n + 1] = '\0'; }
     }
-    settextstyle(DEFAULT_FONT, HORIZ_DIR, 3);
+    settextstyle(DEFAULT_FONT, HORIZ_DIR, fsz(4));
     setcolor(YELLOW);
-    outtextxy(l + 30, t + 90, (char*)shown);
+    outtextxy(l + 30, t + 84, (char*)shown);
 
-    settextstyle(DEFAULT_FONT, HORIZ_DIR, 1);
+    settextstyle(DEFAULT_FONT, HORIZ_DIR, fsz(2));
     setcolor(DARKGRAY);
-    outtextxy(l + 30, b - 36, (char*)"letters, digits and spaces - Backspace deletes - Esc skips");
+    outtextxy(l + 30, b - 38, (char*)"letters, digits and spaces - Backspace deletes - Esc skips");
+
+    present();
 }
 
 /* Game-over card. Returns the next action: 0 menu, 1 play again. */
@@ -968,41 +1409,60 @@ static int drawGameOver ( const Game& g, const GameDB& db, bool newRecord, int r
 {
     cleardevice();
 
-    shadowCentered(130, "GAME OVER", RED, GOTHIC_FONT, 8);
+    shadowCentered(104, "GAME OVER", RED, GOTHIC_FONT, fsz(7));
 
     if (newRecord) {
         char buf[64];
         snprintf(buf, sizeof(buf), "NEW HIGH SCORE - rank #%d!", rank);
-        textCentered(230, buf, YELLOW, DEFAULT_FONT, 2);
+        textCentered(104 + textheight((char*)"GAME OVER") + 24, buf, YELLOW, DEFAULT_FONT, fsz(2));
     }
 
-    int l = getmaxx() / 2 - 200, t = 280, r = getmaxx() / 2 + 200, b = 460;
+    int l = getmaxx() / 2 - 210, t = 104 + textheight((char*)"GAME OVER") + 76;
+    int r = getmaxx() / 2 + 210, b = t + 186;
+    if (b > getmaxy() - 76) { b = getmaxy() - 76; t = b - 186; }
     panel(l, t, r, b, DARKGRAY);
 
     char buf[64];
-    settextstyle(DEFAULT_FONT, HORIZ_DIR, 2);
-    setcolor(LIGHTGRAY); outtextxy(l + 30, t + 26, (char*)"score");
+    int labelSize = fsz(2);
+    int valueSize = fsz(3);
+    int rowStep = labelSize * 8 + 14;
+    int y = t + 22;
+
+    settextstyle(DEFAULT_FONT, HORIZ_DIR, labelSize);
+    setcolor(LIGHTGRAY); outtextxy(l + 30, y, (char*)"score");
+    settextstyle(DEFAULT_FONT, HORIZ_DIR, valueSize);
     setcolor(YELLOW);
     snprintf(buf, sizeof(buf), "%d", g.score);
-    outtextxy(r - 30 - textwidth((char*)buf), t + 26, (char*)buf);
+    outtextxy(r - 30 - textwidth((char*)buf), y - 4, (char*)buf);
+    y += rowStep;
 
-    setcolor(LIGHTGRAY); outtextxy(l + 30, t + 60, (char*)"level");
+    settextstyle(DEFAULT_FONT, HORIZ_DIR, labelSize);
+    setcolor(LIGHTGRAY); outtextxy(l + 30, y, (char*)"level");
+    settextstyle(DEFAULT_FONT, HORIZ_DIR, valueSize);
     setcolor(LIGHTCYAN);
     snprintf(buf, sizeof(buf), "%d", g.level);
-    outtextxy(r - 30 - textwidth((char*)buf), t + 60, (char*)buf);
+    outtextxy(r - 30 - textwidth((char*)buf), y - 4, (char*)buf);
+    y += rowStep;
 
-    setcolor(LIGHTGRAY); outtextxy(l + 30, t + 94, (char*)"apples");
+    settextstyle(DEFAULT_FONT, HORIZ_DIR, labelSize);
+    setcolor(LIGHTGRAY); outtextxy(l + 30, y, (char*)"apples");
+    settextstyle(DEFAULT_FONT, HORIZ_DIR, valueSize);
     setcolor(RED);
     snprintf(buf, sizeof(buf), "%d", g.apples);
-    outtextxy(r - 30 - textwidth((char*)buf), t + 94, (char*)buf);
+    outtextxy(r - 30 - textwidth((char*)buf), y - 4, (char*)buf);
+    y += rowStep;
 
-    setcolor(LIGHTGRAY); outtextxy(l + 30, t + 128, (char*)"best ever");
+    settextstyle(DEFAULT_FONT, HORIZ_DIR, labelSize);
+    setcolor(LIGHTGRAY); outtextxy(l + 30, y, (char*)"best ever");
+    settextstyle(DEFAULT_FONT, HORIZ_DIR, valueSize);
     setcolor(LIGHTGREEN);
     snprintf(buf, sizeof(buf), "%d", highScore(db));
-    outtextxy(r - 30 - textwidth((char*)buf), t + 128, (char*)buf);
+    outtextxy(r - 30 - textwidth((char*)buf), y - 4, (char*)buf);
 
-    textCentered(b + 22, "Enter / N - play again      Q / Esc - menu", WHITE, DEFAULT_FONT, 1);
-    textCentered(b + 42, DIFF_HINTS[g.diff], DARKGRAY, DEFAULT_FONT, 1);
+    textCentered(b + 18, "Enter / N - play again      Q / Esc - menu", WHITE, DEFAULT_FONT, fsz(2));
+    textCentered(b + 40, DIFF_HINTS[g.diff], DARKGRAY, DEFAULT_FONT, fsz(2));
+
+    present();
 
     while (true) {
         int k = readKey();
@@ -1062,8 +1522,8 @@ static int playLoop ( Game& g, GameDB& db )
             bool record = rank > 0;
             if (record) {
                 /* collect a name, insert into the top 5, save */
-                char name[NAME_LEN + 1];
-                strncpy(name, db.name, NAME_LEN); name[NAME_LEN] = '\0';
+                char name[SNAKE_NAME_MAX + 1];
+                strncpy(name, db.name, SNAKE_NAME_MAX); name[SNAKE_NAME_MAX] = '\0';
                 int nameLen = (int)strlen(name);
                 bool done = false;
                 while (!done) {
@@ -1074,25 +1534,20 @@ static int playLoop ( Game& g, GameDB& db )
                     else if (nk == K_ENTER || nk == K_ESC) { done = true; }
                     else if (nk == K_LETTER || nk == K_DIGIT || nk == K_SPACE) {
                         char c = (nk == K_SPACE) ? ' ' : (char)toupper(readKeyLetter);
-                        if (nameLen < NAME_LEN && !(nameLen == 0 && c == ' ')) {
+                        if (nameLen < SNAKE_NAME_MAX && !(nameLen == 0 && c == ' ')) {
                             name[nameLen++] = c; name[nameLen] = '\0';
                         }
                     }
                 }
-                if (nameLen == 0) { strncpy(name, "PLAYER", NAME_LEN); name[NAME_LEN] = '\0'; }
-                strncpy(db.name, name, NAME_LEN); db.name[NAME_LEN] = '\0';
+                if (nameLen == 0) { strncpy(name, "PLAYER", SNAKE_NAME_MAX); name[SNAKE_NAME_MAX] = '\0'; }
+                strncpy(db.name, name, SNAKE_NAME_MAX); db.name[SNAKE_NAME_MAX] = '\0';
                 insertScore(db, name, g.score, g.level);
             }
             db.gamesPlayed++;
             db.applesEaten += g.apples;
             saveDatabase(db);
             int next = drawGameOver(g, db, record, rank);
-            if (next == 1) {
-                resetGame(g, g.diff);      /* "play again" - a fresh run of
-                                            * the same playLoop, no menu trip */
-                continue;
-            }
-            return 0;
+            return next == 1 ? 1 : 0;
         }
 
         drawGame(g, db);
@@ -1104,6 +1559,32 @@ static int playLoop ( Game& g, GameDB& db )
  * SECTION 10 — main(): the little state machine that ties it all together
  * ========================================================================== */
 
+/* Opens the game window. THE important platform difference: on Windows
+ * (WinBGIm) the last initwindow argument true enables DOUBLE BUFFERING,
+ * and swapbuffers() flips it. On SDL_bgi there are always several pages,
+ * so setactivepage(1) moves drawing off-screen and swapbuffers() flips
+ * between the two. Without this, every frame would flicker. */
+static void openWindow ( const GameDB& db )
+{
+#ifdef _WIN32
+    initwindow(SIZES[db.winSize].w, SIZES[db.winSize].h,
+               "SNAKE - graphics.h", 0, 0, true);
+#else
+    initwindow(SIZES[db.winSize].w, SIZES[db.winSize].h);
+    setactivepage(1);                  /* draw off-screen, flip on present */
+#endif
+}
+
+/* Re-creates the window at a new preset size (menu row / + and - keys).
+ * Every draw call computes its layout from getmaxx()/getmaxy() fresh, so
+ * nothing else needs to change. On SDL_bgi the window is ALSO freely
+ * resizable by dragging its borders — the board re-fits automatically. */
+static void applyWindowSize ( const GameDB& db )
+{
+    closegraph();
+    openWindow(db);
+}
+
 int main ( int argc, char* argv[] )
 {
     /* battery hook: BGI_AUTOEXIT_MS=12000 -> play a 12 s demo and exit 0 */
@@ -1114,9 +1595,28 @@ int main ( int argc, char* argv[] )
     resolveDbPath(argc > 0 ? argv[0] : "");
 
     GameDB db;
-    loadDatabase(db);                 /* reading is harmless in demo mode */
+    loadDatabase(db);                 /* also restores sound + window size */
 
-    initwindow(WIN_W, WIN_H);
+    openWindow(db);
+    sfxInit();
+
+    Game g;
+    memset(&g, 0, sizeof(g));
+
+    /* screenshot hook: BGI_SCREENSHOT=<screen> renders that one screen
+     * (with a fresh demo game where one is needed), presents it and
+     * exits 0 — the visual regression battery navigates nothing. */
+    { const char* shot = getenv("BGI_SCREENSHOT");
+      if (shot && shot[0]) {
+          if (strcmp(shot, "difficulty") == 0)      { drawDifficulty(1); }
+          else if (strcmp(shot, "scores") == 0)     { drawScores(db); }
+          else if (strcmp(shot, "help") == 0)       { drawHelp(); }
+          else if (strcmp(shot, "game") == 0)       { resetGame(g, DIFF_MEDIUM); drawGame(g, db); }
+          else                                      { drawMenu(0, DIFF_MEDIUM, db); }
+          delay(2500);   /* visible long enough for the battery grab */
+          closegraph();
+          return 0;
+      } }
 
     int screen = 0;                   /* 0 menu, 1 difficulty, 2 scores, 3 help */
     int selection = 0;
@@ -1125,7 +1625,6 @@ int main ( int argc, char* argv[] )
 
     demoStart = time(NULL);
 
-    Game g;
     while (true) {
         if (demoTimeUp()) { break; }
 
@@ -1141,27 +1640,63 @@ int main ( int argc, char* argv[] )
             drawMenu(selection, diff, db);
             int k = readKey();
             if (k == K_QUIT) { break; }
-            if (k == K_UP    || (k == K_LETTER && readKeyLetter == 'w')) { selection = (selection + 4) % 5; }
-            if (k == K_DOWN  || (k == K_LETTER && readKeyLetter == 's')) { selection = (selection + 1) % 5; }
+            if (k == K_UP    || (k == K_LETTER && readKeyLetter == 'w')) {
+                selection = (selection + 6) % 7; playSfx(SFX_TICK);
+            }
+            if (k == K_DOWN  || (k == K_LETTER && readKeyLetter == 's')) {
+                selection = (selection + 1) % 7; playSfx(SFX_TICK);
+            }
+            if (k == K_PLUS || k == K_MINUS) {
+                int dir = (k == K_PLUS) ? 1 : -1;
+                db.winSize = (db.winSize + dir + 4) % 4;
+                saveDatabase(db);
+                applyWindowSize(db);
+                playSfx(SFX_TICK);
+            }
             if (selection == 1) {
-                if (k == K_LEFT  || (k == K_LETTER && readKeyLetter == 'a')) { cycleDifficulty(diff, -1); }
-                if (k == K_RIGHT || (k == K_LETTER && readKeyLetter == 'd')) { cycleDifficulty(diff, 1);  }
+                if (k == K_LEFT  || (k == K_LETTER && readKeyLetter == 'a')) {
+                    cycleDifficulty(diff, -1); playSfx(SFX_TICK); saveDatabase(db);
+                }
+                if (k == K_RIGHT || (k == K_LETTER && readKeyLetter == 'd')) {
+                    cycleDifficulty(diff, 1);  playSfx(SFX_TICK); saveDatabase(db);
+                }
+            }
+            if (selection == 2) {
+                if (k == K_LEFT  || (k == K_LETTER && readKeyLetter == 'a')) {
+                    db.winSize = (db.winSize + 3) % 4;
+                    saveDatabase(db); applyWindowSize(db); playSfx(SFX_TICK);
+                }
+                if (k == K_RIGHT || (k == K_LETTER && readKeyLetter == 'd')) {
+                    db.winSize = (db.winSize + 1) % 4;
+                    saveDatabase(db); applyWindowSize(db); playSfx(SFX_TICK);
+                }
+            }
+            if (selection == 3) {
+                if (k == K_LEFT  || k == K_RIGHT
+                    || (k == K_LETTER && (readKeyLetter == 'a' || readKeyLetter == 'd'))) {
+                    soundOn = !soundOn;
+                    saveDatabase(db); playSfx(SFX_TICK);
+                }
             }
             if (k == K_ESC) { break; }
             if (k == K_ENTER || k == K_SPACE) {
                 if (selection == 0) {
                     resetGame(g, diff);
                     int rc = playLoop(g, db);
+                    if (rc == 1) { continue; }            /* play again */
                     if (rc == 2) { break; }               /* window closed */
                     selection = 0;
                 } else if (selection == 1) {
                     diffSelection = diff;
                     screen = 1;                           /* difficulty picker */
                 } else if (selection == 2) {
-                    screen = 2;                           /* high scores */
-                } else if (selection == 3) {
-                    screen = 3;                           /* help */
+                    diffSelection = db.winSize;           /* reuse as picker  */
+                    screen = 4;                           /* window size      */
                 } else if (selection == 4) {
+                    screen = 2;                           /* high scores */
+                } else if (selection == 5) {
+                    screen = 3;                           /* help */
+                } else if (selection == 6) {
                     break;                                /* quit */
                 }
             }
@@ -1169,9 +1704,9 @@ int main ( int argc, char* argv[] )
             drawDifficulty(diffSelection);
             int k = readKey();
             if (k == K_QUIT) { break; }
-            if (k == K_UP    || (k == K_LETTER && readKeyLetter == 'w')) { diffSelection = (diffSelection + DIFF_COUNT - 1) % DIFF_COUNT; }
-            if (k == K_DOWN  || (k == K_LETTER && readKeyLetter == 's')) { diffSelection = (diffSelection + 1) % DIFF_COUNT; }
-            if (k == K_ENTER || k == K_SPACE) { diff = diffSelection; screen = 0; selection = 0; }
+            if (k == K_UP    || (k == K_LETTER && readKeyLetter == 'w')) { diffSelection = (diffSelection + DIFF_COUNT - 1) % DIFF_COUNT; playSfx(SFX_TICK); }
+            if (k == K_DOWN  || (k == K_LETTER && readKeyLetter == 's')) { diffSelection = (diffSelection + 1) % DIFF_COUNT; playSfx(SFX_TICK); }
+            if (k == K_ENTER || k == K_SPACE) { diff = diffSelection; saveDatabase(db); screen = 0; selection = 0; }
             if (k == K_ESC) { screen = 0; }
         } else if (screen == 2) {                         /* -- high scores - */
             drawScores(db);
@@ -1193,6 +1728,21 @@ int main ( int argc, char* argv[] )
             if (k == K_QUIT) { break; }
             if (k == K_ESC || k == K_ENTER
                 || (k == K_LETTER && (readKeyLetter == 'q' || readKeyLetter == 'h'))) { screen = 0; }
+        } else if (screen == 4) {                         /* -- window size - */
+            drawWindowSizes(diffSelection);
+            int k = readKey();
+            if (k == K_QUIT) { break; }
+            if (k == K_UP    || (k == K_LETTER && readKeyLetter == 'w')) { diffSelection = (diffSelection + 3) % 4; playSfx(SFX_TICK); }
+            if (k == K_DOWN  || (k == K_LETTER && readKeyLetter == 's')) { diffSelection = (diffSelection + 1) % 4; playSfx(SFX_TICK); }
+            if (k == K_ENTER || k == K_SPACE) {
+                if (diffSelection != db.winSize) {
+                    db.winSize = diffSelection;
+                    saveDatabase(db);
+                    applyWindowSize(db);
+                }
+                screen = 0; selection = 2; playSfx(SFX_TICK);
+            }
+            if (k == K_ESC) { screen = 0; }
         }
     }
 

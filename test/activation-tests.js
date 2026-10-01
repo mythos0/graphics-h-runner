@@ -143,7 +143,7 @@ exports.run = async function () {
   assert.ok(fs.existsSync(binPath), 'per-node tree command (snake) did not compile the sample');
   await vscode.commands.executeCommand('graphics-h-runner.stopProgram');
   await new Promise((r) => setTimeout(r, 800));
-  await vscode.commands.executeCommand('graphics-h-runner.runSample.ddalab');
+  await vscode.commands.executeCommand('graphics-h-runner.runSample.bounce');
   /* the runner terminal steals focus as soon as the compile finishes, so
    * poll the TAB GROUPS for the opened lab source instead of relying on
    * the active editor */
@@ -154,20 +154,20 @@ exports.run = async function () {
       for (const g of vscode.window.tabGroups.all) {
         for (const t of g.tabs) {
           const uri = t.input && t.input.uri;
-          if (uri && uri.fsPath.endsWith('26_dda_lab.cpp')) { labFile = uri.fsPath; }
+          if (uri && uri.fsPath.endsWith('03_bounce_game.cpp')) { labFile = uri.fsPath; }
         }
       }
       if (labFile) { break; }
       await new Promise((r) => setTimeout(r, 250));
     }
   }
-  assert.ok(labFile, 'ddalab source not opened (tabs: ' + JSON.stringify(vscode.window.tabGroups.all.map((g) => g.tabs.map((t) => (t.input && t.input.uri) ? t.input.uri.fsPath : t.label))) + ')');
+  assert.ok(labFile, 'bounce source not opened (tabs: ' + JSON.stringify(vscode.window.tabGroups.all.map((g) => g.tabs.map((t) => (t.input && t.input.uri) ? t.input.uri.fsPath : t.label))) + ')');
   await new Promise((r) => setTimeout(r, 8000)); /* compile + launch */
   const labBin = labFile.replace(/\.cpp$/i, '');
-  assert.ok(fs.existsSync(labBin), 'per-node tree command (ddalab) did not compile the lab sample');
+  assert.ok(fs.existsSync(labBin), 'per-node tree command (bounce) did not compile the sample');
   await vscode.commands.executeCommand('graphics-h-runner.stopProgram');
   await new Promise((r) => setTimeout(r, 800));
-  console.log('activation-tests: per-node tree click path OK — runSample.snake + runSample.ddalab compiled and launched');
+  console.log('activation-tests: per-node tree click path OK — runSample.snake + runSample.bounce compiled and launched');
 
   /* 9. v1.5.5 FIREWORKS SIMULATOR — the toggle command opens the full-
    * screen overlay, the same command stops it, and Stop is idempotent. */

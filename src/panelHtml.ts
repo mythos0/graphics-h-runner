@@ -533,16 +533,12 @@ const CHEAT_SECTIONS: CheatSection[] = [
         desc: 'dos.h: pauses ms milliseconds — the frame pacing call; 15..30ms gives smooth, watchable motion.'
       },
       {
-        sig: 'getresizewidth() / getresizeheight()',
-        desc: 'WinBGIm: the window size after the user resized it — compare with getmaxx()/getmaxy() and re-layout your scene.'
-      },
-      {
-        sig: 'clearresizeevent()',
-        desc: 'Discards a pending resize event you decided not to handle.'
-      },
-      {
         sig: 'swapbuffers()',
-        desc: 'SDL_bgi: presents the frame you drew off-screen (double buffering) — flicker-free animation without erase-then-draw tricks.'
+        desc: 'Presents the frame you drew off-screen — flicker-free double buffering. SDL_bgi: call setactivepage(1) once after initwindow (otherwise both pages are page 0 and the swap is a no-op), then draw + swapbuffers() every frame. WinBGIm: create the window with initwindow(w, h, "title", 0, 0, true) — the last true is the double-buffer flag — and do the same.'
+      },
+      {
+        sig: 'getmaxx() / getmaxy() after a window resize',
+        desc: 'SDL_bgi windows are user-resizable: poll both every frame and re-layout your scene — after a drag the runtime recreates its pages, scales your picture and getmaxx()/getmaxy() report the new size. WinBGIm windows keep the exact size given to initwindow(); offer size choices by calling closegraph() and initwindow() again.'
       }
     ]
   },
@@ -633,7 +629,6 @@ export function buildPanelHtml(opts: PanelHtmlOptions): string {
   /* two sections: the classic catalog first, the Computer Graphics Lab
      (coordinate viewer, algorithm labs, pixel inspector) below it */
   const programs = opts.programs.filter((p) => !p.lab);
-  const labPrograms = opts.programs.filter((p) => p.lab);
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -747,17 +742,17 @@ export function buildPanelHtml(opts: PanelHtmlOptions): string {
 
   /* programs zone: the section bar is the toggle; the list scrolls inside */
   .programs-zone { flex:1 1 auto; min-height:0; display:flex; flex-direction:column; }
-  #programs, #lab-programs { flex:1 1 auto; min-height:0; overflow-y:auto;
+  #programs { flex:1 1 auto; min-height:0; overflow-y:auto;
     overscroll-behavior:contain; margin:0 -2px; padding:0 2px; }
-  #programs.collapsed, #lab-programs.collapsed { display:none; }
+  #programs.collapsed { display:none; }
   .sec-toggle { cursor:pointer; user-select:none; border-radius:8px; padding:2px; }
   .sec-toggle:hover h2, .sec-toggle:hover .count { color:var(--txt); }
   .chev { font-size:9px; color:var(--txt-dim); display:inline-block; margin-left:6px; transition:transform .12s; }
   .chev-open { transform:rotate(90deg); }
-  #programs::-webkit-scrollbar, #lab-programs::-webkit-scrollbar { width:8px; }
-  #programs::-webkit-scrollbar-thumb, #lab-programs::-webkit-scrollbar-thumb { background:rgba(255,255,255,.14); border-radius:4px; }
-  #programs::-webkit-scrollbar-thumb:hover, #lab-programs::-webkit-scrollbar-thumb:hover { background:rgba(255,255,255,.26); }
-  #programs::-webkit-scrollbar-track, #lab-programs::-webkit-scrollbar-track { background:transparent; }
+  #programs::-webkit-scrollbar { width:8px; }
+  #programs::-webkit-scrollbar-thumb { background:rgba(255,255,255,.14); border-radius:4px; }
+  #programs::-webkit-scrollbar-thumb:hover { background:rgba(255,255,255,.26); }
+  #programs::-webkit-scrollbar-track { background:transparent; }
 
   .sec { display:flex; align-items:baseline; justify-content:space-between; margin:14px 2px 0; }
   .sec-tight { margin:0 2px 7px; }
@@ -871,15 +866,6 @@ export function buildPanelHtml(opts: PanelHtmlOptions): string {
       ${programCards(programs)}
     </div>
 
-    <div class="sec-gap"></div>
-    <div class="sec sec-toggle" id="lab-sec" role="button" tabindex="0" aria-expanded="false"
-         title="Show / hide the Computer Graphics Lab programs">
-      <h2>Computer Graphics Lab<span class="chev" id="lab-chev">▶</span></h2>
-      <span class="count" id="lab-count">${labPrograms.length} lab programs · tap to expand</span>
-    </div>
-    <div id="lab-programs" class="collapsed">
-      ${programCards(labPrograms)}
-    </div>
   </div>
 
   <div class="foot">
@@ -928,39 +914,6 @@ ${cheatSheetHtml()}
     }
     applyProgramsState();
 
-    /* Computer Graphics Lab: its own toggle, its own persisted state.
-       Both toggles MERGE into the saved state object so they never
-       wipe each other (vscode.setState replaces the whole state). */
-    var labSec = document.getElementById('lab-sec');
-    var labList = document.getElementById('lab-programs');
-    var labChev = document.getElementById('lab-chev');
-    var labCount = document.getElementById('lab-count');
-    function labOpen() {
-      try { return !!(vscode.getState() && vscode.getState().labOpen); }
-      catch (e) { return false; }
-    }
-    function applyLabState() {
-      var open = labOpen();
-      if (labList) { labList.classList.toggle('collapsed', !open); }
-      if (labChev) { labChev.className = open ? 'chev chev-open' : 'chev'; }
-      if (labCount && labCount.textContent) {
-        labCount.textContent = labCount.textContent
-          .replace(/ \u00b7 (tap to expand|click Run or Open)$/,
-                   open ? ' \u00b7 click Run or Open' : ' \u00b7 tap to expand');
-      }
-      if (labSec) { labSec.setAttribute('aria-expanded', open ? 'true' : 'false'); }
-    }
-    function toggleLab() {
-      try { var st = vscode.getState() || {}; st.labOpen = !labOpen(); vscode.setState(st); } catch (e) {}
-      applyLabState();
-    }
-    if (labSec) {
-      labSec.addEventListener('click', toggleLab);
-      labSec.addEventListener('keydown', function (ev) {
-        if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); toggleLab(); }
-      });
-    }
-    applyLabState();
 
     /* graphics.h cheat sheet: opens from the ? button in the VIEW TITLE
        bar (the host sends {type:'cheat', open:true}), searchable, Esc /

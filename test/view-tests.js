@@ -4,7 +4,7 @@
  * package.json wiring (activity-bar view, commands, debugger, menus).
  *
  * Validates (without a VS Code UI):
- *   1. the program catalog loads 31 samples (23 classic + 8 lab, 0 templates)
+ *   1. the program catalog loads the 3 game samples (0 templates)
  *   2. every source really includes <graphics.h>
  *   3. catalog sources match the bundled samples on disk byte-for-byte
  *   4. filenames are unique, .cpp-suffixed, every card carries an emoji + tag
@@ -36,11 +36,11 @@ function check(name, fn) {
 
 console.log('view-tests — catalog + package.json wiring\n');
 
-check('catalog loads 9 samples (1 snake example + 8 lab, 0 templates)', () => {
+check('catalog loads the 3 game samples, 0 templates', () => {
   const catalog = loadProgramCatalog(ROOT);
-  assert.strictEqual(catalog.filter((p) => p.kind === 'sample').length, 9, 'sample count');
+  assert.strictEqual(catalog.filter((p) => p.kind === 'sample').length, 3, 'sample count');
   assert.strictEqual(catalog.filter((p) => p.kind === 'template').length, 0, 'template count');
-  assert.strictEqual(catalog.length, 9, 'total count');
+  assert.strictEqual(catalog.length, 3, 'total count');
 });
 
 check('every sample source includes <graphics.h>', () => {
@@ -58,19 +58,14 @@ check('catalog sources match bundled samples byte-for-byte', () => {
   }
 });
 
-check('filenames unique + the exact v1.5.16 catalog (snake + lab 24..31)', () => {
+check('filenames unique + the three games present', () => {
   const catalog = loadProgramCatalog(ROOT);
   const names = catalog.map((p) => p.filename);
   assert.strictEqual(new Set(names).size, names.length, 'duplicate filenames');
   names.forEach((n) => assert.ok(n.endsWith('.cpp'), n + ' not .cpp'));
-  /* v1.5.16: the example section is exactly ONE program — the Snake Game;
-   * the Computer Graphics Lab keeps its 24..31 numbering. */
-  const expected = ['01_snake_game.cpp'];
-  for (let i = 24; i <= 31; i++) { expected.push(String(i).padStart(2, '0') + '_'); }
-  for (const e of expected) {
-    assert.ok(names.some((n) => n === e || n.startsWith(e)), 'missing sample #' + e);
+  for (const want of ['01_snake_game.cpp', '02_football_game.cpp', '03_bounce_game.cpp']) {
+    assert.ok(names.includes(want), 'missing game sample ' + want);
   }
-  assert.strictEqual(names.length, 9, 'catalog size drifted: ' + names.length);
 });
 
 check('every program card has emoji + valid tag', () => {
@@ -82,15 +77,13 @@ check('every program card has emoji + valid tag', () => {
   }
 });
 
-check('v1.5.16 catalog shape: one Snake Game example + 8 lab programs', () => {
-  const catalog = loadProgramCatalog(ROOT);
-  const main = catalog.filter((p) => !p.lab);
-  const lab = catalog.filter((p) => p.lab);
-  assert.strictEqual(main.length, 1, 'example count = ' + main.length);
-  assert.strictEqual(main[0].id, 'snake', 'the example must be the snake game');
-  assert.strictEqual(main[0].filename, '01_snake_game.cpp', 'snake filename drifted');
-  assert.strictEqual(main[0].tag, 'fun', 'snake tag');
-  assert.strictEqual(lab.length, 8, 'lab count = ' + lab.length);
+check('the whole catalog is the fun game suite (v1.5.16)', () => {
+  const fun = loadProgramCatalog(ROOT).filter((p) => p.tag === 'fun');
+  assert.strictEqual(fun.length, 3, 'fun count = ' + fun.length);
+  const ids = new Set(fun.map((f) => f.id));
+  for (const id of ['snake', 'football', 'bounce']) {
+    assert.ok(ids.has(id), 'missing game program: ' + id);
+  }
 });
 
 check('resolveProgramTarget places files under graphics-h-programs/', () => {
@@ -141,13 +134,9 @@ check('activity-bar view is declared type=webview with stable id', () => {
   assert.ok(src.includes("VIEW_ID = 'graphics-h-runner.programs'"), 'provider must target the same view id');
 });
 
-check('v1.5.14: 8 lab catalog entries + professional naming contract', () => {
+check('v1.5.16: the lab catalog was removed with the old programs', () => {
   const lab = loadProgramCatalog(ROOT).filter((p) => p.lab);
-  assert.strictEqual(lab.length, 8, 'lab count ' + lab.length);
-  const ids = new Set(lab.map((p) => p.id));
-  for (const id of ['coordview', 'pixelinspector', 'ddalab', 'bresenhamline', 'bresenhamcircle', 'midpointellipse', 'transforms', 'clipping']) {
-    assert.ok(ids.has(id), 'missing lab id: ' + id);
-  }
+  assert.strictEqual(lab.length, 0, 'lab count ' + lab.length);
   assert.strictEqual(pkg.displayName, 'graphics.h Runner — One-Click Setup', 'displayName wrong');
   assert.strictEqual(pkg.contributes.viewsContainers.activitybar[0].title, 'graphics.h Runner', 'container title wrong');
   assert.strictEqual(pkg.contributes.views['graphics-h-runner'][0].name, 'graphics.h Runner', 'view name wrong');

@@ -200,7 +200,7 @@ const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, 
    template and compare against the parsed DOM */
 check('category count matches CHEAT_SECTION_COUNT (11) and entries match CHEAT_ENTRY_COUNT', () => {
   assert.strictEqual(CHEAT_SECTION_COUNT, 11, 'section count constant drifted');
-  assert.strictEqual(CHEAT_ENTRY_COUNT, 81, 'entry count drifted: ' + CHEAT_ENTRY_COUNT);
+  assert.strictEqual(CHEAT_ENTRY_COUNT, 80, 'entry count drifted: ' + CHEAT_ENTRY_COUNT);
   assert.strictEqual(cats.length, CHEAT_SECTION_COUNT, 'rendered categories != data sections');
   const fns = (html.match(/class="cheat-fn"/g) || []).length;
   assert.strictEqual(fns, CHEAT_ENTRY_COUNT, 'rendered entries != data entries');

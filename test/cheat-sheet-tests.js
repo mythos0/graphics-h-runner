@@ -66,7 +66,7 @@ check('fresh page re-syncs the host on boot (no stuck deferral)', () => {
 check('sheet state merges with section toggles (never wipes them)', () => {
   assert.ok(panelHtmlSrc.includes('vscode.getState() || {}'), 'state base missing');
   assert.ok(panelHtmlSrc.includes('st.programsOpen'), 'programs toggle still present');
-  assert.ok(panelHtmlSrc.includes('st.labOpen'), 'lab toggle still present');
+  assert.ok(!panelHtmlSrc.includes('st.labOpen'), 'lab toggle survived the v1.5.16 removal');
 });
 check('Esc / × / backdrop close paths all intact', () => {
   assert.ok(panelHtmlSrc.includes("if (ev.key === 'Escape') { closeCheat(); }"), 'Esc close missing');

@@ -36,6 +36,18 @@ typedef char* LPSTR;
 #define WM_KEYDOWN      0x0100
 #define WM_KEYUP        0x0101
 #define WM_CHAR         0x0102
+
+/* v1.5.16: runtime-loaded sound support (LoadLibraryA/GetProcAddress in
+ * the samples' sound engine) — declarations only, nothing links. */
+typedef void* HMODULE;
+typedef void* FARPROC;
+#define WINAPI
+#define SND_ASYNC      0x0001
+#define SND_NODEFAULT  0x0002
+#define SND_MEMORY     0x0004
+BOOL WINAPI PlaySoundA (LPCSTR pszSound, HMODULE hmod, DWORD fdwSound);
+HMODULE WINAPI LoadLibraryA (LPCSTR lpLibFileName);
+FARPROC WINAPI GetProcAddress (HMODULE hModule, LPCSTR lpProcName);
 #ifdef __cplusplus
 }
 #endif

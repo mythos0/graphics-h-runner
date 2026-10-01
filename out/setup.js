@@ -1068,6 +1068,113 @@ $1`);
     if (!xkbhitMatch) {
         log.push('source: xkbhit peek patch skipped (this upstream revision stores the key itself — no swallow bug)');
     }
+    /* 7. v1.5.16: user-resizable windows. Two coordinated edits:
+     *  a) initwindow () creates the window with SDL_WINDOW_RESIZABLE;
+     *  b) every refresh compares the real window size with bgi_maxx/maxy
+     *     and, after a drag, recreates the visual pages and the streaming
+     *     texture at the new size, scaling the old picture onto the new
+     *     pages (draw-once screens survive) and resetting the viewport.
+     *     Programs that poll getmaxx ()/getmaxy () can re-layout freely. */
+    if (!/PATCHED \(7\)/.test(c)) {
+        const flagsOld = '// reset flags for new windows\n  bgi_window_flags = 0;';
+        if (c.includes(flagsOld)) {
+            c = c.replace(flagsOld, '// reset flags for new windows\n' +
+                '  /* PATCHED (7): user-resizable windows */\n' +
+                '  bgi_window_flags = SDL_WINDOW_RESIZABLE;');
+            log.push('source: initwindow() creates SDL_WINDOW_RESIZABLE windows');
+        }
+        else {
+            log.push('source: initwindow flags pattern not found - resize flag skipped');
+        }
+        const refreshAnchor = /static void refresh_window \(void\)\n\{\n  \/\/ Updates the screen\.\n/;
+        if (refreshAnchor.test(c)) {
+            const resizeHelper = `// ----- PATCHED (7): user-resizable windows -----
+
+static void resize_window_if_needed (void)
+{
+  // Compares the real SDL window size with bgi_maxx/bgi_maxy and, when
+  // the user resized the window, recreates the visual pages and the
+  // streaming texture at the new size. The old picture is scaled onto
+  // the new pages (draw-once screens survive a resize), the viewport is
+  // reset, and getmaxx ()/getmaxy () report the new size from now on.
+  // Called once per screen refresh.
+
+  SDL_Surface
+    *newpages[VPAGES];
+  SDL_Rect
+    oldarea;
+  int
+    w, h, page;
+
+  if (bgi_current_window < 0 || NULL == bgi_win[bgi_current_window])
+    return;
+
+  SDL_GetWindowSize (bgi_win[bgi_current_window], &w, &h);
+
+  if (w == bgi_maxx + 1 && h == bgi_maxy + 1)
+    return;                     // nothing changed
+
+  if (w < 64 || h < 48)         // ignore degenerate sizes while dragging
+    return;
+
+  oldarea.x = 0;
+  oldarea.y = 0;
+  oldarea.w = bgi_maxx + 1;
+  oldarea.h = bgi_maxy + 1;
+
+  for (page = 0; page < VPAGES; page++) {
+    newpages[page] = SDL_CreateRGBSurface (0, w, h, 32, 0, 0, 0, 0);
+    if (NULL == newpages[page]) {
+      SDL_Log ("resize: could not create page surface: %s", SDL_GetError ());
+      return;
+    }
+    if (NULL != bgi_vpage[page])
+      SDL_BlitScaled (bgi_vpage[page], &oldarea, newpages[page], NULL);
+  }
+
+  for (page = 0; page < VPAGES; page++) {
+    if (NULL != bgi_vpage[page])
+      SDL_FreeSurface (bgi_vpage[page]);
+    bgi_vpage[page] = newpages[page];
+  }
+
+  if (NULL != bgi_txt[bgi_current_window])
+    SDL_DestroyTexture (bgi_txt[bgi_current_window]);
+  bgi_txt[bgi_current_window] =
+    SDL_CreateTexture (bgi_rnd[bgi_current_window],
+                       SDL_PIXELFORMAT_ARGB8888,
+                       SDL_TEXTUREACCESS_STREAMING,
+                       w, h);
+  if (NULL == bgi_txt[bgi_current_window]) {
+    SDL_Log ("resize: could not recreate texture: %s", SDL_GetError ());
+    exit (1);
+  }
+
+  bgi_maxx = w - 1;
+  bgi_maxy = h - 1;
+  bgi_activepage[bgi_current_window] = bgi_vpage[bgi_ap]->pixels;
+  bgi_visualpage[bgi_current_window] = bgi_vpage[bgi_vp]->pixels;
+  bgi_window = bgi_win[bgi_current_window];
+  bgi_renderer = bgi_rnd[bgi_current_window];
+  bgi_texture = bgi_txt[bgi_current_window];
+
+  graphdefaults ();             // reset viewport etc. for the new size
+  bgi_refresh_needed = SDL_TRUE;
+
+} // resize_window_if_needed ()
+
+// -----
+
+`;
+            c = c.replace(refreshAnchor, resizeHelper +
+                'static void refresh_window (void)\n{\n  // Updates the screen.\n\n' +
+                '  resize_window_if_needed (); /* PATCHED (7): honor window resizes */\n');
+            log.push('source: windows are resizable (pages + texture recreated on drag, picture scaled)');
+        }
+        else {
+            log.push('source: refresh_window pattern not found - resize hook skipped');
+        }
+    }
     fs.writeFileSync(cPath, c);
 }
 /**

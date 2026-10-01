@@ -10,7 +10,7 @@
 [![Version](https://img.shields.io/github/v/tag/mythos0/graphics-h-runner?label=version&sort=semver)](https://github.com/mythos0/graphics-h-runner/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey.svg)](#per-os-details)
-[![Tests](https://img.shields.io/badge/sample%20tests-9%2F9%20passing-brightgreen.svg)](#tested-and-verified)
+[![Tests](https://img.shields.io/badge/sample%20tests-3%2F3%20passing-brightgreen.svg)](#tested-and-verified)
 
 **Compile and run C++ programs that use `graphics.h` (BGI / WinBGIm / SDL_bgi) in VS Code — with one keypress.**
 A single command prepares the entire toolchain from scratch: the compiler itself, the graphics
@@ -35,7 +35,7 @@ int main ( ) {
 Press **`Ctrl+Alt+R`** — the file is compiled with the correct linker flags and the graphics
 window opens.
 
-![The Snake Game running with graphics.h Runner](docs/screenshots/01_snake_game.png)
+![Mandelbrot set rendered with graphics.h Runner](docs/screenshots/07_mandelbrot.png)
 
 ## Features
 
@@ -54,7 +54,7 @@ window opens.
 | **Clean exit** | Before Complete Run Setup changes anything it records your original settings, and **uninstalling the extension restores them automatically** — the Code Runner executor, the F5 launch configuration, the build task and the compiler paths are reverted surgically, leaving your own settings untouched. Updates and normal shutdowns never modify anything. The `graphics.h: Restore Original Settings` command performs the same undo at any time. |
 | **Activity-bar panel** | A dashboard with a live Ready / Not ready status pill, a one-click Complete Run Setup button while anything is missing, the full action grid, and all bundled programs as cards with one-click **Run** and **Open** buttons — responsive, and consistent in light and dark themes. |
 | **Cheat sheet** | A searchable `graphics.h` function reference with 81 entries across 11 sections — parameters, angle and color conventions, fill patterns, fonts, keyboard codes, mouse events and classic usage patterns for every function. |
-| **The Snake Game + Computer Graphics Lab** | The example section ships one polished showpiece: the **graphics.h Snake Game** — play with **W A S D or the arrow keys**, three difficulties (Easy wraps around the walls), timed bonus apples worth 5x points, level-ups every five apples, pause, a help screen, and a tiny human-readable file database (`snake_scores.db`) that saves your name, the top-5 high scores and your lifetime totals after every game. The **Computer Graphics Lab** adds 8 classic course algorithms: Coordinate Viewer, Pixel Inspector, DDA, Bresenham line & circle, Midpoint Ellipse, 2D Transformations and Cohen–Sutherland Clipping. |
+| **Three complete games** | The example section is a small game suite you can play (and study) right after setup: **Snake** (WASD/arrows, three difficulties, bonus apples, high-score database), **2-Player Football** (a full street-rules derby whose pitch is drawn without a single built-in shape call — every line, circle and net is rasterized by hand with `putpixel`), and **Bounce** (the Nokia rubber-ball classic with charge jumps, rings, spikes, springs, six levels and synthesized sound effects). Each game is a heavily commented, single-file C++ program. |
 | **Snippets** | `gfxprog`, `gfx-anim`, `gfx-mouse`, `gfx-kbd`, `gfx-text`, `gfx-bar`. |
 | **Celebrations** (optional) | A confetti animation over the panel on every successful compilation and a short show when the panel first opens each session; compile errors produce a full-screen error overlay presenting the first error messages. Includes an optional **Fireworks Simulator** with realistic synthesized audio (launch whoosh, burst boom, crackle) and click-to-burst — click anywhere in the show and the next firework bursts at that spot. Everything is bundled locally (no network requests) and can be disabled with `graphics-h-runner.celebrations.enabled`. |
 
@@ -112,7 +112,7 @@ code --install-extension mythos0-labs.graphics-h-runner
 | `graphics.h: Restore Original Settings (undo Complete Run Setup)` | Restore every setting the setup changed — also runs automatically on uninstall |
 | `graphics.h: Setup Doctor — Check Environment` | Probe the compiler and graphics libraries, with fixes |
 | `graphics.h: Copy Compile Command` | Copy the exact compiler command line for the active file |
-| `graphics.h: Open Examples Folder` | Copy the bundled example programs (the Snake Game and the Computer Graphics Lab) into the workspace and reveal them |
+| `graphics.h: Open Examples Folder` | Copy all 3 game examples into the workspace and reveal them |
 | `graphics.h: Open Example Program` | Open any bundled sample in the editor |
 | `graphics.h: Cheat Sheet` | Open the searchable `graphics.h` function reference |
 | `graphics.h: Fireworks Simulator` | Full-screen fireworks simulation (same button or Esc stops it) |
@@ -125,12 +125,10 @@ The **graphics.h Runner** icon in the Activity Bar opens the panel:
    one-click **Complete Run Setup** button while anything is missing.
 2. **Actions** — Compile & Run, Complete Run Setup, Setup Doctor, Compile, Run Last Build,
    Stop Running Program and Copy Compile Command, always visible.
-3. **Example Programs** — the **Snake Game** card with **Run** (open, compile and launch in one
-   click) and **Open** (open the source in the editor) buttons, in a scrollable, collapsible
-   section.
-4. **Computer Graphics Lab** — 8 lab programs covering the classic computer-graphics course
-   algorithms, each printing its algorithm's step table in the terminal.
-5. **Cheat sheet** — the `?` button in the view title bar opens the searchable function
+3. **Example Programs** — 3 game cards (Snake, 2-Player Football, Bounce), each with **Run**
+   (open, compile and launch in one click) and **Open** (open the source in the editor)
+   buttons, in a scrollable, collapsible section.
+4. **Cheat sheet** — the `?` button in the view title bar opens the searchable function
    reference inside the panel.
 
 ## Extension settings
@@ -165,28 +163,28 @@ setup failures on any machine can be diagnosed and fixed without requiring users
 
 ## Tested and verified
 
-Every bundled sample is compiled with the extension's own flag-building code, executed on a
+Every bundled game is compiled with the extension's own flag-building code, executed on a
 virtual display and screenshot-verified by an automated pipeline (`test/run-tests.js`; machine-
-readable results in `test/test-results.json`). Current results — **9/9 passing**:
+readable results in `test/test-results.json`). The same sources also compile against the
+WinBGIm headers (`test/win-header-tests.js`), so the Windows side is proven without a Windows
+machine. Current results — **3/3 passing**:
 
-| Sample | Verdict | What it renders |
+| Game | Verdict | What it does |
 |---|---|---|
-| `01_snake_game.cpp` | ✅ PASS | the Snake Game playing itself in demo mode (menu, HUD, arena) |
-| `24_coordinate_viewer.cpp` | ✅ PASS | grid, axes, origin and coordinate labels |
-| `25_pixel_inspector.cpp` | ✅ PASS | mouse x/y and color readout |
-| `26_dda_lab.cpp` | ✅ PASS | DDA algorithm with step table |
-| `27_bresenham_line_lab.cpp` | ✅ PASS | all-integer Bresenham line, all octants |
-| `28_bresenham_circle_lab.cpp` | ✅ PASS | midpoint circle with 8-way symmetry |
-| `29_midpoint_ellipse_lab.cpp` | ✅ PASS | midpoint ellipse, region 1 / region 2 |
-| `30_2d_transforms_lab.cpp` | ✅ PASS | translate / rotate / scale with real matrices |
-| `31_cohen_sutherland_clipping.cpp` | ✅ PASS | outcode-based line clipping |
+| `01_snake_game.cpp` | ✅ PASS | playable demo run, HUD, resizable window, all menus and screens exercised |
+| `02_football_game.cpp` | ✅ PASS | kickoff, AI keepers, two-player controls, scoreboard and match clock |
+| `03_bounce_game.cpp` | ✅ PASS | level 1 with rings, spikes and the bouncing-ball physics loop |
 
 The setup engine is tested end to end as well: fresh SDL_bgi download → patch → build →
 user-prefix install → compile → verified render.
 
 More rendered output: [`docs/screenshots/`](docs/screenshots/)
 
-![The Snake Game](docs/screenshots/01_snake_game.png)
+![Snake game](docs/screenshots/01_snake_game.png)
+
+![2-Player Football](docs/screenshots/02_football_game.png)
+
+![Bounce game](docs/screenshots/03_bounce_game.png)
 
 ## Per-OS details
 
