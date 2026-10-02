@@ -11,6 +11,7 @@
 #include <ctime>
 #include <iostream>
 #include <cstdlib>
+#include <cstdio>     /* sprintf() — older MinGW flavors do not leak it */
 
 using namespace std;
 

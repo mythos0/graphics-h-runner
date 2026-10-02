@@ -1,423 +1,423 @@
 {
-  "name": "graphics-h-runner",
-  "displayName": "graphics.h Runner — One-Click Setup",
-  "description": "Compile and run C++ graphics.h (WinBGIm/SDL_bgi) with one keypress or F5. One command auto-installs the compiler, graphics library and native run integration; 21 bundled games and labs; Setup Doctor; Reset Setup.",
-  "version": "1.5.20",
-  "publisher": "mythos0-labs",
-  "author": {
-    "name": "Department of CSE, Dhaka International University",
-    "url": "https://github.com/mythos0/graphics-h-runner"
-  },
-  "license": "MIT",
-  "icon": "icon.png",
-  "engines": {
-    "vscode": "^1.80.0"
-  },
-  "categories": [
-    "Programming Languages",
-    "Snippets",
-    "Other"
-  ],
-  "galleryBanner": {
-    "color": "#e0e7ff",
-    "theme": "light"
-  },
-  "badges": [
-    {
-      "url": "https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-blue",
-      "href": "https://github.com/mythos0/graphics-h-runner",
-      "description": "Platforms"
-    },
-    {
-      "url": "https://img.shields.io/github/v/tag/mythos0/graphics-h-runner?label=release&sort=semver",
-      "href": "https://github.com/mythos0/graphics-h-runner/releases",
-      "description": "Latest release"
-    }
-  ],
-  "markdown": "github",
-  "qna": "marketplace",
-  "keywords": [
-    "beginner",
-    "bgi",
-    "c++",
-    "compile",
-    "computer graphics",
-    "conio.h",
-    "cpp",
-    "dda",
-    "graphics",
-    "graphics.h",
-    "mingw",
-    "problem matcher",
-    "run",
-    "sdl_bgi",
-    "student",
-    "turbo c",
-    "turbo c++",
-    "winbgim"
-  ],
-  "activationEvents": [
-    "onLanguage:cpp",
-    "onLanguage:c",
-    "onView:graphics-h-runner.programs",
-    "onView:graphics-h-runner.fallback",
-    "onView:graphics-h-runner.fallbackPrograms",
-    "onDebug:type:graphics-h"
-  ],
-  "main": "./dist/extension.js",
-  "contributes": {
-    "viewsContainers": {
-      "activitybar": [
-        {
-          "id": "graphics-h-runner",
-          "title": "graphics.h Runner",
-          "icon": "media/activity-icon.svg"
-        }
-      ]
-    },
-    "views": {
-      "graphics-h-runner": [
-        {
-          "type": "webview",
-          "id": "graphics-h-runner.programs",
-          "name": "graphics.h Runner",
-          "when": "true"
-        },
-        {
-          "type": "tree",
-          "id": "graphics-h-runner.fallback",
-          "name": "Actions (Recovery)",
-          "when": "graphics-h-runner.showFallback"
-        },
-        {
-          "type": "tree",
-          "id": "graphics-h-runner.fallbackPrograms",
-          "name": "Example Programs (List)",
-          "when": "graphics-h-runner.showFallback"
-        }
-      ]
-    },
-    "commands": [
-      {
-        "command": "graphics-h-runner.compileAndRun",
-        "title": "Compile & Run",
-        "category": "graphics.h",
-        "icon": "$(play)"
-      },
-      {
-        "command": "graphics-h-runner.compile",
-        "title": "Compile",
-        "category": "graphics.h",
-        "icon": "$(file-binary)"
-      },
-      {
-        "command": "graphics-h-runner.run",
-        "title": "Run Last Build",
-        "category": "graphics.h"
-      },
-      {
-        "command": "graphics-h-runner.doctor",
-        "title": "Setup Doctor — Check Environment",
-        "category": "graphics.h",
-        "icon": "$(check)"
-      },
-      {
-        "command": "graphics-h-runner.setupEverything",
-        "title": "Complete graphics.h Run Setup",
-        "category": "graphics.h",
-        "icon": "$(rocket)"
-      },
-      {
-        "command": "graphics-h-runner.stopProgram",
-        "title": "Stop Running Program",
-        "category": "graphics.h",
-        "icon": "$(debug-stop)"
-      },
-      {
-        "command": "graphics-h-runner.copyCompileCommand",
-        "title": "Copy Compile Command",
-        "category": "graphics.h",
-        "icon": "$(copy)"
-      },
-      {
-        "command": "graphics-h-runner.nativeRunSetup",
-        "title": "Enable native VS Code run (F5, Ctrl+Alt+N, Ctrl+Shift+B)",
-        "category": "graphics.h",
-        "icon": "$(play-circle)"
-      },
-      {
-        "command": "graphics-h-runner.restoreOriginalSettings",
-        "title": "Restore Original Settings (undo Complete Run Setup)",
-        "category": "graphics.h",
-        "icon": "$(discard)"
-      },
-      {
-        "command": "graphics-h-runner.openExamplesFolder",
-        "title": "Open Examples Folder",
-        "category": "graphics.h",
-        "icon": "$(folder-opened)"
-      },
-      {
-        "command": "graphics-h-runner.openProgram",
-        "title": "Open Example Program",
-        "category": "graphics.h",
-        "icon": "$(go-to-file)"
-      },
-      {
-        "command": "graphics-h-runner.runSample",
-        "title": "Run Example Program",
-        "category": "graphics.h",
-        "icon": "$(play)"
-      },
-      {
-        "command": "graphics-h-runner.reloadPanel",
-        "title": "Reload Panel",
-        "category": "graphics.h",
-        "icon": "$(refresh)"
-      },
-      {
-        "command": "graphics-h-runner.fireworks",
-        "title": "Fireworks Simulator",
-        "category": "graphics.h",
-        "icon": "$(sparkle)"
-      },
-      {
-        "command": "graphics-h-runner.stopFireworks",
-        "title": "Stop Fireworks Simulator",
-        "category": "graphics.h",
-        "icon": "$(debug-stop)"
-      },
-      {
-        "command": "graphics-h-runner.cheatSheet",
-        "title": "Cheat Sheet",
-        "category": "graphics.h",
-        "icon": "$(question)"
-      }
-    ],
-    "debuggers": [
-      {
-        "type": "graphics-h",
-        "label": "graphics.h Runner",
-        "languages": [
-          "cpp",
-          "c"
-        ],
-        "configurationAttributes": {
-          "launch": {
-            "properties": {
-              "program": {
-                "type": "string",
-                "description": "Path to the .cpp file to compile and run. Defaults to the active editor (${file})."
-              }
-            }
-          }
-        },
-        "configurationSnippets": [
-          {
-            "label": "graphics.h Runner: compile & run current file",
-            "description": "Compile with the right graphics.h flags and launch the graphics window",
-            "body": {
-              "type": "graphics-h",
-              "request": "launch",
-              "name": "Run graphics.h program",
-              "program": "${file}"
-            }
-          }
-        ]
-      }
-    ],
-    "configuration": {
-      "title": "graphics.h Runner",
-      "properties": {
-        "graphics-h-runner.compilerPath": {
-          "type": "string",
-          "default": "g++",
-          "description": "Path to the C++ compiler executable (g++ from MinGW-w64 on Windows, or any g++/clang++ on Linux/macOS)."
-        },
-        "graphics-h-runner.autoDetect": {
-          "type": "boolean",
-          "default": true,
-          "markdownDescription": "When `#include <graphics.h>` is detected, automatically compile with BGI linker flags. When disabled, BGI flags are always applied for every build."
-        },
-        "graphics-h-runner.linuxLibrary": {
-          "type": "string",
-          "enum": [
-            "auto",
-            "sdl_bgi",
-            "libgraph"
-          ],
-          "enumDescriptions": [
-            "Prefer SDL_bgi, fall back to libgraph (uses Setup Doctor probe results)",
-            "SDL_bgi (-lSDL_bgi -lSDL2 -lm)",
-            "libgraph (-lgraph)"
-          ],
-          "default": "auto",
-          "description": "Which graphics.h implementation to link against on Linux/macOS."
-        },
-        "graphics-h-runner.staticLinkWindows": {
-          "type": "boolean",
-          "default": true,
-          "description": "Windows only: add -static-libgcc -static-libstdc++ so the produced .exe runs without MinGW runtime DLLs."
-        },
-        "graphics-h-runner.extraIncludePaths": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "default": [],
-          "description": "Extra include directories passed as -I (useful when SDL_bgi or WinBGIM is installed in a non-standard location)."
-        },
-        "graphics-h-runner.extraLibPaths": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "default": [],
-          "description": "Extra library directories passed as -L."
-        },
-        "graphics-h-runner.extraCompilerArgs": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "default": [],
-          "description": "Extra arguments passed to the compiler, e.g. [\"-std=c++17\", \"-Wall\"]."
-        },
-        "graphics-h-runner.showStatusBarItem": {
-          "type": "boolean",
-          "default": true,
-          "description": "Show the BGI environment indicator in the status bar. Clicking it runs the Setup Doctor."
-        },
-        "graphics-h-runner.celebrations.enabled": {
-          "type": "boolean",
-          "default": true,
-          "description": "Show a confetti animation over the graphics.h panel on every successful compilation and a short show when the panel first opens each session. Compile errors produce a full-screen error overlay presenting the first compiler messages. The Fireworks Simulator button always works."
-        },
-        "graphics-h-runner.restoreSettingsOnUninstall": {
-          "type": "boolean",
-          "default": true,
-          "markdownDescription": "Clean exit guarantee: the original values of every setting \"Complete graphics.h Run Setup\" changes are snapshotted before the first write, and UNINSTALLING the extension automatically restores them (F5 launch.json, Code Runner executor, build task, compiler paths). Turn off to keep the setup after uninstall. The command \"Restore Original Settings\" performs the same restore manually at any time."
-        }
-      }
-    },
-    "keybindings": [
-      {
-        "command": "graphics-h-runner.compileAndRun",
-        "key": "ctrl+alt+r",
-        "when": "editorTextFocus && resourceLangId == cpp"
-      },
-      {
-        "command": "graphics-h-runner.compileAndRun",
-        "key": "ctrl+alt+r",
-        "when": "editorTextFocus && resourceLangId == c"
-      },
-      {
-        "command": "graphics-h-runner.compile",
-        "key": "ctrl+alt+b",
-        "when": "editorTextFocus && resourceLangId == cpp"
-      },
-      {
-        "command": "graphics-h-runner.compile",
-        "key": "ctrl+alt+b",
-        "when": "editorTextFocus && resourceLangId == c"
-      },
-      {
-        "command": "graphics-h-runner.stopProgram",
-        "key": "ctrl+alt+s",
-        "when": "true"
-      }
-    ],
-    "menus": {
-      "editor/title/run": [
-        {
-          "command": "graphics-h-runner.compileAndRun",
-          "when": "resourceLangId == cpp || resourceLangId == c",
-          "group": "navigation@1"
-        },
-        {
-          "command": "graphics-h-runner.compile",
-          "when": "resourceLangId == cpp || resourceLangId == c",
-          "group": "navigation@2"
-        }
-      ],
-      "editor/context": [
-        {
-          "command": "graphics-h-runner.compileAndRun",
-          "when": "resourceLangId == cpp || resourceLangId == c",
-          "group": "graphics_h@1"
-        },
-        {
-          "command": "graphics-h-runner.compile",
-          "when": "resourceLangId == cpp || resourceLangId == c",
-          "group": "graphics_h@2"
-        }
-      ],
-      "view/title": [
-        {
-          "command": "graphics-h-runner.cheatSheet",
-          "when": "view == graphics-h-runner.programs",
-          "group": "navigation@0"
-        },
-        {
-          "command": "graphics-h-runner.reloadPanel",
-          "when": "view == graphics-h-runner.fallback || view == graphics-h-runner.fallbackPrograms",
-          "group": "navigation@0"
-        },
-        {
-          "command": "graphics-h-runner.setupEverything",
-          "when": "view == graphics-h-runner.fallback",
-          "group": "navigation@1"
-        },
-        {
-          "command": "graphics-h-runner.doctor",
-          "when": "view == graphics-h-runner.fallback",
-          "group": "navigation@2"
-        },
-        {
-          "command": "graphics-h-runner.fireworks",
-          "when": "view == graphics-h-runner.fallbackPrograms && !graphics-h-runner.fireworksRunning",
-          "group": "navigation@1"
-        },
-        {
-          "command": "graphics-h-runner.stopFireworks",
-          "when": "view == graphics-h-runner.fallbackPrograms && graphics-h-runner.fireworksRunning",
-          "group": "navigation@1"
-        }
-      ]
-    },
-    "snippets": [
-      {
-        "language": "cpp",
-        "path": "./snippets/cpp.json"
-      },
-      {
-        "language": "c",
-        "path": "./snippets/cpp.json"
-      }
-    ]
-  },
-  "scripts": {
-    "vscode:prepublish": "npm run compile && npm run bundle",
-    "compile": "tsc -p ./",
-    "bundle": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --platform=node --format=cjs --target=node18 --external:vscode --sourcemap=external --legal-comments=none --log-level=warning",
-    "watch": "tsc -watch -p ./"
-  },
-  "devDependencies": {
-    "@types/node": "^20.14.0",
-    "@types/vscode": "^1.80.0",
-    "@vscode/test-electron": "^3.1.0",
-    "esbuild": "^0.28.2",
-    "typescript": "^5.4.5"
-  },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/mythos0/graphics-h-runner.git"
-  },
-  "bugs": {
-    "url": "https://github.com/mythos0/graphics-h-runner/issues"
-  },
-  "homepage": "https://github.com/mythos0/graphics-h-runner#readme",
-  "dependencies": {
-    "@sentry/node": "^10.75.3"
-  }
+	"name": "graphics-h-runner",
+	"displayName": "graphics.h Runner — One-Click Setup",
+	"description": "Compile and run C++ graphics.h (WinBGIm/SDL_bgi) with one keypress or F5. One command auto-installs the compiler, graphics library and native run integration; 21 bundled games and labs; Setup Doctor; Reset Setup.",
+	"version": "1.5.21",
+	"publisher": "mythos0-labs",
+	"author": {
+		"name": "Department of CSE, Dhaka International University",
+		"url": "https://github.com/mythos0/graphics-h-runner"
+	},
+	"license": "MIT",
+	"icon": "icon.png",
+	"engines": {
+		"vscode": "^1.80.0"
+	},
+	"categories": [
+		"Programming Languages",
+		"Snippets",
+		"Other"
+	],
+	"galleryBanner": {
+		"color": "#e0e7ff",
+		"theme": "light"
+	},
+	"badges": [
+		{
+			"url": "https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-blue",
+			"href": "https://github.com/mythos0/graphics-h-runner",
+			"description": "Platforms"
+		},
+		{
+			"url": "https://img.shields.io/github/v/tag/mythos0/graphics-h-runner?label=release&sort=semver",
+			"href": "https://github.com/mythos0/graphics-h-runner/releases",
+			"description": "Latest release"
+		}
+	],
+	"markdown": "github",
+	"qna": "marketplace",
+	"keywords": [
+		"beginner",
+		"bgi",
+		"c++",
+		"compile",
+		"computer graphics",
+		"conio.h",
+		"cpp",
+		"dda",
+		"graphics",
+		"graphics.h",
+		"mingw",
+		"problem matcher",
+		"run",
+		"sdl_bgi",
+		"student",
+		"turbo c",
+		"turbo c++",
+		"winbgim"
+	],
+	"activationEvents": [
+		"onLanguage:cpp",
+		"onLanguage:c",
+		"onView:graphics-h-runner.programs",
+		"onView:graphics-h-runner.fallback",
+		"onView:graphics-h-runner.fallbackPrograms",
+		"onDebug:type:graphics-h"
+	],
+	"main": "./dist/extension.js",
+	"contributes": {
+		"viewsContainers": {
+			"activitybar": [
+				{
+					"id": "graphics-h-runner",
+					"title": "graphics.h Runner",
+					"icon": "media/activity-icon.svg"
+				}
+			]
+		},
+		"views": {
+			"graphics-h-runner": [
+				{
+					"type": "webview",
+					"id": "graphics-h-runner.programs",
+					"name": "graphics.h Runner",
+					"when": "true"
+				},
+				{
+					"type": "tree",
+					"id": "graphics-h-runner.fallback",
+					"name": "Actions (Recovery)",
+					"when": "graphics-h-runner.showFallback"
+				},
+				{
+					"type": "tree",
+					"id": "graphics-h-runner.fallbackPrograms",
+					"name": "Example Programs (List)",
+					"when": "graphics-h-runner.showFallback"
+				}
+			]
+		},
+		"commands": [
+			{
+				"command": "graphics-h-runner.compileAndRun",
+				"title": "Compile & Run",
+				"category": "graphics.h",
+				"icon": "$(play)"
+			},
+			{
+				"command": "graphics-h-runner.compile",
+				"title": "Compile",
+				"category": "graphics.h",
+				"icon": "$(file-binary)"
+			},
+			{
+				"command": "graphics-h-runner.run",
+				"title": "Run Last Build",
+				"category": "graphics.h"
+			},
+			{
+				"command": "graphics-h-runner.doctor",
+				"title": "Setup Doctor — Check Environment",
+				"category": "graphics.h",
+				"icon": "$(check)"
+			},
+			{
+				"command": "graphics-h-runner.setupEverything",
+				"title": "Complete graphics.h Run Setup",
+				"category": "graphics.h",
+				"icon": "$(rocket)"
+			},
+			{
+				"command": "graphics-h-runner.stopProgram",
+				"title": "Stop Running Program",
+				"category": "graphics.h",
+				"icon": "$(debug-stop)"
+			},
+			{
+				"command": "graphics-h-runner.copyCompileCommand",
+				"title": "Copy Compile Command",
+				"category": "graphics.h",
+				"icon": "$(copy)"
+			},
+			{
+				"command": "graphics-h-runner.nativeRunSetup",
+				"title": "Enable native VS Code run (F5, Ctrl+Alt+N, Ctrl+Shift+B)",
+				"category": "graphics.h",
+				"icon": "$(play-circle)"
+			},
+			{
+				"command": "graphics-h-runner.restoreOriginalSettings",
+				"title": "Restore Original Settings (undo Complete Run Setup)",
+				"category": "graphics.h",
+				"icon": "$(discard)"
+			},
+			{
+				"command": "graphics-h-runner.openExamplesFolder",
+				"title": "Open Examples Folder",
+				"category": "graphics.h",
+				"icon": "$(folder-opened)"
+			},
+			{
+				"command": "graphics-h-runner.openProgram",
+				"title": "Open Example Program",
+				"category": "graphics.h",
+				"icon": "$(go-to-file)"
+			},
+			{
+				"command": "graphics-h-runner.runSample",
+				"title": "Run Example Program",
+				"category": "graphics.h",
+				"icon": "$(play)"
+			},
+			{
+				"command": "graphics-h-runner.reloadPanel",
+				"title": "Reload Panel",
+				"category": "graphics.h",
+				"icon": "$(refresh)"
+			},
+			{
+				"command": "graphics-h-runner.fireworks",
+				"title": "Fireworks Simulator",
+				"category": "graphics.h",
+				"icon": "$(sparkle)"
+			},
+			{
+				"command": "graphics-h-runner.stopFireworks",
+				"title": "Stop Fireworks Simulator",
+				"category": "graphics.h",
+				"icon": "$(debug-stop)"
+			},
+			{
+				"command": "graphics-h-runner.cheatSheet",
+				"title": "Cheat Sheet",
+				"category": "graphics.h",
+				"icon": "$(question)"
+			}
+		],
+		"debuggers": [
+			{
+				"type": "graphics-h",
+				"label": "graphics.h Runner",
+				"languages": [
+					"cpp",
+					"c"
+				],
+				"configurationAttributes": {
+					"launch": {
+						"properties": {
+							"program": {
+								"type": "string",
+								"description": "Path to the .cpp file to compile and run. Defaults to the active editor (${file})."
+							}
+						}
+					}
+				},
+				"configurationSnippets": [
+					{
+						"label": "graphics.h Runner: compile & run current file",
+						"description": "Compile with the right graphics.h flags and launch the graphics window",
+						"body": {
+							"type": "graphics-h",
+							"request": "launch",
+							"name": "Run graphics.h program",
+							"program": "${file}"
+						}
+					}
+				]
+			}
+		],
+		"configuration": {
+			"title": "graphics.h Runner",
+			"properties": {
+				"graphics-h-runner.compilerPath": {
+					"type": "string",
+					"default": "g++",
+					"description": "Path to the C++ compiler executable (g++ from MinGW-w64 on Windows, or any g++/clang++ on Linux/macOS)."
+				},
+				"graphics-h-runner.autoDetect": {
+					"type": "boolean",
+					"default": true,
+					"markdownDescription": "When `#include <graphics.h>` is detected, automatically compile with BGI linker flags. When disabled, BGI flags are always applied for every build."
+				},
+				"graphics-h-runner.linuxLibrary": {
+					"type": "string",
+					"enum": [
+						"auto",
+						"sdl_bgi",
+						"libgraph"
+					],
+					"enumDescriptions": [
+						"Prefer SDL_bgi, fall back to libgraph (uses Setup Doctor probe results)",
+						"SDL_bgi (-lSDL_bgi -lSDL2 -lm)",
+						"libgraph (-lgraph)"
+					],
+					"default": "auto",
+					"description": "Which graphics.h implementation to link against on Linux/macOS."
+				},
+				"graphics-h-runner.staticLinkWindows": {
+					"type": "boolean",
+					"default": true,
+					"description": "Windows only: add -static-libgcc -static-libstdc++ so the produced .exe runs without MinGW runtime DLLs."
+				},
+				"graphics-h-runner.extraIncludePaths": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					},
+					"default": [],
+					"description": "Extra include directories passed as -I (useful when SDL_bgi or WinBGIM is installed in a non-standard location)."
+				},
+				"graphics-h-runner.extraLibPaths": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					},
+					"default": [],
+					"description": "Extra library directories passed as -L."
+				},
+				"graphics-h-runner.extraCompilerArgs": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					},
+					"default": [],
+					"description": "Extra arguments passed to the compiler, e.g. [\"-std=c++17\", \"-Wall\"]."
+				},
+				"graphics-h-runner.showStatusBarItem": {
+					"type": "boolean",
+					"default": true,
+					"description": "Show the BGI environment indicator in the status bar. Clicking it runs the Setup Doctor."
+				},
+				"graphics-h-runner.celebrations.enabled": {
+					"type": "boolean",
+					"default": true,
+					"description": "Show a confetti animation over the graphics.h panel on every successful compilation and a short show when the panel first opens each session. Compile errors produce a full-screen error overlay presenting the first compiler messages. The Fireworks Simulator button always works."
+				},
+				"graphics-h-runner.restoreSettingsOnUninstall": {
+					"type": "boolean",
+					"default": true,
+					"markdownDescription": "Clean exit guarantee: the original values of every setting \"Complete graphics.h Run Setup\" changes are snapshotted before the first write, and UNINSTALLING the extension automatically restores them (F5 launch.json, Code Runner executor, build task, compiler paths). Turn off to keep the setup after uninstall. The command \"Restore Original Settings\" performs the same restore manually at any time."
+				}
+			}
+		},
+		"keybindings": [
+			{
+				"command": "graphics-h-runner.compileAndRun",
+				"key": "ctrl+alt+r",
+				"when": "editorTextFocus && resourceLangId == cpp"
+			},
+			{
+				"command": "graphics-h-runner.compileAndRun",
+				"key": "ctrl+alt+r",
+				"when": "editorTextFocus && resourceLangId == c"
+			},
+			{
+				"command": "graphics-h-runner.compile",
+				"key": "ctrl+alt+b",
+				"when": "editorTextFocus && resourceLangId == cpp"
+			},
+			{
+				"command": "graphics-h-runner.compile",
+				"key": "ctrl+alt+b",
+				"when": "editorTextFocus && resourceLangId == c"
+			},
+			{
+				"command": "graphics-h-runner.stopProgram",
+				"key": "ctrl+alt+s",
+				"when": "true"
+			}
+		],
+		"menus": {
+			"editor/title/run": [
+				{
+					"command": "graphics-h-runner.compileAndRun",
+					"when": "resourceLangId == cpp || resourceLangId == c",
+					"group": "navigation@1"
+				},
+				{
+					"command": "graphics-h-runner.compile",
+					"when": "resourceLangId == cpp || resourceLangId == c",
+					"group": "navigation@2"
+				}
+			],
+			"editor/context": [
+				{
+					"command": "graphics-h-runner.compileAndRun",
+					"when": "resourceLangId == cpp || resourceLangId == c",
+					"group": "graphics_h@1"
+				},
+				{
+					"command": "graphics-h-runner.compile",
+					"when": "resourceLangId == cpp || resourceLangId == c",
+					"group": "graphics_h@2"
+				}
+			],
+			"view/title": [
+				{
+					"command": "graphics-h-runner.cheatSheet",
+					"when": "view == graphics-h-runner.programs",
+					"group": "navigation@0"
+				},
+				{
+					"command": "graphics-h-runner.reloadPanel",
+					"when": "view == graphics-h-runner.fallback || view == graphics-h-runner.fallbackPrograms",
+					"group": "navigation@0"
+				},
+				{
+					"command": "graphics-h-runner.setupEverything",
+					"when": "view == graphics-h-runner.fallback",
+					"group": "navigation@1"
+				},
+				{
+					"command": "graphics-h-runner.doctor",
+					"when": "view == graphics-h-runner.fallback",
+					"group": "navigation@2"
+				},
+				{
+					"command": "graphics-h-runner.fireworks",
+					"when": "view == graphics-h-runner.fallbackPrograms && !graphics-h-runner.fireworksRunning",
+					"group": "navigation@1"
+				},
+				{
+					"command": "graphics-h-runner.stopFireworks",
+					"when": "view == graphics-h-runner.fallbackPrograms && graphics-h-runner.fireworksRunning",
+					"group": "navigation@1"
+				}
+			]
+		},
+		"snippets": [
+			{
+				"language": "cpp",
+				"path": "./snippets/cpp.json"
+			},
+			{
+				"language": "c",
+				"path": "./snippets/cpp.json"
+			}
+		]
+	},
+	"scripts": {
+		"vscode:prepublish": "npm run compile && npm run bundle",
+		"compile": "tsc -p ./",
+		"bundle": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --platform=node --format=cjs --target=node18 --external:vscode --sourcemap=external --legal-comments=none --log-level=warning",
+		"watch": "tsc -watch -p ./"
+	},
+	"devDependencies": {
+		"@types/node": "^20.14.0",
+		"@types/vscode": "^1.80.0",
+		"@vscode/test-electron": "^3.1.0",
+		"esbuild": "^0.28.2",
+		"typescript": "^5.4.5"
+	},
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/mythos0/graphics-h-runner.git"
+	},
+	"bugs": {
+		"url": "https://github.com/mythos0/graphics-h-runner/issues"
+	},
+	"homepage": "https://github.com/mythos0/graphics-h-runner#readme",
+	"dependencies": {
+		"@sentry/node": "^10.75.3"
+	}
 }

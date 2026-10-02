@@ -13,6 +13,7 @@
 #include <iostream>
 #include <cstdlib>
 #include <cmath>
+#include <ctime>      /* time() — older MinGW flavors do not leak it */
 
 using namespace std;
 

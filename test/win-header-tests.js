@@ -11,14 +11,26 @@
  * int* to int". This gate would have caught it before v1.5.0 shipped.
  *
  * How it works: downloads graphics.h + winbgim.h from the same URLs
- * src/setup.ts installs (keep in sync!), then runs
- *   g++ -fsyntax-only -D_WIN32 -I test/stubs -I <headers> samples/*.cpp
+ * src/setup.ts installs (keep in sync!), then compiles every sample
+ *   <win-g++> -fsyntax-only -D_WIN32 -I test/stubs -I <headers> samples/*.cpp
  * -D_WIN32 activates the exact code path a Windows user compiles (samples
  * carry #ifdef _WIN32 shims). Only syntax is checked — nothing links, so
  * no Windows libraries are needed.
  *
- * Requirements: g++ and network access. Skips cleanly (exit 0) when g++ is
- * unavailable so constrained environments are not blocked.
+ * Toolchain preference (v1.5.21): a REAL MinGW-w64 g++ is used when one is
+ * available — BGI_WIN_GXX env override, then x86_64-w64-mingw32-g++ / 
+ * x86_64-w64-mingw32-g++-posix on PATH. A real MinGW toolchain ships the
+ * SAME C/C++ standard headers a Windows user compiles against, which is
+ * strictly more faithful than Linux g++ (field bug: a sample using time()
+ * without <ctime> compiled on glibc, which leaks the declaration, but
+ * failed on a user's stricter MinGW — see strict-include-tests.js). When
+ * only Linux g++ exists it is still used, with a warning that its glibc
+ * headers leak more declarations than MinGW's; strict-include-tests.js
+ * covers that gap statically.
+ *
+ * Requirements: g++ (or a mingw cross g++) and network access. Skips
+ * cleanly (exit 0) when neither is available so constrained environments
+ * are not blocked.
  */
 'use strict';
 const { spawnSync } = require('child_process');
@@ -30,6 +42,20 @@ const path = require('path');
 const ROOT = path.join(__dirname, '..');
 const SAMPLES = path.join(ROOT, 'samples');
 const STUBS = path.join(__dirname, 'stubs');
+
+/* v1.5.21: prefer a real MinGW-w64 cross g++ over Linux g++ — same class of
+ * standard headers a Windows user compiles against. BGI_WIN_GXX wins so CI
+ * machines can point at an extracted toolchain anywhere. */
+function pickWinGxx() {
+  const candidates = [];
+  if (process.env.BGI_WIN_GXX) candidates.push(process.env.BGI_WIN_GXX);
+  candidates.push('x86_64-w64-mingw32-g++', 'x86_64-w64-mingw32-g++-posix', 'i686-w64-mingw32-g++');
+  for (const c of candidates) {
+    const probe = spawnSync(c, ['--version'], { encoding: 'utf8' });
+    if (!probe.error && probe.status === 0) return { cmd: c, real: true };
+  }
+  return { cmd: 'g++', real: false };
+}
 
 /* keep these URLs in sync with src/setup.ts (WINBGIM sources) */
 const HEADER_URLS = [
@@ -60,10 +86,18 @@ function download(url, dest, redirects) {
 }
 
 async function main() {
-  const gxx = spawnSync('g++', ['--version'], { encoding: 'utf8' });
+  const picked = pickWinGxx();
+  const GXX = picked.cmd;
+  const gxx = spawnSync(GXX, ['--version'], { encoding: 'utf8' });
   if (gxx.error || gxx.status !== 0) {
-    console.log('win-header-tests: SKIPPED (g++ not available)');
+    console.log('win-header-tests: SKIPPED (no usable g++)');
     return;
+  }
+  if (picked.real) {
+    console.log('win-header-tests: using REAL MinGW toolchain ' + GXX +
+      ' (' + (gxx.stdout || '').split('\n')[0] + ')');
+  } else {
+    console.log('win-header-tests: using Linux g++ fallback — glibc headers leak MORE declarations than MinGW; strict-include-tests.js covers that gap statically. Set BGI_WIN_GXX (or install g++-mingw-w64-x86-64) for the faithful run.');
   }
 
   const incDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bgi-winhdr-'));
@@ -81,7 +115,7 @@ async function main() {
     let pass = 0;
     const failures = [];
     for (const f of files) {
-      const r = spawnSync('g++', ['-fsyntax-only', '-D_WIN32', '-I', STUBS, '-I', incDir,
+      const r = spawnSync(GXX, ['-fsyntax-only', '-D_WIN32', '-I', STUBS, '-I', incDir,
                                   path.join(SAMPLES, f)], { encoding: 'utf8' });
       if (r.status === 0) {
         pass++;

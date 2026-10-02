@@ -13,7 +13,7 @@
       "exitCode": 0,
       "shot": "/home/z/my-project/push-work/fresh-155/docs/screenshots/01_snake_game.png",
       "analysis": {
-        "nonblack": 0.0178,
+        "nonblack": 0.0194,
         "unique_colors": 10
       },
       "cmd": "g++ -I/home/z/my-project/bgi-env/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include/x86_64-linux-gnu /home/z/my-project/push-work/fresh-155/samples/01_snake_game.cpp -o /home/z/my-project/push-work/fresh-155/build/01_snake_game -L/home/z/my-project/bgi-env/usr/lib -Wl,-rpath,/home/z/my-project/bgi-env/usr/lib -L/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -Wl,-rpath,/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -lSDL_bgi -lSDL2 -lm",
@@ -313,7 +313,7 @@
       "exitCode": 0,
       "shot": "/home/z/my-project/push-work/fresh-155/docs/screenshots/41_lab_3d_wireframe_cube.png",
       "analysis": {
-        "nonblack": 0.0029,
+        "nonblack": 0.0027,
         "unique_colors": 4
       },
       "cmd": "g++ -I/home/z/my-project/bgi-env/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include/x86_64-linux-gnu /home/z/my-project/push-work/fresh-155/samples/41_lab_3d_wireframe_cube.cpp -o /home/z/my-project/push-work/fresh-155/build/41_lab_3d_wireframe_cube -L/home/z/my-project/bgi-env/usr/lib -Wl,-rpath,/home/z/my-project/bgi-env/usr/lib -L/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -Wl,-rpath,/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -lSDL_bgi -lSDL2 -lm",

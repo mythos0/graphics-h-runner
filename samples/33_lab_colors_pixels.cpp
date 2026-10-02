@@ -7,6 +7,7 @@
 #include <graphics.h>
 #include <iostream>
 #include <cstdlib>
+#include <ctime>      /* time() — older MinGW flavors do not leak it */
 
 using namespace std;
 

@@ -4,6 +4,24 @@ All notable changes to this extension are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.21] — 2026-10-02
+
+Ten of the twenty-one shipped programs relied on a standard header they never included — fixed for every compiler, and updated examples now actually reach the machines that have older copies.
+
+### Fixed
+- **`'time' was not declared in this scope` on a real user's machine.** `32_lab_first_window.cpp` (reported) and eight more lab programs (`33`–`36`, `38`–`41`) used `time()` without `#include <ctime>`, and `28_bresenham_circle_lab.cpp` used `sprintf()` without `#include <cstdio>`. They compiled in every test we ran because modern mingw-w64's `<iostream>` chain and glibc leak those declarations transitively — but stricter/older MinGW flavors common in classrooms (TDM-GCC, nuwen, MinGW.org, older mingw-w64) do not, and the user's compile died on line 92. All ten samples now include exactly what they use; explicit includes are never a bug.
+- **Stale example copies could never heal.** Example files are written into `graphics-h-programs/` once and deliberately never overwritten — which also meant a bug fixed in a later release never reached an existing copy. Opening an example whose on-disk content differs from the shipped source now offers **Replace with Updated Example / Keep Mine** (one-time per shipped version, answered offers never re-ask, a dismissed toast asks again, CRLF-only differences are not treated as edits). "Open Examples Folder" makes the same offer once for the whole batch instead of one toast per file.
+
+### Added
+- **`test/strict-include-tests.js` (new gate, 21/21).** Static check that every shipped sample declares a standard header for every standard symbol it uses — comments and strings excluded. This is the gate that would have caught the field bug above, independent of any toolchain.
+- **`test/win-header-tests.js` now prefers a REAL MinGW-w64 cross-compiler** (`BGI_WIN_GXX` env override, then the common `x86_64-w64-mingw32-g++` names on PATH) so the Windows-side gate compiles against the same C/C++ standard headers a Windows user has; Linux g++ remains a documented fallback.
+- **The Xvfb harness in `test/run-tests.js` now heals its own display state.** The old code deleted the X11 socket unconditionally, which could strip it from under a live Xvfb of a previous session — the zombie then held the display lock forever ("Server is already active") with no socket to serve clients, and every later run aborted. The harness now reads the lock's owner PID: a live healthy server is adopted, a live broken one is killed, and only a dead owner's lock+socket are removed.
+
+### Verified
+- Real MinGW-w64 cross-compile (GCC 14): 21/21 samples compile against the exact WinBGIm headers the setup installs.
+- Full SDL_bgi battery on a virtual display: 21/21 samples compile, run, screenshot and self-exit cleanly.
+- Unit suites (registry, view, tree-model, smoke-view, pc-states 61, celebrate, health, globalize 22, diagnostics, setup-download 21, deps-audit 14, uninstall-restore 28, robust, native-run, winbgim-repair 6, cheat-dom, cheat-sheet) and e2e (activation, native-run, uninstall-restore in a real VS Code host) all green.
+
 ## [1.5.20] — 2026-10-02
 
 Lab code now compiles in the real world, not just in CI: the compile path repairs broken installs by itself, textbook code compiles on Windows, and three dead-end dialogs became automatic fallbacks.
@@ -18,7 +36,7 @@ Lab code now compiles in the real world, not just in CI: the compile path repair
 - **Leaner Marketplace page.** The listing dropped its stale screenshot references (the `docs/` folder is not part of the published package, so the images rendered broken), the outdated 31/31 badge and the maintainer-facing sections; what remains is the quick start, a compact feature list, commands, settings and troubleshooting.
 - Panels/messages updated for the new fallbacks; `test/winbgim-repair-tests.js` (6 checks) pins the patch and the failure classifiers.
 
-## [1.5.18] — 2026-10-02
+## [1.5.19] — 2026-10-02
 
 The Computer Graphics Lab returns bigger than ever, a Reset Setup button lands in the panel, and a real input bug is fixed in the SDL_bgi library the setup builds.
 

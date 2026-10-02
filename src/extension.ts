@@ -100,6 +100,9 @@ let storageDir: string | undefined; /* globalStorage — real files for folder-l
  * the snapshot metadata. */
 let extensionPath: string | undefined;
 let extVersion = '';
+/* v1.5.21: globalState for the stale-example self-heal (one offer per
+ * bundled sample version — answered offers never re-appear). */
+let globalState: vscode.Memento | undefined;
 let diagnostics: vscode.DiagnosticCollection | undefined;
 /* live run feedback for the status bar: idle -> compiling -> running -> idle */
 let runState: 'idle' | 'compiling' | 'running' = 'idle';
@@ -1808,6 +1811,59 @@ async function runDoctor(verbose: boolean): Promise<DoctorResult> {
 
 /* ---------------- sidebar: open a program as filename.cpp ---------------- */
 
+/* ---- v1.5.21: stale-example self-heal -----------------------------------
+ * Samples ship inside the extension; copies under graphics-h-programs/ (or
+ * extension storage) are written once and never touched again so user edits
+ * survive. That also means a bug FIXED in a later release never reaches an
+ * existing copy — the real story of 32_lab_first_window.cpp compiling on
+ * modern mingw-w64 but failing on stricter/older MinGW flavors ("'time' was
+ * not declared in this scope", user report on 1.5.20). When an on-disk
+ * example differs from the bundled source, offer Replace/Keep ONCE per
+ * bundled version; never overwrite without an explicit answer, and never
+ * re-ask after the user answered. Line endings are normalized before the
+ * compare so an editor CRLF rewrite is not treated as a user edit. */
+function normalizeSampleText(s: string): string {
+  return s.replace(/\r\n/g, '\n');
+}
+
+function isExampleStale(target: string, source: string): boolean {
+  try {
+    if (!fs.existsSync(target)) return false;
+    return normalizeSampleText(fs.readFileSync(target, 'utf8')) !== normalizeSampleText(source);
+  } catch {
+    return false;
+  }
+}
+
+function exampleOfferKey(filename: string, source: string): string {
+  /* djb2 over the bundled source: a NEW fix in a later release produces a
+   * NEW key, so the offer can legitimately re-appear for the next update. */
+  let h = 5381;
+  for (let i = 0; i < source.length; i++) h = ((h << 5) + h + source.charCodeAt(i)) | 0;
+  return 'exampleUpdateOffered.' + filename + '.' + (h >>> 0).toString(16);
+}
+
+async function offerExampleUpdate(target: string, filename: string, source: string): Promise<void> {
+  if (!globalState) return;
+  const key = exampleOfferKey(filename, source);
+  if (globalState.get(key) === true) return;
+  const pick = await vscode.window.showInformationMessage(
+    `${filename} on disk is older than the example shipped with graphics.h Runner — the shipped fix makes it compile on stricter/older compilers. Replace your copy?`,
+    'Replace with Updated Example',
+    'Keep Mine'
+  );
+  if (pick === 'Replace with Updated Example') {
+    fs.writeFileSync(target, source, 'utf8');
+    log('[programs] example updated with user consent: ' + target);
+    void vscode.window.showInformationMessage(`Updated ${filename} from the extension's fixed examples.`);
+  } else if (pick === 'Keep Mine') {
+    log('[programs] example update declined for ' + filename);
+  }
+  /* only an explicit answer records the key — a dismissed toast asks again
+   * next open (accidental dismissal should not hide the fix forever). */
+  if (pick) await globalState.update(key, true);
+}
+
 async function openProgram(program: LoadedProgram): Promise<void> {
   if (!program || !program.source) {
     vscode.window.showErrorMessage('No program selected.');
@@ -1821,6 +1877,8 @@ async function openProgram(program: LoadedProgram): Promise<void> {
         fs.mkdirSync(path.dirname(target), { recursive: true });
         fs.writeFileSync(target, program.source, 'utf8');
         log('[programs] created ' + target);
+      } else if (isExampleStale(target, program.source)) {
+        await offerExampleUpdate(target, program.filename, program.source);
       }
       const doc = await vscode.workspace.openTextDocument(target);
       await vscode.window.showTextDocument(doc, { preview: false });
@@ -1834,6 +1892,8 @@ async function openProgram(program: LoadedProgram): Promise<void> {
       if (!fs.existsSync(realFile)) {
         fs.writeFileSync(realFile, program.source, 'utf8');
         log('[programs] created ' + realFile + ' (no workspace folder open)');
+      } else if (isExampleStale(realFile, program.source)) {
+        await offerExampleUpdate(realFile, program.filename, program.source);
       }
       const doc = await vscode.workspace.openTextDocument(realFile);
       await vscode.window.showTextDocument(doc, { preview: false });
@@ -1868,10 +1928,34 @@ async function openExamplesFolder(context: vscode.ExtensionContext): Promise<voi
     if (folder) {
       const dir = path.join(folder, 'graphics-h-programs');
       fs.mkdirSync(dir, { recursive: true });
+      /* v1.5.21: create missing copies, collect stale ones, then make ONE
+       * batch Replace/Keep offer — 21 individual toasts would be spam. */
+      const stale: LoadedProgram[] = [];
       for (const prog of catalog) {
         const target = path.join(dir, prog.filename);
         if (!fs.existsSync(target)) {
           fs.writeFileSync(target, prog.source, 'utf8');
+        } else if (isExampleStale(target, prog.source)) {
+          stale.push(prog);
+        }
+      }
+      if (stale.length && globalState) {
+        const batchKey = 'exampleUpdateOffered.batch.' +
+          stale.map((p) => p.filename + ':' + exampleOfferKey(p.filename, p.source).slice(-6)).join(',');
+        if (globalState.get(batchKey) !== true) {
+          const pick = await vscode.window.showInformationMessage(
+            `${stale.length} example program(s) in graphics-h-programs/ are older than the fixed versions shipped with the extension. Replace them?`,
+            'Replace All',
+            'Keep Mine'
+          );
+          if (pick === 'Replace All') {
+            for (const prog of stale) {
+              fs.writeFileSync(path.join(dir, prog.filename), prog.source, 'utf8');
+              log('[programs] example updated with user consent: ' + path.join(dir, prog.filename));
+            }
+            void vscode.window.showInformationMessage(`Updated ${stale.length} example program(s).`);
+          }
+          if (pick) await globalState.update(batchKey, true);
         }
       }
       log('[examples] copied ' + catalog.length + ' programs to ' + dir);
@@ -2073,6 +2157,7 @@ export function activate(context: vscode.ExtensionContext): void {
   log(`[programs] panel catalog: ${catalog.length} programs loaded`);
   storageDir = context.globalStorageUri.fsPath;
   extensionPath = context.extensionPath;
+  globalState = context.globalState;
   extVersion = String((context.extension.packageJSON as { version?: string } | undefined)?.version || '');
   const version: string = String(context.extension.packageJSON?.version || '0.0.0');
   const panelProvider = new GhPanelProvider(context.extensionPath, version, catalog, (msg) => {

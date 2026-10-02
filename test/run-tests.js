@@ -45,20 +45,51 @@ const EXTRA_LIBS = [
 const DISPLAY = ':112';
 const DISPLAY_NUM = '112';
 
-/** Remove stale X11 socket files left behind by killed Xvfb instances.
- *  Without this, a fresh Xvfb may bind next to a dead socket file and
- *  clients can hang forever in the connection handshake. */
-function cleanStaleSockets() {
+/** v1.5.21: heal the X display state before binding — the old code removed
+ * the socket file unconditionally, which could strip the socket out from
+ * under a LIVE Xvfb from a previous session; the zombie then held the
+ * display lock forever ("Server is already active") with no socket to
+ * serve clients, and every later run aborted. Now: read the lock's owner
+ * PID — a live healthy server is ADOPTED, a live broken one (socket gone)
+ * is killed, and only a dead/absent owner's lock+socket are removed.
+ * Returns 'adopted' when a live healthy Xvfb already owns the display. */
+function readXLockPid(n) {
   try {
-    for (const f of fs.readdirSync('/tmp/.X11-unix')) {
-      if (f === 'X' + DISPLAY_NUM) {
-        fs.unlinkSync(path.join('/tmp/.X11-unix', f));
-        console.log(`  removed stale socket /tmp/.X11-unix/${f}`);
-      }
-    }
+    const txt = fs.readFileSync('/tmp/.X' + n + '-lock', 'utf8').trim();
+    const pid = parseInt(txt.split('\n')[0].replace(/[^0-9]/g, ''), 10);
+    return Number.isFinite(pid) && pid > 0 ? pid : null;
   } catch {
-    /* dir may not exist yet — fine */
+    return null; /* no lock */
   }
+}
+
+function pidAlive(pid) {
+  if (!pid) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (e) {
+    return e && e.code === 'EPERM'; /* alive but owned by someone else */
+  }
+}
+
+async function reconcileXDisplay() {
+  const sock = '/tmp/.X11-unix/X' + DISPLAY_NUM;
+  const lockPid = readXLockPid(DISPLAY_NUM);
+  if (pidAlive(lockPid)) {
+    let sockThere = false;
+    try { sockThere = fs.existsSync(sock); } catch { sockThere = false; }
+    if (sockThere) {
+      console.log(`  adopting live Xvfb on ${DISPLAY} (pid ${lockPid})`);
+      return 'adopted';
+    }
+    console.log(`  broken Xvfb on ${DISPLAY} (pid ${lockPid} alive, socket missing) — killing it so a fresh server can bind`);
+    try { process.kill(lockPid, 'SIGKILL'); } catch { /* already gone */ }
+    for (let i = 0; i < 10 && pidAlive(lockPid); i++) await sleep(200);
+  }
+  try { fs.rmSync('/tmp/.X' + DISPLAY_NUM + '-lock', { force: true }); } catch { /* fine */ }
+  try { fs.rmSync(sock, { force: true }); } catch { /* fine */ }
+  return 'clean';
 }
 const SHOT_AT = {
   '01_snake_game.cpp': 3.0,
@@ -144,14 +175,20 @@ async function main() {
            shutting down and hold the display lock briefly) ---- */
   console.log('── Starting Xvfb on ' + DISPLAY + ' ──');
   let xvfb = null;
+  let adopted = false;
   let lastErr = '';
   let started = false;
   for (let attempt = 1; attempt <= 4 && !started; attempt++) {
-    cleanStaleSockets();
+    const state = await reconcileXDisplay();
+    if (state === 'adopted') {
+      started = true;
+      adopted = true;
+      break;
+    }
     if (xvfb) {
       try { xvfb.kill('SIGKILL'); } catch { /* ignore */ }
       await sleep(1200);
-      cleanStaleSockets();
+      await reconcileXDisplay();
     }
     xvfb = sh('Xvfb', [DISPLAY, '-screen', '0', '1024x768x24', '-nolisten', 'tcp']);
     xvfb.stderr.on('data', (d) => { lastErr += d.toString(); });
@@ -182,7 +219,7 @@ async function main() {
     '-video_size', GRAB_SIZE, '-i', DISPLAY, '-frames:v', '1', path.join(BUILD_DIR, 'health.png')]);
   if (health.code !== 0) {
     console.error('Xvfb health check failed — aborting.');
-    xvfb.kill();
+    if (xvfb) xvfb.kill();
     process.exit(1);
   }
   console.log('  Xvfb ready (socket + grab health check passed)');
@@ -295,7 +332,9 @@ async function main() {
   }
 
   /* ---- 8. cleanup + summary ---- */
-  xvfb.kill();
+  /* only kill a server WE spawned — an adopted live server belongs to
+   * whatever session started it and must be left alone */
+  if (xvfb && !adopted) xvfb.kill();
 
   fs.writeFileSync(RESULTS_PATH, JSON.stringify({ doctor: { graphicsReady: doctor.graphicsReady, bestLibrary: doctor.bestLibrary }, results }, null, 2));
 
