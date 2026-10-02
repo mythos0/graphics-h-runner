@@ -7,16 +7,16 @@
         "nonblack": 0.2277,
         "unique_colors": 7
       },
-      "secs": "6.7"
+      "secs": "6.8"
     },
     "rfx02_gravity_bounce.cpp": {
       "ok": true,
       "exit": 0,
       "analysis": {
-        "nonblack": 0.0326,
+        "nonblack": 0.0327,
         "unique_colors": 6
       },
-      "secs": "7.5"
+      "secs": "7.6"
     },
     "rfx03_conio_menu.cpp": {
       "ok": true,
@@ -25,7 +25,7 @@
         "nonblack": 0.0552,
         "unique_colors": 10
       },
-      "secs": "8.3"
+      "secs": "8.4"
     },
     "rfx04_julia_morph.cpp": {
       "ok": true,
@@ -34,7 +34,7 @@
         "nonblack": 0.2493,
         "unique_colors": 23
       },
-      "secs": "6.7"
+      "secs": "6.8"
     },
     "rfx05_image_ops.cpp": {
       "ok": true,
@@ -52,7 +52,7 @@
         "nonblack": 0.013,
         "unique_colors": 4
       },
-      "secs": "5.3"
+      "secs": "5.4"
     },
     "rfx07_text_matrix.cpp": {
       "ok": true,
@@ -79,7 +79,7 @@
         "nonblack": 0.4946,
         "unique_colors": 16
       },
-      "secs": "5.2"
+      "secs": "5.3"
     },
     "rfx10_key_echo.cpp": {
       "ok": true,
@@ -112,7 +112,7 @@
   "E": {
     "count": 2,
     "first": {
-      "file": "/home/z/my-project/push-work/clone/build/robust/rfx12_broken.cpp",
+      "file": "/home/z/my-project/push-work/fresh-155/build/robust/rfx12_broken.cpp",
       "line": 5,
       "column": 5,
       "severity": "error",

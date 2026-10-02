@@ -1,8 +1,8 @@
 {
   "name": "graphics-h-runner",
   "displayName": "graphics.h Runner — One-Click Setup",
-  "description": "Compile and run C++ graphics.h (BGI/WinBGIm/SDL_bgi) programs with one keypress or F5. One command auto-installs the whole toolchain — compiler, graphics library and linker flags — then wires the native VS Code run options, shows compiler errors in the Problems panel, and ships three complete games (Snake, 2-Player Football, Bounce), an 18-program Computer Graphics Lab that teaches from zero to advanced, a searchable graphics.h reference and a Setup Doctor.",
-  "version": "1.5.19",
+  "description": "Compile and run C++ graphics.h (WinBGIm/SDL_bgi) with one keypress or F5. One command auto-installs the compiler, graphics library and native run integration; 21 bundled games and labs; Setup Doctor; Reset Setup.",
+  "version": "1.5.20",
   "publisher": "mythos0-labs",
   "author": {
     "name": "Department of CSE, Dhaka International University",
@@ -27,11 +27,6 @@
       "url": "https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-blue",
       "href": "https://github.com/mythos0/graphics-h-runner",
       "description": "Platforms"
-    },
-    {
-      "url": "https://img.shields.io/badge/Tests-31%2F31%20screenshot%20verified-brightgreen",
-      "href": "https://github.com/mythos0/graphics-h-runner/tree/main/docs/screenshots",
-      "description": "Sample tests"
     },
     {
       "url": "https://img.shields.io/github/v/tag/mythos0/graphics-h-runner?label=release&sort=semver",

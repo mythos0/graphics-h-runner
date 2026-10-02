@@ -63,6 +63,7 @@ exports.compilerArchitecture = compilerArchitecture;
 exports.bgiLinkProbe = bgiLinkProbe;
 exports.installCompilerWindowsDirect = installCompilerWindowsDirect;
 exports.installWinbgimWindows = installWinbgimWindows;
+exports.patchWinbgimHeaderConstChar = patchWinbgimHeaderConstChar;
 exports.validateWinbgimArtifact = validateWinbgimArtifact;
 exports.describeBgiProbeFailure = describeBgiProbeFailure;
 exports.patchSdlBgiSources = patchSdlBgiSources;
@@ -732,7 +733,58 @@ async function installWinbgimWindows(storageRoot, fetchBuf) {
     fs.writeFileSync(path.join(includeDir, 'graphics.h'), await fetchFirst('header', exports.WINBGIM_SOURCES.graphicsH));
     fs.writeFileSync(path.join(includeDir, 'winbgim.h'), await fetchFirst('header', exports.WINBGIM_SOURCES.winbgimH));
     fs.writeFileSync(path.join(libDir, 'libbgi.a'), await fetchFirst('library', exports.WINBGIM_SOURCES.libbgiA));
+    /* v1.5.20: const-correct the text API in the storage WinBGIm headers so
+     * Turbo C++ textbook code (string literals, const char*) compiles on
+     * Windows too — the Linux SDL_bgi header has had this since v1.4.9.
+     * ABI-safe: the BGI text functions are extern "C" in winbgim.h and the
+     * library never writes through the text pointers. */
+    patchWinbgimHeaderConstChar(includeDir, log);
     return { includeDir, libDir, log };
+}
+/**
+ * v1.5.20: const-correct the text/file-name API in the INSTALLED WinBGIm
+ * headers (storage copy — the make-global step copies these into the
+ * toolchain, so the patch rides along). WinBGIm declares
+ *   outtext(char*), outtextxy(int,int,char*), textheight(char*),
+ *   textwidth(char*), initgraph(int*,int*,char*), installuserfont(char*)
+ * with non-const params; Turbo C++ textbook code passes string literals
+ * and const char* to these constantly, which is a HARD compile error on
+ * MinGW ("invalid conversion from 'const char*' to 'char*'"). The library
+ * never writes through the pointers and the symbols are extern "C" (no
+ * mangling impact), so the header can safely take const char*.
+ * Idempotent: lines that already say `const char *` are left untouched.
+ */
+function patchWinbgimHeaderConstChar(includeDir, log) {
+    const targets = ['outtext', 'outtextxy', 'textheight', 'textwidth', 'initgraph', 'installuserfont', 'installuserdriver'];
+    for (const headerName of ['graphics.h', 'winbgim.h']) {
+        const header = path.join(includeDir, headerName);
+        try {
+            if (!fs.existsSync(header)) {
+                continue;
+            }
+            const lines = fs.readFileSync(header, 'utf8').split('\n');
+            let patched = 0;
+            const out = lines.map((line) => {
+                if (!line.includes('char *') || line.includes('const char *')) {
+                    return line;
+                }
+                const hit = targets.find((n) => new RegExp('\\b' + n + '\\s*\\(').test(line));
+                if (!hit) {
+                    return line;
+                }
+                patched++;
+                return line.replace(/char \*/g, 'const char *');
+            });
+            if (patched > 0) {
+                fs.writeFileSync(header, out.join('\n'));
+                log.push(`WinBGIm header const-corrected: ${headerName} (${patched} text API declarations) — textbook code with string literals compiles now`);
+            }
+        }
+        catch (e) {
+            /* cosmetic patch — never block the install */
+            log.push('WinBGIm header const-correctness patch skipped for ' + headerName + ': ' + String(e));
+        }
+    }
 }
 /** Minimum plausible size for the WinBGIm64 archive (real one is ~0.2-0.5 MB). */
 exports.LIBBGI_MIN_BYTES = 50000;

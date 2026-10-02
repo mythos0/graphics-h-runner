@@ -104,6 +104,21 @@ export function looksLikeBgiLinkFailure(compilerText: string): boolean {
 }
 
 /**
+ * v1.5.20: True when the compiler output says the INSTALLED WinBGIm files
+ * are stale or broken — unpatched pre-const headers (Turbo C++ textbook
+ * literals fail with a conversion error), headers missing entirely, or a
+ * truncated library. Drives the compile-time self-repair (re-download +
+ * const-patch + retry once) so lab code compiles again without the
+ * student ever running Setup Doctor by hand.
+ */
+export function looksLikeStaleWinbgimInstall(compilerText: string): boolean {
+  return (
+    /invalid conversion from ['"]const char\*['"] to ['"]char\*['"]/.test(compilerText) ||
+    /graphics\.h:\s*No such file|cannot open (source file )?graphics\.h/i.test(compilerText)
+  );
+}
+
+/**
  * Pick the most useful error "headers" for the big-font error overlay:
  * real `file:line:col: error: …` lines first, then linker errors, deduped,
  * with temp object-file prefixes stripped (`ccXyZ.o:main.cpp:(...)` ->

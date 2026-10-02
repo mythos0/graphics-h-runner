@@ -4,6 +4,20 @@ All notable changes to this extension are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.20] — 2026-10-02
+
+Lab code now compiles in the real world, not just in CI: the compile path repairs broken installs by itself, textbook code compiles on Windows, and three dead-end dialogs became automatic fallbacks.
+
+### Added
+- **Compile-time WinBGIm self-repair.** When a Windows compile fails with the classic signatures of a broken or stale install — every graphics symbol an `undefined reference` (truncated/mangled `libbgi.a`, the Sentry-reported failure class), `graphics.h: No such file`, or `invalid conversion from 'const char*' to 'char*'` — the extension now re-downloads and validates the WinBGIm trio, refreshes the global toolchain copies if the make-global step had spread them, and retries the compile ONCE, all before the student sees anything. Session-guarded so it can never loop.
+- **Textbook code compiles on Windows.** The WinBGIm headers declare `outtext`, `outtextxy`, `textheight`, `textwidth` and `initgraph` with non-const `char*` — so the textbook style every C course teaches (`outtextxy(x, y, "Hello")`, const strings, ternaries) failed on Windows with hard conversion errors, while the Linux SDL_bgi header has been const-corrected since 1.4.9. Complete Setup now const-corrects the installed WinBGIm headers too (ABI-safe: the BGI text API is `extern "C"` and the library never writes through the pointers). Verified against the real headers with a real MinGW-w64 cross-compile: 3 hard errors before the patch, 0 after.
+- **Compiler auto-heal.** If the configured compiler vanishes (deleted toolchain, rewritten PATH) while another working g++ exists in the known locations, it is found, persisted into the settings and the compile retries once instead of bouncing the student to Complete Setup.
+- **Run Last Build never dead-ends.** Pressing Run with no binary on disk now compiles first and then runs — the "Binary not found — Compile first?" dialog remains only for real compile failures.
+
+### Changed
+- **Leaner Marketplace page.** The listing dropped its stale screenshot references (the `docs/` folder is not part of the published package, so the images rendered broken), the outdated 31/31 badge and the maintainer-facing sections; what remains is the quick start, a compact feature list, commands, settings and troubleshooting.
+- Panels/messages updated for the new fallbacks; `test/winbgim-repair-tests.js` (6 checks) pins the patch and the failure classifiers.
+
 ## [1.5.18] — 2026-10-02
 
 The Computer Graphics Lab returns bigger than ever, a Reset Setup button lands in the panel, and a real input bug is fixed in the SDL_bgi library the setup builds.

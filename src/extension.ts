@@ -59,7 +59,7 @@ import {
   flushTelemetry,
   scrubText
 } from './instrument';
-import { parseCompilerOutput, capCompilerDiagnostics, looksLikeBgiLinkFailure, pickErrorHeaders } from './diagnostics';
+import { parseCompilerOutput, capCompilerDiagnostics, looksLikeBgiLinkFailure, looksLikeStaleWinbgimInstall, pickErrorHeaders } from './diagnostics';
 import { auditWindowsExe, buildAuditMessage } from './depsAudit';
 import { cmdRunLine, posixRunLine } from './runwrap';
 import {
@@ -73,7 +73,7 @@ import {
   TASK_LABEL,
   LAUNCH_CONFIG_NAME
 } from './nativeRun';
-import { makeGlobalWindows } from './globalize';
+import { makeGlobalWindows, computeGlobalTargets } from './globalize';
 import { Celebrator } from './celebrateHost';
 import type { CelebrationKind } from './celebrate';
 import { treeRunCommandId } from './programsTreeModel';
@@ -1079,7 +1079,195 @@ function resolvePlan(sourceFile: string, cfg: ExtensionConfig): CompilePlan {
 
 type CompileResult = 'ok' | 'failed' | 'no-compiler';
 
+interface CompileAttempt {
+  result: CompileResult;
+  compilerText: string;
+}
+
+/** session flag: the WinBGIm self-repair may run at most once — a retry
+ *  loop re-downloading a 274 KB library after every failed lab compile
+ *  would be its own bug */
+let winbgimRepairTried = false;
+
+/**
+ * v1.5.20 robust fallback — repair a broken/stale WinBGIm install in place:
+ * re-download the trio (validated, const-corrected) into extension storage
+ * and refresh the make-global toolchain copies if they exist. Every failure
+ * is non-fatal; the caller retries the compile once.
+ */
+async function repairWinbgimArtifacts(): Promise<boolean> {
+  if (!storageDir) {
+    return false;
+  }
+  try {
+    const res = await installWinbgimWindows(storageDir);
+    res.log.forEach((l) => log('[repair] ' + l));
+    /* the make-global copies (toolchain include/lib) must follow — a stale
+     * copy there would keep failing the repair */
+    const compiler = getConfig().compilerPath;
+    if (compiler && path.isAbsolute(compiler)) {
+      try {
+        const targets = computeGlobalTargets(compiler);
+        const gfx = path.join(res.includeDir, 'graphics.h');
+        const wbh = path.join(res.includeDir, 'winbgim.h');
+        const lib = path.join(res.libDir, 'libbgi.a');
+        for (let i = 0; i < targets.includeCandidates.length; i++) {
+          const incDir = targets.includeCandidates[i];
+          const libDir = targets.libCandidates[i];
+          if (fs.existsSync(path.join(incDir, 'graphics.h')) && fs.existsSync(path.join(incDir, 'winbgim.h'))) {
+            fs.copyFileSync(gfx, path.join(incDir, 'graphics.h'));
+            fs.copyFileSync(wbh, path.join(incDir, 'winbgim.h'));
+            fs.copyFileSync(lib, path.join(libDir, 'libbgi.a'));
+            log('[repair] refreshed the global toolchain copies in ' + incDir);
+            break;
+          }
+        }
+      } catch (e) {
+        log('[repair] toolchain copy refresh skipped: ' + String(e));
+      }
+    }
+    return true;
+  } catch (e) {
+    log('[repair] WinBGIm re-install failed: ' + String(e));
+    captureExtensionWarning('compile-time WinBGIm repair failed', { detail: String(e).slice(0, 200) });
+    return false;
+  }
+}
+
+/**
+ * v1.5.20 robust fallback — the configured compiler can vanish on a real PC
+ * (toolchain folder deleted, drive letter changed, PATH rewritten) while
+ * another working g++ still exists. Windows: discoverGppWindows() knows the
+ * storage toolchain, winget WinLibs and common IDE locations. Linux/macOS:
+ * an explicit path that died is healed back to the distro g++ when that one
+ * works. The heal is PERSISTED into the setting.
+ */
+async function healCompilerSetting(): Promise<string | undefined> {
+  try {
+    if (currentPlatform() === 'windows') {
+      const found = await findWorkingGpp();
+      if (found) {
+        await setCompilerPathSetting(found.gppPath);
+        log('[heal] compiler auto-healed: ' + found.gppPath + ' (' + found.version + ')');
+        return found.gppPath;
+      }
+      return undefined;
+    }
+    const configured = getConfig().compilerPath;
+    if (configured && configured !== 'g++' && path.isAbsolute(configured)) {
+      const probe = await verifyCompilerRun('g++');
+      if (probe.ok) {
+        await setCompilerPathSetting('g++');
+        log('[heal] stale compiler path healed back to the distro g++');
+        return 'g++';
+      }
+    }
+  } catch (e) {
+    log('[heal] compiler heal skipped: ' + String(e));
+  }
+  return undefined;
+}
+
+/**
+ * Compile with the full fallback ladder (v1.5.20):
+ *   1. plain compile (exact extension plan)
+ *   2. no-compiler → heal the compiler setting from known locations, retry
+ *   3. failure that looks like a broken/stale WinBGIm install → re-download
+ *      + const-patch the library once, retry
+ * Celebrations, diagnostics and the link-failure dialog fire ONCE for the
+ * FINAL result — a healed retry never flashes a fake error overlay first.
+ */
 async function compileSource(sourceFile: string): Promise<CompileResult> {
+  let attempt = await compileSourceOnce(sourceFile);
+
+  if (attempt.result === 'no-compiler') {
+    const healed = await healCompilerSetting();
+    if (healed) {
+      attempt = await compileSourceOnce(sourceFile);
+    }
+  }
+
+  if (
+    attempt.result === 'failed' &&
+    currentPlatform() === 'windows' &&
+    !winbgimRepairTried &&
+    detectGraphicsInclude(fs.existsSync(sourceFile) ? fs.readFileSync(sourceFile, 'utf8') : '') &&
+    (looksLikeBgiLinkFailure(attempt.compilerText) || looksLikeStaleWinbgimInstall(attempt.compilerText))
+  ) {
+    winbgimRepairTried = true;
+    log('[repair] the failure looks like a broken/stale WinBGIm install — repairing and retrying once');
+    addExtensionBreadcrumb('compile', 'winbgim self-repair', { file: path.basename(sourceFile) });
+    if (await repairWinbgimArtifacts()) {
+      attempt = await compileSourceOnce(sourceFile);
+    }
+  }
+
+  /* ---- final result only: status, celebrations, diagnostics, dialogs ---- */
+  const result = attempt.result;
+  const compilerText = attempt.compilerText;
+
+  /* v1.4.9 robustness fix: only clear the indicator when no program is
+   * still alive. A plain Compile (or a failed rebuild) while a graphics
+   * program runs used to flip the status bar to "idle" even though the
+   * runner terminal — and the window — were still up (Ctrl+Alt+S kept
+   * working, but the visible state lied). */
+  const stillRunning = !!runnerTerminal && !runnerTerminal.exitStatus;
+  setRunState(stillRunning ? 'running' : 'idle');
+  addExtensionBreadcrumb('compile', result, { file: path.basename(sourceFile) });
+  if (result === 'ok') {
+    celebrate('confetti'); /* v1.5.6: success confetti rains over the activity panel */
+    diagnostics?.delete(vscode.Uri.file(sourceFile));
+    if (currentPlatform() === 'windows') {
+      auditExeAfterBuild(binaryPathFor(sourceFile, currentPlatform()));
+    }
+  } else if (result === 'failed') {
+    /* v1.5.6: the snowfall is gone — a failed build now gets a relatable
+     * ERROR overlay: giant ✗ + shake, the actual compiler error headers in
+     * big type, and a red-ember rain for 5 s (click/Esc to dismiss). */
+    const errorHeaders = pickErrorHeaders(compilerText, 3, 120);
+    celebrate('error', errorHeaders);
+    /* Compile errors are the NORMAL edit-compile loop for a graphics.h
+     * teaching tool — they belong in the Problems panel and the output
+     * channel, NOT in the telemetry error inbox (a single student session
+     * could otherwise raise dozens of "g++ exited non-zero" issues). The
+     * first error lines ride along as a breadcrumb so any genuinely
+     * unrelated crash in the same session still carries compiler context. */
+    publishCompilerDiagnostics(sourceFile, compilerText);
+    const firstErrors = errorHeaders.join(' | ');
+    addExtensionBreadcrumb('compile', 'failed', {
+      file: path.basename(sourceFile),
+      errors: (firstErrors || 'no error lines captured').slice(0, 600)
+    });
+    /* v1.5.6: undefined references to graphics symbols = the graphics
+     * library could not be LINKED (classic: 32-bit MinGW.org g++ vs the
+     * 64-bit libbgi.a). Turn the wall of linker errors into one fix. */
+    if (looksLikeBgiLinkFailure(compilerText)) {
+      log('[deps] graphics library could not be linked — the compiler is incompatible with libbgi.a');
+      captureExtensionWarning('graphics library link failed (incompatible compiler/library)', {
+        file: path.basename(sourceFile)
+      });
+      void vscode.window
+        .showErrorMessage(
+          'The graphics library (libbgi.a) could not be LINKED — every graphics symbol is unresolved. ' +
+            'This compiler cannot use the installed 64-bit graphics library (typical cause: the legacy ' +
+            '32-bit MinGW.org g++). Complete Run Setup can install a compatible 64-bit MinGW-w64 ' +
+            'compiler automatically.',
+          'Complete Run Setup (recommended)',
+          'Show Output'
+        )
+        .then((pick) => {
+          if (pick === 'Complete Run Setup (recommended)') {
+            vscode.commands.executeCommand('graphics-h-runner.setupEverything');
+          } else if (pick === 'Show Output') {
+            showOutput(true);
+          }
+        });
+    }
+  }
+  return result;
+}
+
+async function compileSourceOnce(sourceFile: string): Promise<CompileAttempt> {
   const cfg = getConfig();
   const plan = resolvePlan(sourceFile, cfg);
 
@@ -1161,61 +1349,12 @@ async function compileSource(sourceFile: string): Promise<CompileResult> {
    * still alive. A plain Compile (or a failed rebuild) while a graphics
    * program runs used to flip the status bar to "idle" even though the
    * runner terminal — and the window — were still up (Ctrl+Alt+S kept
-   * working, but the visible state lied). */
+   * working, but the visible state lied). The full post-processing
+   * (celebrations, diagnostics, link-failure dialog) lives in the
+   * compileSource wrapper so a healed/repaired retry reports ONCE. */
   const stillRunning = !!runnerTerminal && !runnerTerminal.exitStatus;
   setRunState(stillRunning ? 'running' : 'idle');
-  addExtensionBreadcrumb('compile', result, { file: path.basename(sourceFile) });
-  if (result === 'ok') {
-    celebrate('confetti'); /* v1.5.6: success confetti rains over the activity panel */
-    diagnostics?.delete(vscode.Uri.file(sourceFile));
-    if (currentPlatform() === 'windows') {
-      auditExeAfterBuild(binaryPathFor(sourceFile, currentPlatform()));
-    }
-  } else if (result === 'failed') {
-    /* v1.5.6: the snowfall is gone — a failed build now gets a relatable
-     * ERROR overlay: giant ✗ + shake, the actual compiler error headers in
-     * big type, and a red-ember rain for 5 s (click/Esc to dismiss). */
-    const errorHeaders = pickErrorHeaders(compilerText, 3, 120);
-    celebrate('error', errorHeaders);
-    /* Compile errors are the NORMAL edit-compile loop for a graphics.h
-     * teaching tool — they belong in the Problems panel and the output
-     * channel, NOT in the telemetry error inbox (a single student session
-     * could otherwise raise dozens of "g++ exited non-zero" issues). The
-     * first error lines ride along as a breadcrumb so any genuinely
-     * unrelated crash in the same session still carries compiler context. */
-    publishCompilerDiagnostics(sourceFile, compilerText);
-    const firstErrors = errorHeaders.join(' | ');
-    addExtensionBreadcrumb('compile', 'failed', {
-      file: path.basename(sourceFile),
-      errors: (firstErrors || 'no error lines captured').slice(0, 600)
-    });
-    /* v1.5.6: undefined references to graphics symbols = the graphics
-     * library could not be LINKED (classic: 32-bit MinGW.org g++ vs the
-     * 64-bit libbgi.a). Turn the wall of linker errors into one fix. */
-    if (looksLikeBgiLinkFailure(compilerText)) {
-      log('[deps] graphics library could not be linked — the compiler is incompatible with libbgi.a');
-      captureExtensionWarning('graphics library link failed (incompatible compiler/library)', {
-        file: path.basename(sourceFile)
-      });
-      void vscode.window
-        .showErrorMessage(
-          'The graphics library (libbgi.a) could not be LINKED — every graphics symbol is unresolved. ' +
-            'This compiler cannot use the installed 64-bit graphics library (typical cause: the legacy ' +
-            '32-bit MinGW.org g++). Complete Run Setup can install a compatible 64-bit MinGW-w64 ' +
-            'compiler automatically.',
-          'Complete Run Setup (recommended)',
-          'Show Output'
-        )
-        .then((pick) => {
-          if (pick === 'Complete Run Setup (recommended)') {
-            vscode.commands.executeCommand('graphics-h-runner.setupEverything');
-          } else if (pick === 'Show Output') {
-            showOutput(true);
-          }
-        });
-    }
-  }
-  return result;
+  return { result, compilerText };
 }
 
 /** Parse the compiler's output and surface it in the Problems panel. */
@@ -1295,20 +1434,24 @@ async function runBinary(sourceFile: string): Promise<void> {
   const platform = currentPlatform();
   const bin = binaryPathFor(sourceFile, platform);
   if (!fs.existsSync(bin)) {
-    /* expected UX (Run before Compile) — the dialog below is the fix,
-     * telemetry noise is not: breadcrumb only. */
-    addExtensionBreadcrumb('run', 'binary not found', {
+    /* v1.5.20 robust fallback: "Run Last Build" with no binary on disk
+     * used to dead-end in a dialog. A student pressing Run wants the
+     * program — compile it right now, then run. The dialog remains only
+     * for a real compile failure. */
+    addExtensionBreadcrumb('run', 'binary missing — compiling first', {
       file: path.basename(sourceFile),
       bin: path.basename(bin)
     });
-    vscode.window.showErrorMessage(`Binary not found: ${bin}. Compile first.`, 'Compile now').then(
-      (pick) => {
-        if (pick === 'Compile now') {
-          vscode.commands.executeCommand('graphics-h-runner.compile');
-        }
+    log('[run] binary not found — compiling first (automatic fallback)');
+    const built = await compileSource(sourceFile);
+    if (built !== 'ok') {
+      if (built === 'no-compiler') {
+        showNoCompilerHelp();
+      } else {
+        showCompileFailure(sourceFile);
       }
-    );
-    return;
+      return;
+    }
   }
 
   /* v1.5.3: "Run" used to execute whatever binary was on disk — a student
