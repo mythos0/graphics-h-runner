@@ -4,59 +4,26 @@ All notable changes to this extension are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.5.16] — 2026-09-30
+## [1.5.18] — 2026-10-02
 
-The example section becomes the Snake Game; the Linux library pipeline is pinned and more honest.
+The Computer Graphics Lab returns bigger than ever, a Reset Setup button lands in the panel, and a real input bug is fixed in the SDL_bgi library the setup builds.
 
-### Changed
-- **The example section is now the Snake Game.** All previous example programs were removed and replaced by a single, complete graphics.h game: play with **W A S D or the arrow keys**, choose one of three difficulties (Easy wraps around the walls, Medium/Hard are deadly), chase red apples and timed 5× yellow bonuses, level up every five apples, pause with P or Space, and read the built-in help screen. Your name, the top-5 high scores, games played and apples eaten are saved after every game into a small, human-readable file (`snake_scores.db`, created next to your program).
-- **The Computer Graphics Lab is unchanged** — the 8 classic course-algorithm programs (Coordinate Viewer, Pixel Inspector, DDA, Bresenham line & circle, Midpoint Ellipse, 2D Transformations, Cohen–Sutherland Clipping) keep their own section in the panel and the list views.
+### Added
+- **The Computer Graphics Lab is back — 18 programs arranged from zero to advanced.** The game suite (1.5.16) had replaced the whole teaching list; the lab section now returns exactly as it was (Coordinate Viewer, Pixel Inspector, DDA Line, Bresenham Line, Bresenham Circle, Midpoint Ellipse, 2D Transformations, Cohen–Sutherland Clipping) and extends into a full course: **First Window** (start here, narrated step by step), **Colors & Pixels** (the 16-color palette, fill patterns, an RGB gradient), **Shapes & Text** (every primitive in one labeled scene plus all five fonts), **Keyboard & Mouse** (the extended-key protocol and mouse events with demo strokes), **Animation Loop** (erase → update → draw → delay demystified), **Sprites with getimage** (a UFO flying over a saved starfield), **Scanline Polygon Fill** implemented by hand, animated **Bézier Curves** via de Casteljau, recursive **Fractals** (Koch snowflake + Sierpinski triangle, depth on the +/− keys) and a **3D Wireframe Cube** with hand-written rotation matrices and perspective projection.
+- **Reset Setup action button.** The panel's action grid gains a ninth button that runs the same surgical restore as uninstalling (1.5.13): every setting Complete Run Setup ever wrote is reverted to its pre-extension value, behind a confirmation.
+- **Played, not just compiled.** The whole game suite was played end-to-end on a virtual display with synthetic keystrokes — menus, difficulty screens, live gameplay, charged shots, the pause screen, game over and the score database — and every one of the 21 bundled programs was verified against both WinBGIm headers and SDL_bgi (21/21 + 21/21).
 
 ### Fixed
-- **The SDL_bgi download is pinned.** Complete Run Setup now downloads the exact upstream commit the extension's patch set is validated against, instead of whatever the upstream `main` branch happens to contain that day. A fresh `main` checkout in late September produced libraries whose on-screen rendering could not be vouched for; a pinned commit guarantees every user gets the same, verified library. The moving refs remain only as fallbacks.
-- The setup patcher now says what it does: when the downloaded SDL_bgi revision already stores keyboard events itself (the `k_bhit` variant), the kbhit-peek patch is skipped **with a visible log line** instead of silently. If the patch applies (the `kbhit` spelling), `kbhit()`/`xkbhit()` only peek at the key event, so classic `while (kbhit()) { k = getch(); }` game loops no longer lose keys or freeze between keystrokes.
-- The Fireworks Simulator's error reporting no longer attributes unrelated extension-host crashes to this extension: a stack frame that merely *observed* an error (the bundled uncaught-exception handler) no longer counts as evidence that the extension caused it.
-- A "play again" on the Snake Game's game-over card now actually restarts the game instead of returning to the menu.
+- The football **Controls screen** no longer overlaps its columns at large font sizes ("Hold kick" ran into "charged shot"), and the Pause row now tells the truth: P pauses, Esc quits to the menu.
+- Bounce's help promised "Esc pauses", but no pause existed — Esc silently abandoned the run. A real pause screen now freezes the ball, shows "PAUSED — P resume / Esc quit to the menu", and a second Esc returns to the menu.
 
 ## [1.5.17] — 2026-10-01
 
-The example section becomes a full three-game suite, the Snake game gets every reported window and text fix, and fresh SDL_bgi builds learn resizable windows.
+The Game Suite ships — the example section becomes three complete games (initially published as 1.5.16 and refreshed as 1.5.17 within the same day):
 
-This release extends the Snake-only 1.5.16: two more complete games join the example section, the remaining teaching samples retire, and the library pipeline gains the resizable-window patch.
-
-### Added
-- **Snake** (`01_snake_game.cpp`) replaces the old teaching-sample list as example 1: arrows or
-  W A S D, three difficulties (Easy's walls wrap, Medium/Hard are deadly), timed yellow bonus
-  apples worth 5x points, level-ups every five apples, pause/help screens, a top-5 score table
-  and a tiny human-readable `snake_scores.db` that remembers your name, statistics and window
-  size. Sound effects are synthesized live and can be toggled in the menu.
-- **2-Player Football** (`02_football_game.cpp`) — a street-rules derby for two players on one
-  keyboard. The pitch is drawn **without a single built-in shape call**: no `rectangle()`, no
-  `circle()`, no `bar()`, no `line()` — every line, circle, arc, net and board is rasterized by
-  hand from `putpixel()` (Bresenham lines, midpoint circles, herringbone net hatching). Ball
-  physics carry momentum, spin-visible rolling, wall and post bounces; kick types (tap pass,
-  charged shot), AI keepers, two halves with sides swapping, a 90-second match clock, shots
-  counter and a persistent derby record.
-- **Bounce** (`03_bounce_game.cpp`) — the Nokia rubber-ball classic: charge jumps, yellow rings
-  to collect, spikes, springs, moving platforms and red herring boards, six levels with door
-  exits, diamonds banked for the score database, lives, checkpoint restarts — and a full
-  synthesized sound engine (pitch-by-impact bounces, ring chimes, spring boings, the door
-  jingle) with a toggle persisted next to your progress.
-
-### Fixed
-- **Snake window feel** (all three reported issues): rendering is double-buffered, so the
-  window no longer flickers; the window is resizable — drag its borders on SDL_bgi and the
-  board re-fits instantly, or pick S/M/L/XL in the menu; every font got bigger and
-  higher-contrast; and the selected menu row now shows a bright bar with black text plus
-  `> <` markers and an underline, so the selection is unmistakable on every platform.
-- Help, high-score and footer screens re-flow themselves: text wraps or the font steps down
-  instead of clipping, and score columns space themselves by their widest content, so nothing
-  merges or truncates at any window size.
-
-### Changed
-- The old 31 teaching samples (Hello graphics.h through Cohen–Sutherland Clipping) are no
-  longer bundled; the example section is exactly the three games. Their screenshots and README
-  references were updated accordingly.
+- **Snake** — the classic: WASD/arrow keys, three difficulties with wrap-around walls, timed bonus apples, level-ups every five apples, a help screen, a top-5 score database with statistics, synthesized sound, a resizable window and a demo AI for the test battery.
+- **2-Player Football** — a street-rules derby for two on one keyboard, the pitch drawn without a single built-in shape call (every line, circle and net hand-plotted with putpixel): charged shots, AI goalkeepers, two halves with side swap, goal celebrations, full-time statistics, a derby database and sound.
+- **Bounce** — the rubber-ball classic: hold to charge a jump, collect rings to open the exit door, diamonds, spikes, springs, moving platforms, six handcrafted levels, a following camera and synthesized sound effects.
 
 ## [1.5.15] — 2026-09-29
 

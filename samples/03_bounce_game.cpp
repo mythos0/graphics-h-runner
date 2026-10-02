@@ -653,6 +653,7 @@ static int  deathTimer;             /* ticks left of the pop animation   */
 static int  completeTimer;          /* door flag / LEVEL CLEAR! timer    */
 static bool gameoverSfxDone = false;
 static bool demoMode = false;       /* BGI_AUTOEXIT_MS battery mode      */
+static bool playPaused = false;     /* v1.5.16: Esc/P pause during play  */
 static int  camX, camY;             /* camera top-left in world pixels   */
 
 static void placeBall ( double x, double y )
@@ -1132,6 +1133,17 @@ static void drawPlayScreen ( int levelIdx, int livesLeft )
         snprintf(buf, sizeof(buf), "diamonds this run: %d", diamondsGot);
         textCenteredH(getmaxy() / 2 + 20, buf, WHITE, DEFAULT_FONT, fsz(2));
     }
+    if (playPaused) {
+        /* v1.5.16: real pause overlay (Esc first pauses, Esc again quits) */
+        int l = getmaxx() / 2 - 190, t = getmaxy() / 2 - 70;
+        int r = getmaxx() / 2 + 190, b = getmaxy() / 2 + 70;
+        setfillstyle(SOLID_FILL, BLACK); bar(l, t, r, b);
+        setcolor(YELLOW);   rectangle(l, t, r, b);
+        setcolor(DARKGRAY); rectangle(l + 4, t + 4, r - 4, b - 4);
+        textCenteredH(getmaxy() / 2 - 34, "PAUSED", YELLOW, GOTHIC_FONT, fsz(4));
+        textCenteredH(getmaxy() / 2 + 22, "P - resume", WHITE, DEFAULT_FONT, fsz(2));
+        textCenteredH(getmaxy() / 2 + 44, "Esc - quit to the menu", WHITE, DEFAULT_FONT, fsz(2));
+    }
     present();
 }
 
@@ -1145,20 +1157,6 @@ static void textCenteredH ( int y, const char* s, int color, int font, int size 
     setcolor(color);
     int w = textwidth((char*)s);
     outtextxy((getmaxx() - w) / 2, y, (char*)s);
-}
-
-/* centred DEFAULT_FONT text that drops a font size when the string would
- * be wider than the window — footer hints survive the smallest size (S) */
-static void textCenteredFitH ( int y, const char* s, int color, int size )
-{
-    int use = size;
-    settextstyle(DEFAULT_FONT, HORIZ_DIR, use);
-    while (use > 1 && textwidth((char*)s) > getmaxx() - 24) {
-        use--;
-        settextstyle(DEFAULT_FONT, HORIZ_DIR, use);
-    }
-    setcolor(color);
-    outtextxy((getmaxx() - textwidth((char*)s)) / 2, y, (char*)s);
 }
 
 static void shadowCenteredH ( int y, const char* s, int color, int font, int size )
@@ -1236,10 +1234,10 @@ static void drawMenu ( int selection, const BounceDB& db )
     snprintf(stats, sizeof(stats),
              "unlocked level %d/%d   |   diamonds banked %d",
              db.unlocked + 1, LEVEL_COUNT, db.diamonds);
-    textCenteredFitH(getmaxy() - 64, stats, LIGHTGRAY, fsz(2));
-    textCenteredFitH(getmaxy() - 40,
+    textCenteredH(getmaxy() - 64, stats, LIGHTGRAY, DEFAULT_FONT, fsz(2));
+    textCenteredH(getmaxy() - 40,
         "W/S choose   Enter select   +/- window size",
-        DARKGRAY, fsz(2));
+        DARKGRAY, DEFAULT_FONT, fsz(2));
 
     present();
 }
@@ -1282,8 +1280,8 @@ static void drawLevelSelect ( int selection, const BounceDB& db )
         }
     }
 
-    textCenteredFitH(getmaxy() - 64, "W/S/A/D choose   Enter play   Esc back",
-                  LIGHTGRAY, fsz(2));
+    textCenteredH(getmaxy() - 64, "W/S/A/D choose   Enter play   Esc back",
+                  LIGHTGRAY, DEFAULT_FONT, fsz(2));
     present();
 }
 
@@ -1309,7 +1307,7 @@ static void drawHelp ( )
         { "Spikes",       "they pop the ball - do not touch" },
         { "Springs",      "touch one to fly sky-high" },
         { "Movers",       "grey platforms carry you across gaps" },
-        { "Pause",        "Esc during play" }
+        { "Pause",        "Esc pauses, Esc again quits" }
     };
     int keySize = fsz(2);
     int rowStep = keySize * 8 + 12;
@@ -1480,6 +1478,7 @@ int main ( int argc, char* argv[] )
                     levelIdx = 0;
                     diamondsRun = 0;
                     lives = LIVES_MAX;
+                    playPaused = false;
                     startLevel(levelIdx, sx, sy);
                     screen = 3;
                 } else if (selection == 1) {
@@ -1506,6 +1505,7 @@ int main ( int argc, char* argv[] )
                 levelIdx = levelSel;
                 diamondsRun = 0;
                 lives = LIVES_MAX;
+                playPaused = false;
                 startLevel(levelIdx, sx, sy);
                 screen = 3;
             }
@@ -1520,7 +1520,14 @@ int main ( int argc, char* argv[] )
         } else if (screen == 3) {
             int k = pollKey();
             if (k == K_QUIT) { break; }
-            if (k == K_ESC) { screen = 0; continue; }
+            if (k == K_ESC) {
+                /* v1.5.16: first Esc pauses, a second Esc quits to the
+                 * menu (matches the help screen, which always promised a
+                 * pause that did not exist) */
+                if (playPaused) { playPaused = false; screen = 0; continue; }
+                playPaused = true;
+            }
+            if (k == K_LETTER && readKeyLetter == 'p') { playPaused = !playPaused; }
             if (k == K_PLUS || k == K_MINUS) {
                 int dir = (k == K_PLUS) ? 1 : -1;
                 db.winSize = (db.winSize + dir + 4) % 4;
@@ -1528,40 +1535,42 @@ int main ( int argc, char* argv[] )
                 applyWindowSize(db);
             }
 
-            tickBall();
+            if (!playPaused) {
+                tickBall();
 
-            if (deathTimer > 0) {
-                deathTimer--;
-                if (deathTimer == 0) {
-                    lives--;
-                    if (lives <= 0) {
-                        screen = 4;            /* game over */
-                        gameoverSfxDone = false;
-                    } else {
-                        startLevel(levelIdx, sx, sy);
+                if (deathTimer > 0) {
+                    deathTimer--;
+                    if (deathTimer == 0) {
+                        lives--;
+                        if (lives <= 0) {
+                            screen = 4;            /* game over */
+                            gameoverSfxDone = false;
+                        } else {
+                            startLevel(levelIdx, sx, sy);
+                        }
                     }
-                }
-            } else if (completeTimer == 1) {
-                /* the door just swallowed the ball: bank the progress,
-                 * show LEVEL CLEAR!, then move on                      */
-                completeTimer = 70;
-                diamondsRun += diamondsGot;
-                db.diamonds += diamondsGot;
-                if (levelIdx + 1 > db.unlocked && levelIdx + 1 < LEVEL_COUNT) {
-                    db.unlocked = levelIdx + 1;
-                }
-                saveDatabase(db);
-                playSfx(SFX_DOOR);
-            } else if (completeTimer > 1) {
-                completeTimer--;
-                if (completeTimer <= 1) {
-                    completeTimer = 0;
-                    levelIdx++;
-                    if (levelIdx >= LEVEL_COUNT) {
-                        screen = 5;            /* victory */
-                        playSfx(SFX_VICTORY);
-                    } else {
-                        startLevel(levelIdx, sx, sy);
+                } else if (completeTimer == 1) {
+                    /* the door just swallowed the ball: bank the progress,
+                     * show LEVEL CLEAR!, then move on                      */
+                    completeTimer = 70;
+                    diamondsRun += diamondsGot;
+                    db.diamonds += diamondsGot;
+                    if (levelIdx + 1 > db.unlocked && levelIdx + 1 < LEVEL_COUNT) {
+                        db.unlocked = levelIdx + 1;
+                    }
+                    saveDatabase(db);
+                    playSfx(SFX_DOOR);
+                } else if (completeTimer > 1) {
+                    completeTimer--;
+                    if (completeTimer <= 1) {
+                        completeTimer = 0;
+                        levelIdx++;
+                        if (levelIdx >= LEVEL_COUNT) {
+                            screen = 5;            /* victory */
+                            playSfx(SFX_VICTORY);
+                        } else {
+                            startLevel(levelIdx, sx, sy);
+                        }
                     }
                 }
             }
@@ -1577,6 +1586,7 @@ int main ( int argc, char* argv[] )
                 levelIdx = 0;
                 diamondsRun = 0;
                 lives = LIVES_MAX;
+                playPaused = false;
                 startLevel(levelIdx, sx, sy);
                 screen = 3;
             }

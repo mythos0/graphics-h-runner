@@ -13,7 +13,7 @@
       "exitCode": 0,
       "shot": "/home/z/my-project/push-work/clone/docs/screenshots/01_snake_game.png",
       "analysis": {
-        "nonblack": 0.0199,
+        "nonblack": 0.0194,
         "unique_colors": 10
       },
       "cmd": "g++ -I/home/z/my-project/bgi-env/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include/x86_64-linux-gnu /home/z/my-project/push-work/clone/samples/01_snake_game.cpp -o /home/z/my-project/push-work/clone/build/01_snake_game -L/home/z/my-project/bgi-env/usr/lib -Wl,-rpath,/home/z/my-project/bgi-env/usr/lib -L/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -Wl,-rpath,/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -lSDL_bgi -lSDL2 -lm",
@@ -43,10 +43,280 @@
       "exitCode": 0,
       "shot": "/home/z/my-project/push-work/clone/docs/screenshots/03_bounce_game.png",
       "analysis": {
-        "nonblack": 0.053,
+        "nonblack": 0.0737,
         "unique_colors": 10
       },
       "cmd": "g++ -I/home/z/my-project/bgi-env/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include/x86_64-linux-gnu /home/z/my-project/push-work/clone/samples/03_bounce_game.cpp -o /home/z/my-project/push-work/clone/build/03_bounce_game -L/home/z/my-project/bgi-env/usr/lib -Wl,-rpath,/home/z/my-project/bgi-env/usr/lib -L/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -Wl,-rpath,/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -lSDL_bgi -lSDL2 -lm",
+      "stderrTail": ""
+    },
+    {
+      "sample": "24_coordinate_viewer.cpp",
+      "detected": true,
+      "library": "sdl_bgi",
+      "compileOk": true,
+      "runOk": true,
+      "exitCode": 0,
+      "shot": "/home/z/my-project/push-work/clone/docs/screenshots/24_coordinate_viewer.png",
+      "analysis": {
+        "nonblack": 0.0861,
+        "unique_colors": 7
+      },
+      "cmd": "g++ -I/home/z/my-project/bgi-env/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include/x86_64-linux-gnu /home/z/my-project/push-work/clone/samples/24_coordinate_viewer.cpp -o /home/z/my-project/push-work/clone/build/24_coordinate_viewer -L/home/z/my-project/bgi-env/usr/lib -Wl,-rpath,/home/z/my-project/bgi-env/usr/lib -L/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -Wl,-rpath,/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -lSDL_bgi -lSDL2 -lm",
+      "stderrTail": ""
+    },
+    {
+      "sample": "25_pixel_inspector.cpp",
+      "detected": true,
+      "library": "sdl_bgi",
+      "compileOk": true,
+      "runOk": true,
+      "exitCode": 0,
+      "shot": "/home/z/my-project/push-work/clone/docs/screenshots/25_pixel_inspector.png",
+      "analysis": {
+        "nonblack": 0.2853,
+        "unique_colors": 16
+      },
+      "cmd": "g++ -I/home/z/my-project/bgi-env/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include/x86_64-linux-gnu /home/z/my-project/push-work/clone/samples/25_pixel_inspector.cpp -o /home/z/my-project/push-work/clone/build/25_pixel_inspector -L/home/z/my-project/bgi-env/usr/lib -Wl,-rpath,/home/z/my-project/bgi-env/usr/lib -L/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -Wl,-rpath,/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -lSDL_bgi -lSDL2 -lm",
+      "stderrTail": ""
+    },
+    {
+      "sample": "26_dda_lab.cpp",
+      "detected": true,
+      "library": "sdl_bgi",
+      "compileOk": true,
+      "runOk": true,
+      "exitCode": 0,
+      "shot": "/home/z/my-project/push-work/clone/docs/screenshots/26_dda_lab.png",
+      "analysis": {
+        "nonblack": 0.004,
+        "unique_colors": 5
+      },
+      "cmd": "g++ -I/home/z/my-project/bgi-env/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include/x86_64-linux-gnu /home/z/my-project/push-work/clone/samples/26_dda_lab.cpp -o /home/z/my-project/push-work/clone/build/26_dda_lab -L/home/z/my-project/bgi-env/usr/lib -Wl,-rpath,/home/z/my-project/bgi-env/usr/lib -L/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -Wl,-rpath,/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -lSDL_bgi -lSDL2 -lm",
+      "stderrTail": ""
+    },
+    {
+      "sample": "27_bresenham_line_lab.cpp",
+      "detected": true,
+      "library": "sdl_bgi",
+      "compileOk": true,
+      "runOk": true,
+      "exitCode": 0,
+      "shot": "/home/z/my-project/push-work/clone/docs/screenshots/27_bresenham_line_lab.png",
+      "analysis": {
+        "nonblack": 0.0042,
+        "unique_colors": 5
+      },
+      "cmd": "g++ -I/home/z/my-project/bgi-env/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include/x86_64-linux-gnu /home/z/my-project/push-work/clone/samples/27_bresenham_line_lab.cpp -o /home/z/my-project/push-work/clone/build/27_bresenham_line_lab -L/home/z/my-project/bgi-env/usr/lib -Wl,-rpath,/home/z/my-project/bgi-env/usr/lib -L/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -Wl,-rpath,/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -lSDL_bgi -lSDL2 -lm",
+      "stderrTail": ""
+    },
+    {
+      "sample": "28_bresenham_circle_lab.cpp",
+      "detected": true,
+      "library": "sdl_bgi",
+      "compileOk": true,
+      "runOk": true,
+      "exitCode": 0,
+      "shot": "/home/z/my-project/push-work/clone/docs/screenshots/28_bresenham_circle_lab.png",
+      "analysis": {
+        "nonblack": 0.0051,
+        "unique_colors": 4
+      },
+      "cmd": "g++ -I/home/z/my-project/bgi-env/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include/x86_64-linux-gnu /home/z/my-project/push-work/clone/samples/28_bresenham_circle_lab.cpp -o /home/z/my-project/push-work/clone/build/28_bresenham_circle_lab -L/home/z/my-project/bgi-env/usr/lib -Wl,-rpath,/home/z/my-project/bgi-env/usr/lib -L/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -Wl,-rpath,/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -lSDL_bgi -lSDL2 -lm",
+      "stderrTail": ""
+    },
+    {
+      "sample": "29_midpoint_ellipse_lab.cpp",
+      "detected": true,
+      "library": "sdl_bgi",
+      "compileOk": true,
+      "runOk": true,
+      "exitCode": 0,
+      "shot": "/home/z/my-project/push-work/clone/docs/screenshots/29_midpoint_ellipse_lab.png",
+      "analysis": {
+        "nonblack": 0.0052,
+        "unique_colors": 4
+      },
+      "cmd": "g++ -I/home/z/my-project/bgi-env/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include/x86_64-linux-gnu /home/z/my-project/push-work/clone/samples/29_midpoint_ellipse_lab.cpp -o /home/z/my-project/push-work/clone/build/29_midpoint_ellipse_lab -L/home/z/my-project/bgi-env/usr/lib -Wl,-rpath,/home/z/my-project/bgi-env/usr/lib -L/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -Wl,-rpath,/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -lSDL_bgi -lSDL2 -lm",
+      "stderrTail": ""
+    },
+    {
+      "sample": "30_2d_transforms_lab.cpp",
+      "detected": true,
+      "library": "sdl_bgi",
+      "compileOk": true,
+      "runOk": true,
+      "exitCode": 0,
+      "shot": "/home/z/my-project/push-work/clone/docs/screenshots/30_2d_transforms_lab.png",
+      "analysis": {
+        "nonblack": 0.0349,
+        "unique_colors": 7
+      },
+      "cmd": "g++ -I/home/z/my-project/bgi-env/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include/x86_64-linux-gnu /home/z/my-project/push-work/clone/samples/30_2d_transforms_lab.cpp -o /home/z/my-project/push-work/clone/build/30_2d_transforms_lab -L/home/z/my-project/bgi-env/usr/lib -Wl,-rpath,/home/z/my-project/bgi-env/usr/lib -L/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -Wl,-rpath,/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -lSDL_bgi -lSDL2 -lm",
+      "stderrTail": ""
+    },
+    {
+      "sample": "31_cohen_sutherland_clipping.cpp",
+      "detected": true,
+      "library": "sdl_bgi",
+      "compileOk": true,
+      "runOk": true,
+      "exitCode": 0,
+      "shot": "/home/z/my-project/push-work/clone/docs/screenshots/31_cohen_sutherland_clipping.png",
+      "analysis": {
+        "nonblack": 0.0126,
+        "unique_colors": 5
+      },
+      "cmd": "g++ -I/home/z/my-project/bgi-env/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include/x86_64-linux-gnu /home/z/my-project/push-work/clone/samples/31_cohen_sutherland_clipping.cpp -o /home/z/my-project/push-work/clone/build/31_cohen_sutherland_clipping -L/home/z/my-project/bgi-env/usr/lib -Wl,-rpath,/home/z/my-project/bgi-env/usr/lib -L/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -Wl,-rpath,/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -lSDL_bgi -lSDL2 -lm",
+      "stderrTail": ""
+    },
+    {
+      "sample": "32_lab_first_window.cpp",
+      "detected": true,
+      "library": "sdl_bgi",
+      "compileOk": true,
+      "runOk": true,
+      "exitCode": 0,
+      "shot": "/home/z/my-project/push-work/clone/docs/screenshots/32_lab_first_window.png",
+      "analysis": {
+        "nonblack": 0.0347,
+        "unique_colors": 5
+      },
+      "cmd": "g++ -I/home/z/my-project/bgi-env/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include/x86_64-linux-gnu /home/z/my-project/push-work/clone/samples/32_lab_first_window.cpp -o /home/z/my-project/push-work/clone/build/32_lab_first_window -L/home/z/my-project/bgi-env/usr/lib -Wl,-rpath,/home/z/my-project/bgi-env/usr/lib -L/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -Wl,-rpath,/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -lSDL_bgi -lSDL2 -lm",
+      "stderrTail": ""
+    },
+    {
+      "sample": "33_lab_colors_pixels.cpp",
+      "detected": true,
+      "library": "sdl_bgi",
+      "compileOk": true,
+      "runOk": true,
+      "exitCode": 0,
+      "shot": "/home/z/my-project/push-work/clone/docs/screenshots/33_lab_colors_pixels.png",
+      "analysis": {
+        "nonblack": 0.0626,
+        "unique_colors": 16
+      },
+      "cmd": "g++ -I/home/z/my-project/bgi-env/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include/x86_64-linux-gnu /home/z/my-project/push-work/clone/samples/33_lab_colors_pixels.cpp -o /home/z/my-project/push-work/clone/build/33_lab_colors_pixels -L/home/z/my-project/bgi-env/usr/lib -Wl,-rpath,/home/z/my-project/bgi-env/usr/lib -L/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -Wl,-rpath,/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -lSDL_bgi -lSDL2 -lm",
+      "stderrTail": ""
+    },
+    {
+      "sample": "34_lab_shapes_text.cpp",
+      "detected": true,
+      "library": "sdl_bgi",
+      "compileOk": true,
+      "runOk": true,
+      "exitCode": 0,
+      "shot": "/home/z/my-project/push-work/clone/docs/screenshots/34_lab_shapes_text.png",
+      "analysis": {
+        "nonblack": 0.6956,
+        "unique_colors": 6
+      },
+      "cmd": "g++ -I/home/z/my-project/bgi-env/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include/x86_64-linux-gnu /home/z/my-project/push-work/clone/samples/34_lab_shapes_text.cpp -o /home/z/my-project/push-work/clone/build/34_lab_shapes_text -L/home/z/my-project/bgi-env/usr/lib -Wl,-rpath,/home/z/my-project/bgi-env/usr/lib -L/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -Wl,-rpath,/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -lSDL_bgi -lSDL2 -lm",
+      "stderrTail": ""
+    },
+    {
+      "sample": "35_lab_keyboard_mouse.cpp",
+      "detected": true,
+      "library": "sdl_bgi",
+      "compileOk": true,
+      "runOk": true,
+      "exitCode": 0,
+      "shot": "/home/z/my-project/push-work/clone/docs/screenshots/35_lab_keyboard_mouse.png",
+      "analysis": {
+        "nonblack": 0.0078,
+        "unique_colors": 7
+      },
+      "cmd": "g++ -I/home/z/my-project/bgi-env/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include/x86_64-linux-gnu /home/z/my-project/push-work/clone/samples/35_lab_keyboard_mouse.cpp -o /home/z/my-project/push-work/clone/build/35_lab_keyboard_mouse -L/home/z/my-project/bgi-env/usr/lib -Wl,-rpath,/home/z/my-project/bgi-env/usr/lib -L/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -Wl,-rpath,/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -lSDL_bgi -lSDL2 -lm",
+      "stderrTail": ""
+    },
+    {
+      "sample": "36_lab_animation_loop.cpp",
+      "detected": true,
+      "library": "sdl_bgi",
+      "compileOk": true,
+      "runOk": true,
+      "exitCode": 0,
+      "shot": "/home/z/my-project/push-work/clone/docs/screenshots/36_lab_animation_loop.png",
+      "analysis": {
+        "nonblack": 0.0024,
+        "unique_colors": 5
+      },
+      "cmd": "g++ -I/home/z/my-project/bgi-env/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include/x86_64-linux-gnu /home/z/my-project/push-work/clone/samples/36_lab_animation_loop.cpp -o /home/z/my-project/push-work/clone/build/36_lab_animation_loop -L/home/z/my-project/bgi-env/usr/lib -Wl,-rpath,/home/z/my-project/bgi-env/usr/lib -L/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -Wl,-rpath,/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -lSDL_bgi -lSDL2 -lm",
+      "stderrTail": ""
+    },
+    {
+      "sample": "37_lab_sprite_getimage.cpp",
+      "detected": true,
+      "library": "sdl_bgi",
+      "compileOk": true,
+      "runOk": true,
+      "exitCode": 0,
+      "shot": "/home/z/my-project/push-work/clone/docs/screenshots/37_lab_sprite_getimage.png",
+      "analysis": {
+        "nonblack": 0.0317,
+        "unique_colors": 8
+      },
+      "cmd": "g++ -I/home/z/my-project/bgi-env/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include/x86_64-linux-gnu /home/z/my-project/push-work/clone/samples/37_lab_sprite_getimage.cpp -o /home/z/my-project/push-work/clone/build/37_lab_sprite_getimage -L/home/z/my-project/bgi-env/usr/lib -Wl,-rpath,/home/z/my-project/bgi-env/usr/lib -L/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -Wl,-rpath,/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -lSDL_bgi -lSDL2 -lm",
+      "stderrTail": ""
+    },
+    {
+      "sample": "38_lab_scanline_fill.cpp",
+      "detected": true,
+      "library": "sdl_bgi",
+      "compileOk": true,
+      "runOk": true,
+      "exitCode": 0,
+      "shot": "/home/z/my-project/push-work/clone/docs/screenshots/38_lab_scanline_fill.png",
+      "analysis": {
+        "nonblack": 0.0136,
+        "unique_colors": 2
+      },
+      "cmd": "g++ -I/home/z/my-project/bgi-env/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include/x86_64-linux-gnu /home/z/my-project/push-work/clone/samples/38_lab_scanline_fill.cpp -o /home/z/my-project/push-work/clone/build/38_lab_scanline_fill -L/home/z/my-project/bgi-env/usr/lib -Wl,-rpath,/home/z/my-project/bgi-env/usr/lib -L/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -Wl,-rpath,/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -lSDL_bgi -lSDL2 -lm",
+      "stderrTail": ""
+    },
+    {
+      "sample": "39_lab_bezier_curves.cpp",
+      "detected": true,
+      "library": "sdl_bgi",
+      "compileOk": true,
+      "runOk": true,
+      "exitCode": 0,
+      "shot": "/home/z/my-project/push-work/clone/docs/screenshots/39_lab_bezier_curves.png",
+      "analysis": {
+        "nonblack": 0.0092,
+        "unique_colors": 7
+      },
+      "cmd": "g++ -I/home/z/my-project/bgi-env/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include/x86_64-linux-gnu /home/z/my-project/push-work/clone/samples/39_lab_bezier_curves.cpp -o /home/z/my-project/push-work/clone/build/39_lab_bezier_curves -L/home/z/my-project/bgi-env/usr/lib -Wl,-rpath,/home/z/my-project/bgi-env/usr/lib -L/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -Wl,-rpath,/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -lSDL_bgi -lSDL2 -lm",
+      "stderrTail": ""
+    },
+    {
+      "sample": "40_lab_fractals.cpp",
+      "detected": true,
+      "library": "sdl_bgi",
+      "compileOk": true,
+      "runOk": true,
+      "exitCode": 0,
+      "shot": "/home/z/my-project/push-work/clone/docs/screenshots/40_lab_fractals.png",
+      "analysis": {
+        "nonblack": 0.0028,
+        "unique_colors": 3
+      },
+      "cmd": "g++ -I/home/z/my-project/bgi-env/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include/x86_64-linux-gnu /home/z/my-project/push-work/clone/samples/40_lab_fractals.cpp -o /home/z/my-project/push-work/clone/build/40_lab_fractals -L/home/z/my-project/bgi-env/usr/lib -Wl,-rpath,/home/z/my-project/bgi-env/usr/lib -L/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -Wl,-rpath,/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -lSDL_bgi -lSDL2 -lm",
+      "stderrTail": ""
+    },
+    {
+      "sample": "41_lab_3d_wireframe_cube.cpp",
+      "detected": true,
+      "library": "sdl_bgi",
+      "compileOk": true,
+      "runOk": true,
+      "exitCode": 0,
+      "shot": "/home/z/my-project/push-work/clone/docs/screenshots/41_lab_3d_wireframe_cube.png",
+      "analysis": {
+        "nonblack": 0.0029,
+        "unique_colors": 4
+      },
+      "cmd": "g++ -I/home/z/my-project/bgi-env/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include/x86_64-linux-gnu /home/z/my-project/push-work/clone/samples/41_lab_3d_wireframe_cube.cpp -o /home/z/my-project/push-work/clone/build/41_lab_3d_wireframe_cube -L/home/z/my-project/bgi-env/usr/lib -Wl,-rpath,/home/z/my-project/bgi-env/usr/lib -L/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -Wl,-rpath,/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -lSDL_bgi -lSDL2 -lm",
       "stderrTail": ""
     }
   ]

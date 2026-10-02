@@ -1603,6 +1603,8 @@ static void drawControls ( )
     shadowCentered(40, "CONTROLS", YELLOW, GOTHIC_FONT, fsz(5));
 
     int colY = 40 + textheight((char*)"CONTROLS") + 34;
+    int fontSize = fsz(2);
+    int rowStep = fontSize * 8 + 12;
 
     struct Row { const char* k; const char* v; };
     static const Row P1R[] = {
@@ -1622,51 +1624,38 @@ static void drawControls ( )
         { "Boards",   "street rules - the ball bounces" },
         { "Keepers",  "AI - they catch and throw" },
         { "Match",    "two halves, ends swap, 90' clock" },
-        { "Pause",    "P or Esc during play" }
+        { "Pause",    "P pauses - Esc quits to the menu" }
     };
 
     int l = 60, r = getmaxx() - 60;
     int bottom = getmaxy() - 96;
     int y = colY;
 
-    /* column geometry from content widths: shrink the font until the two
-     * player columns AND the widest rule line clear the panel edge — the
-     * fixed offsets this replaces clipped on the S and XL sizes */
-    int fontSize = fsz(2);
-    int c1Val, key2X, val2X, rulesValX;
-    for (;;) {
-        int cw = 8 * fontSize;
-        c1Val     = (l + 20) + 9 * cw + 2 * cw;   /* after "Hold kick"  */
-        key2X     = c1Val + 12 * cw + 3 * cw;     /* after "charged shot" */
-        val2X     = key2X + 9 * cw + 2 * cw;      /* after "Tap kick"   */
-        rulesValX = (l + 20) + 9 * cw + 2 * cw;
-        int p2End    = key2X + 19 * cw;           /* "PLAYER 2 - SKYBLUES" */
-        int p2ValEnd = val2X + 10 * cw;           /* "ARROW KEYS"          */
-        int rulesEnd = rulesValX + 32 * cw;       /* widest rule line      */
-        int widest = p2End;
-        if (p2ValEnd > widest) { widest = p2ValEnd; }
-        if (rulesEnd > widest) { widest = rulesEnd; }
-        if (widest <= r || fontSize <= 1) { break; }
-        fontSize--;
-    }
-    int rowStep = fontSize * 8 + 12;
-
     settextstyle(DEFAULT_FONT, HORIZ_DIR, fontSize);
-    setcolor(LIGHTRED);  outtextxy(l + 20, y, (char*)"PLAYER 1 - REDS");
-    setcolor(CYAN);      outtextxy(key2X, y, (char*)"PLAYER 2 - SKYBLUES");
+    /* column layout measured from the REAL text width so long keys like
+       "Hold kick" never collide with the values beside them (the fixed
+       offsets overlapped at fsz(2)) */
+    int keyW = textwidth((char*)"Hold kick") + 16;
+    int p1KeyX = l + 20;
+    int p1ValX = p1KeyX + keyW;
+    int p2KeyX = p1ValX + textwidth((char*)"charged shot") + 40;
+    int p2ValX = p2KeyX + keyW;
+
+    setcolor(LIGHTRED);  outtextxy(p1KeyX, y, (char*)"PLAYER 1 - REDS");
+    setcolor(CYAN);      outtextxy(p2KeyX, y, (char*)"PLAYER 2 - SKYBLUES");
     y += rowStep + 6;
     for (int i = 0; i < 4; i++) {
-        setcolor(YELLOW);   outtextxy(l + 20, y, (char*)P1R[i].k);
-        setcolor(WHITE);    outtextxy(c1Val, y, (char*)P1R[i].v);
-        setcolor(YELLOW);   outtextxy(key2X, y, (char*)P2R[i].k);
-        setcolor(WHITE);    outtextxy(val2X, y, (char*)P2R[i].v);
+        setcolor(YELLOW);   outtextxy(p1KeyX, y, (char*)P1R[i].k);
+        setcolor(WHITE);    outtextxy(p1ValX, y, (char*)P1R[i].v);
+        setcolor(YELLOW);   outtextxy(p2KeyX, y, (char*)P2R[i].k);
+        setcolor(WHITE);    outtextxy(p2ValX, y, (char*)P2R[i].v);
         y += rowStep;
     }
 
     y += 10;
     for (int i = 0; i < 5 && y < bottom; i++) {
-        setcolor(YELLOW);   outtextxy(l + 20, y, (char*)RULES[i].k);
-        setcolor(WHITE);    outtextxy(rulesValX, y, (char*)RULES[i].v);
+        setcolor(YELLOW);   outtextxy(p1KeyX, y, (char*)RULES[i].k);
+        setcolor(WHITE);    outtextxy(p1ValX, y, (char*)RULES[i].v);
         y += rowStep;
     }
 

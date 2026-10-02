@@ -3,11 +3,12 @@
  * tree-model-tests.js — unit tests for the fallback TreeView models
  * (src/programsTreeModel.ts -> out/programsTreeModel.js) — no vscode needed.
  *
- * Contract (v1.5.15 SPLIT): the fallback is TWO separate views so each is
+ * Contract (v1.5.16): the fallback is TWO separate views so each is
  * easy to understand at a glance —
- *   - buildActionEntries():  the 8 panel commands as a flat list;
- *   - buildProgramEntries(): the 3 game programs in one section
- *     Lab programs grouped under their own section headers.
+ *   - buildActionEntries():  the 9 panel commands as a flat list;
+ *   - buildProgramEntries(): the 3 game programs in one section + the
+ *     Computer Graphics Lab (8 restored + 10 new zero-to-advanced labs)
+ *     grouped under their own section header.
  * Every program click runs through its own STATIC per-node command id
  * (graphics-h-runner.runSample.<id>). TreeItem.command must never carry
  * `arguments`: VS Code caches argument-carrying tree commands under a
@@ -42,11 +43,14 @@ const catalog = loadProgramCatalog(ROOT);
 
 console.log('tree-model-tests — fallback list view models\n');
 
-check('actions model = exactly the 8 panel commands, flat (no sections)', () => {
+check('actions model = exactly the 9 panel commands, flat (no sections)', () => {
   const a = buildActionEntries();
   assert.strictEqual(a.length, COMMAND_META.length, 'action count');
+  assert.strictEqual(COMMAND_META.length, 9, 'COMMAND_META drifted (expect 9 incl. Reset Setup + Fireworks)');
   assert.ok(a.every((e) => e.kind === 'action'), 'every entry must be an action');
   assert.strictEqual(a[0].id, 'cmd-compileAndRun', 'Compile & Run must lead the actions view');
+  assert.ok(a.some((e) => e.id === 'cmd-resetSetup' && e.commandId === 'graphics-h-runner.restoreOriginalSettings'),
+    'Reset Setup button must be wired to the surgical restore command');
   for (const c of COMMAND_META) {
     const hit = a.find((e) => e.id === c.id);
     assert.ok(hit, 'action missing from tree: ' + c.id);
@@ -56,13 +60,14 @@ check('actions model = exactly the 8 panel commands, flat (no sections)', () => 
   }
 });
 
-check('programs model = 1 section + 3 games', () => {
+check('programs model = 2 sections + 21 programs (3 games + 18 lab)', () => {
   const m = buildProgramEntries(catalog);
   const sections = m.filter((e) => e.kind === 'section');
   const programs = m.filter((e) => e.kind === 'program');
-  assert.strictEqual(sections.length, 1, 'section count ' + sections.length);
-  assert.strictEqual(programs.length, 3, 'program count ' + programs.length);
+  assert.strictEqual(sections.length, 2, 'section count ' + sections.length);
+  assert.strictEqual(programs.length, 21, 'program count ' + programs.length);
   assert.ok(/Example Programs \(3\)/.test(sections[0].label), 'programs section label wrong: ' + sections[0].label);
+  assert.ok(/Computer Graphics Lab \(18\)/.test(sections[1].label), 'lab section label wrong: ' + sections[1].label);
 });
 
 check('every program carries its own STATIC per-node run command (no arguments)', () => {
@@ -79,18 +84,36 @@ check('every program carries its own STATIC per-node run command (no arguments)'
     assert.ok(/\.cpp$/.test(p.filename), 'filename not a .cpp for ' + p.id);
     ids.add(p.id);
   }
-  assert.strictEqual(ids.size, 3, 'duplicate program ids in the tree model');
+  assert.strictEqual(ids.size, 21, 'duplicate program ids in the tree model');
   for (const loaded of catalog) {
     assert.ok(ids.has(loaded.id), 'catalog program missing from tree: ' + loaded.id);
   }
 });
 
-check('no lab programs remain (v1.5.16: the lab section was removed)', () => {
+check('lab section back as it was + extended: 18 lab programs (8 restored + 10 new)', () => {
   const m = buildProgramEntries(catalog);
   const labCount = m.filter((e) => e.kind === 'program' && e.lab).length;
-  assert.strictEqual(labCount, 0, 'lab program count ' + labCount);
+  assert.strictEqual(labCount, 18, 'lab program count ' + labCount);
+  /* the restored originals, byte-identical ids */
+  for (const id of ['coordview', 'pixelinspector', 'ddalab', 'bresenhamline',
+                    'bresenhamcircle', 'midpointellipse', 'transforms', 'clipping']) {
+    const hit = m.find((e) => e.kind === 'program' && e.id === id && e.lab);
+    assert.ok(hit, 'restored lab program missing: ' + id);
+  }
+  /* the new zero-to-advanced course */
+  for (const id of ['labfirst', 'labcolors', 'labshapes', 'labinput', 'labanim',
+                    'labsprite', 'labfill', 'labezier', 'labfractal', 'lab3dcube']) {
+    const hit = m.find((e) => e.kind === 'program' && e.id === id && e.lab);
+    assert.ok(hit, 'new lab program missing: ' + id);
+  }
+  /* ordering: the new course runs zero -> tools -> algorithms -> advanced */
+  const labOrder = m.filter((e) => e.kind === 'program' && e.lab).map((e) => e.id);
+  const idx = (id) => labOrder.indexOf(id);
+  assert.ok(idx('labfirst') < idx('labcolors') && idx('labcolors') < idx('labanim'), 'start-here labs must lead');
+  assert.ok(idx('labanim') < idx('coordview') && idx('coordview') < idx('ddalab'), 'tools before algorithms');
+  assert.ok(idx('clipping') < idx('labsprite') && idx('labsprite') < idx('lab3dcube'), 'advanced labs must close the course');
 });
-check('lab flag matches the section a program belongs to (vacuous)', () => {
+check('lab flag matches the section a program belongs to', () => {
   const m = buildProgramEntries(catalog);
   let inLab = false;
   for (const e of m) {
@@ -103,7 +126,7 @@ check('lab flag matches the section a program belongs to (vacuous)', () => {
     }
   }
   const labCount = m.filter((e) => e.kind === 'program' && e.lab).length;
-  assert.strictEqual(labCount, 0, 'lab program count ' + labCount);
+  assert.strictEqual(labCount, 18, 'lab program count ' + labCount);
 });
 
 check('per-node command ids are unique across the whole catalog', () => {

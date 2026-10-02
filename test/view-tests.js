@@ -4,7 +4,7 @@
  * package.json wiring (activity-bar view, commands, debugger, menus).
  *
  * Validates (without a VS Code UI):
- *   1. the program catalog loads the 3 game samples (0 templates)
+ *   1. the program catalog loads 21 samples: 3 games + 18 lab (0 templates)
  *   2. every source really includes <graphics.h>
  *   3. catalog sources match the bundled samples on disk byte-for-byte
  *   4. filenames are unique, .cpp-suffixed, every card carries an emoji + tag
@@ -36,11 +36,12 @@ function check(name, fn) {
 
 console.log('view-tests — catalog + package.json wiring\n');
 
-check('catalog loads the 3 game samples, 0 templates', () => {
+check('catalog loads 3 games + 18 lab programs, 0 templates', () => {
   const catalog = loadProgramCatalog(ROOT);
-  assert.strictEqual(catalog.filter((p) => p.kind === 'sample').length, 3, 'sample count');
+  assert.strictEqual(catalog.filter((p) => p.kind === 'sample').length, 21, 'sample count');
   assert.strictEqual(catalog.filter((p) => p.kind === 'template').length, 0, 'template count');
-  assert.strictEqual(catalog.length, 3, 'total count');
+  assert.strictEqual(catalog.length, 21, 'total count');
+  assert.strictEqual(catalog.filter((p) => p.lab).length, 18, 'lab count');
 });
 
 check('every sample source includes <graphics.h>', () => {
@@ -77,13 +78,26 @@ check('every program card has emoji + valid tag', () => {
   }
 });
 
-check('the whole catalog is the fun game suite (v1.5.16)', () => {
-  const fun = loadProgramCatalog(ROOT).filter((p) => p.tag === 'fun');
+check('the whole catalog is the fun game suite + the lab (v1.5.16)', () => {
+  const fun = loadProgramCatalog(ROOT).filter((p) => !p.lab);
   assert.strictEqual(fun.length, 3, 'fun count = ' + fun.length);
   const ids = new Set(fun.map((f) => f.id));
   for (const id of ['snake', 'football', 'bounce']) {
     assert.ok(ids.has(id), 'missing game program: ' + id);
   }
+});
+
+check('lab section restored + extended (v1.5.16)', () => {
+  const catalog = loadProgramCatalog(ROOT);
+  const lab = catalog.filter((p) => p.lab);
+  assert.strictEqual(lab.length, 18, 'lab count = ' + lab.length);
+  const restored = lab.filter((p) => /^2[4-9]_|^3[01]_/.test(p.filename));
+  assert.strictEqual(restored.length, 8, 'the 8 original lab programs must be back verbatim');
+  for (const p of restored) {
+    assert.ok(/^2[4-9]|^3[01]_/.test(p.filename), 'unexpected restored filename ' + p.filename);
+  }
+  const fresh = lab.filter((p) => /^3[2-9]_|^4[01]_/.test(p.filename));
+  assert.strictEqual(fresh.length, 10, 'ten new zero-to-advanced labs expected');
 });
 
 check('resolveProgramTarget places files under graphics-h-programs/', () => {
@@ -134,9 +148,9 @@ check('activity-bar view is declared type=webview with stable id', () => {
   assert.ok(src.includes("VIEW_ID = 'graphics-h-runner.programs'"), 'provider must target the same view id');
 });
 
-check('v1.5.16: the lab catalog was removed with the old programs', () => {
+check('identity stable + the lab catalog is back (v1.5.16)', () => {
   const lab = loadProgramCatalog(ROOT).filter((p) => p.lab);
-  assert.strictEqual(lab.length, 0, 'lab count ' + lab.length);
+  assert.strictEqual(lab.length, 18, 'lab count ' + lab.length);
   assert.strictEqual(pkg.displayName, 'graphics.h Runner — One-Click Setup', 'displayName wrong');
   assert.strictEqual(pkg.contributes.viewsContainers.activitybar[0].title, 'graphics.h Runner', 'container title wrong');
   assert.strictEqual(pkg.contributes.views['graphics-h-runner'][0].name, 'graphics.h Runner', 'view name wrong');

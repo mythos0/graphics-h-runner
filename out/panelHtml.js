@@ -544,6 +544,7 @@ function buildPanelHtml(opts) {
     /* two sections: the classic catalog first, the Computer Graphics Lab
        (coordinate viewer, algorithm labs, pixel inspector) below it */
     const programs = opts.programs.filter((p) => !p.lab);
+    const labPrograms = opts.programs.filter((p) => p.lab);
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -656,17 +657,17 @@ function buildPanelHtml(opts) {
 
   /* programs zone: the section bar is the toggle; the list scrolls inside */
   .programs-zone { flex:1 1 auto; min-height:0; display:flex; flex-direction:column; }
-  #programs { flex:1 1 auto; min-height:0; overflow-y:auto;
+  #programs, #lab-programs { flex:1 1 auto; min-height:0; overflow-y:auto;
     overscroll-behavior:contain; margin:0 -2px; padding:0 2px; }
-  #programs.collapsed { display:none; }
+  #programs.collapsed, #lab-programs.collapsed { display:none; }
   .sec-toggle { cursor:pointer; user-select:none; border-radius:8px; padding:2px; }
   .sec-toggle:hover h2, .sec-toggle:hover .count { color:var(--txt); }
   .chev { font-size:9px; color:var(--txt-dim); display:inline-block; margin-left:6px; transition:transform .12s; }
   .chev-open { transform:rotate(90deg); }
-  #programs::-webkit-scrollbar { width:8px; }
-  #programs::-webkit-scrollbar-thumb { background:rgba(255,255,255,.14); border-radius:4px; }
-  #programs::-webkit-scrollbar-thumb:hover { background:rgba(255,255,255,.26); }
-  #programs::-webkit-scrollbar-track { background:transparent; }
+  #programs::-webkit-scrollbar, #lab-programs::-webkit-scrollbar { width:8px; }
+  #programs::-webkit-scrollbar-thumb, #lab-programs::-webkit-scrollbar-thumb { background:rgba(255,255,255,.14); border-radius:4px; }
+  #programs::-webkit-scrollbar-thumb:hover, #lab-programs::-webkit-scrollbar-thumb:hover { background:rgba(255,255,255,.26); }
+  #programs::-webkit-scrollbar-track, #lab-programs::-webkit-scrollbar-track { background:transparent; }
 
   .sec { display:flex; align-items:baseline; justify-content:space-between; margin:14px 2px 0; }
   .sec-tight { margin:0 2px 7px; }
@@ -774,10 +775,20 @@ function buildPanelHtml(opts) {
     <div class="sec sec-toggle" id="programs-sec" role="button" tabindex="0" aria-expanded="false"
          title="Show / hide the example programs">
       <h2>Example Programs<span class="chev" id="programs-chev">▶</span></h2>
-      <span class="count" id="programs-count">${programs.length} ${programs.length === 1 ? 'program' : 'programs'} · tap to expand</span>
+      <span class="count" id="programs-count">${programs.length} programs · tap to expand</span>
     </div>
     <div id="programs" class="collapsed">
       ${programCards(programs)}
+    </div>
+
+    <div class="sec-gap"></div>
+    <div class="sec sec-toggle" id="lab-sec" role="button" tabindex="0" aria-expanded="false"
+         title="Show / hide the Computer Graphics Lab programs">
+      <h2>Computer Graphics Lab<span class="chev" id="lab-chev">▶</span></h2>
+      <span class="count" id="lab-count">${labPrograms.length} lab programs · tap to expand</span>
+    </div>
+    <div id="lab-programs" class="collapsed">
+      ${programCards(labPrograms)}
     </div>
 
   </div>
@@ -827,6 +838,40 @@ ${cheatSheetHtml()}
       });
     }
     applyProgramsState();
+
+    /* Computer Graphics Lab: its own toggle, its own persisted state.
+       Both toggles MERGE into the saved state object so they never
+       wipe each other (vscode.setState replaces the whole state). */
+    var labSec = document.getElementById('lab-sec');
+    var labList = document.getElementById('lab-programs');
+    var labChev = document.getElementById('lab-chev');
+    var labCount = document.getElementById('lab-count');
+    function labOpen() {
+      try { return !!(vscode.getState() && vscode.getState().labOpen); }
+      catch (e) { return false; }
+    }
+    function applyLabState() {
+      var open = labOpen();
+      if (labList) { labList.classList.toggle('collapsed', !open); }
+      if (labChev) { labChev.className = open ? 'chev chev-open' : 'chev'; }
+      if (labCount && labCount.textContent) {
+        labCount.textContent = labCount.textContent
+          .replace(/ · (tap to expand|click Run or Open)$/,
+                   open ? ' · click Run or Open' : ' · tap to expand');
+      }
+      if (labSec) { labSec.setAttribute('aria-expanded', open ? 'true' : 'false'); }
+    }
+    function toggleLab() {
+      try { var st = vscode.getState() || {}; st.labOpen = !labOpen(); vscode.setState(st); } catch (e) {}
+      applyLabState();
+    }
+    if (labSec) {
+      labSec.addEventListener('click', toggleLab);
+      labSec.addEventListener('keydown', function (ev) {
+        if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); toggleLab(); }
+      });
+    }
+    applyLabState();
 
 
     /* graphics.h cheat sheet: opens from the ? button in the VIEW TITLE

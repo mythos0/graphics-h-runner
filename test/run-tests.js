@@ -45,47 +45,10 @@ const EXTRA_LIBS = [
 const DISPLAY = ':112';
 const DISPLAY_NUM = '112';
 
-/** True when a LIVE X server owns this display. Primary signal: the
- *  /tmp/.X<n>-lock owner PID still answers. Fallback (lock file may have
- *  been removed by an older cleanup): scan /proc for a running
- *  "Xvfb :<n>" process. An unparseable lock counts as alive (better to
- *  skip cleanup than to murder a working server). */
-function displayOwnerAlive() {
-  try {
-    const txt = fs.readFileSync('/tmp/.X' + DISPLAY_NUM + '-lock', 'utf8');
-    const pid = parseInt(txt.trim().split(/\s+/).pop(), 10);
-    if (!Number.isFinite(pid) || pid <= 0) { return true; }
-    try { process.kill(pid, 0); return true; } catch (e) { if (e.code === 'EPERM') { return true; } }
-  } catch {
-    /* no lock file — fall through to the process scan */
-  }
-  try {
-    /* /proc cmdline args are NUL-separated: look for argv0 "Xvfb" and
-     * argv1 ":<n>" as adjacent NUL-terminated strings */
-    const a0 = Buffer.from('Xvfb\u0000');
-    const a1 = Buffer.from(':' + DISPLAY_NUM + '\u0000');
-    for (const pidStr of fs.readdirSync('/proc')) {
-      if (!/^\d+$/.test(pidStr)) { continue; }
-      try {
-        const cmd = fs.readFileSync('/proc/' + pidStr + '/cmdline');
-        const i = cmd.indexOf(a0);
-        if (i !== -1 && cmd.indexOf(a1, i) === i + a0.length) { return true; }
-      } catch { /* process vanished — ignore */ }
-    }
-  } catch { /* /proc unavailable — ignore */ }
-  return false;
-}
-
-/** Remove stale X11 socket + lock files left behind by KILLED Xvfb
- *  instances. Without this, a fresh Xvfb may refuse to start ("Server is
- *  already active") or clients hang in the connection handshake.
- *  A display owned by a LIVE Xvfb is left completely alone — deleting its
- *  socket breaks the running server and every later spawn attempt fails
- *  with "Cannot establish any listening sockets". */
+/** Remove stale X11 socket files left behind by killed Xvfb instances.
+ *  Without this, a fresh Xvfb may bind next to a dead socket file and
+ *  clients can hang forever in the connection handshake. */
 function cleanStaleSockets() {
-  if (displayOwnerAlive()) {
-    return; /* live server on this display — do not touch anything */
-  }
   try {
     for (const f of fs.readdirSync('/tmp/.X11-unix')) {
       if (f === 'X' + DISPLAY_NUM) {
@@ -95,12 +58,6 @@ function cleanStaleSockets() {
     }
   } catch {
     /* dir may not exist yet — fine */
-  }
-  try {
-    fs.unlinkSync('/tmp/.X' + DISPLAY_NUM + '-lock');
-    console.log(`  removed stale lock /tmp/.X${DISPLAY_NUM}-lock (owner is dead)`);
-  } catch {
-    /* no lock file — fine */
   }
 }
 const SHOT_AT = {
@@ -212,14 +169,6 @@ async function main() {
       }
     }
     started = ready && xvfb.exitCode === null;
-    if (!started && displayOwnerAlive() && fs.existsSync('/tmp/.X11-unix/X' + DISPLAY_NUM)) {
-      /* a LIVE Xvfb already owns this display (another battery, a debug
-       * session): adopt it instead of failing — it serves the same
-       * purpose and killing it would break whatever started it */
-      console.log(`  attempt ${attempt}: adopting the already-running Xvfb on ${DISPLAY}`);
-      started = true;
-      xvfb = null; /* nothing of ours to stop in the finally block */
-    }
     if (!started) {
       console.log(`  attempt ${attempt}: Xvfb not ready (${lastErr.trim().split('\n').slice(-2).join(' | ') || 'no output'})`);
     }

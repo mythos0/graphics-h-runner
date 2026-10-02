@@ -10,7 +10,7 @@
 [![Version](https://img.shields.io/github/v/tag/mythos0/graphics-h-runner?label=version&sort=semver)](https://github.com/mythos0/graphics-h-runner/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey.svg)](#per-os-details)
-[![Tests](https://img.shields.io/badge/sample%20tests-3%2F3%20passing-brightgreen.svg)](#tested-and-verified)
+[![Tests](https://img.shields.io/badge/sample%20tests-31%2F31%20passing-brightgreen.svg)](#tested-and-verified)
 
 **Compile and run C++ programs that use `graphics.h` (BGI / WinBGIm / SDL_bgi) in VS Code — with one keypress.**
 A single command prepares the entire toolchain from scratch: the compiler itself, the graphics
@@ -54,7 +54,7 @@ window opens.
 | **Clean exit** | Before Complete Run Setup changes anything it records your original settings, and **uninstalling the extension restores them automatically** — the Code Runner executor, the F5 launch configuration, the build task and the compiler paths are reverted surgically, leaving your own settings untouched. Updates and normal shutdowns never modify anything. The `graphics.h: Restore Original Settings` command performs the same undo at any time. |
 | **Activity-bar panel** | A dashboard with a live Ready / Not ready status pill, a one-click Complete Run Setup button while anything is missing, the full action grid, and all bundled programs as cards with one-click **Run** and **Open** buttons — responsive, and consistent in light and dark themes. |
 | **Cheat sheet** | A searchable `graphics.h` function reference with 81 entries across 11 sections — parameters, angle and color conventions, fill patterns, fonts, keyboard codes, mouse events and classic usage patterns for every function. |
-| **Three complete games** | The example section is a small game suite you can play (and study) right after setup: **Snake** (WASD/arrows, three difficulties, bonus apples, high-score database), **2-Player Football** (a full street-rules derby whose pitch is drawn without a single built-in shape call — every line, circle and net is rasterized by hand with `putpixel`), and **Bounce** (the Nokia rubber-ball classic with charge jumps, rings, spikes, springs, six levels and synthesized sound effects). Each game is a heavily commented, single-file C++ program. |
+| **21 example programs** | The **Game Suite**: Snake (WASD/arrows, bonus apples, a top-5 score database), 2-Player Football (a street-rules derby whose pitch is drawn without a single built-in shape call, charged shots, AI keepers, two halves) and Bounce (the rubber-ball classic — charge jumps, rings, spikes, springs, six levels, synthesized sounds). Plus the **Computer Graphics Lab**, a learn-graphics.h-from-zero-to-advanced course: ten new labs (First Window, Colors & Pixels, Shapes & Text, Keyboard & Mouse, the Animation Loop, Sprites with `getimage`, hand-written Scanline Polygon Fill, animated Bézier Curves, recursive Fractals and a 3-D Wireframe Cube) alongside the eight restored classics (Coordinate Viewer, Pixel Inspector, DDA, Bresenham line & circle, Midpoint Ellipse, 2D Transformations, Cohen–Sutherland Clipping). |
 | **Snippets** | `gfxprog`, `gfx-anim`, `gfx-mouse`, `gfx-kbd`, `gfx-text`, `gfx-bar`. |
 | **Celebrations** (optional) | A confetti animation over the panel on every successful compilation and a short show when the panel first opens each session; compile errors produce a full-screen error overlay presenting the first error messages. Includes an optional **Fireworks Simulator** with realistic synthesized audio (launch whoosh, burst boom, crackle) and click-to-burst — click anywhere in the show and the next firework bursts at that spot. Everything is bundled locally (no network requests) and can be disabled with `graphics-h-runner.celebrations.enabled`. |
 
@@ -112,7 +112,7 @@ code --install-extension mythos0-labs.graphics-h-runner
 | `graphics.h: Restore Original Settings (undo Complete Run Setup)` | Restore every setting the setup changed — also runs automatically on uninstall |
 | `graphics.h: Setup Doctor — Check Environment` | Probe the compiler and graphics libraries, with fixes |
 | `graphics.h: Copy Compile Command` | Copy the exact compiler command line for the active file |
-| `graphics.h: Open Examples Folder` | Copy all 3 game examples into the workspace and reveal them |
+| `graphics.h: Open Examples Folder` | Copy all 31 examples into the workspace and reveal them |
 | `graphics.h: Open Example Program` | Open any bundled sample in the editor |
 | `graphics.h: Cheat Sheet` | Open the searchable `graphics.h` function reference |
 | `graphics.h: Fireworks Simulator` | Full-screen fireworks simulation (same button or Esc stops it) |
@@ -124,11 +124,16 @@ The **graphics.h Runner** icon in the Activity Bar opens the panel:
 1. **Status** — a live Ready / Not ready / Checking pill with the extension version, and a
    one-click **Complete Run Setup** button while anything is missing.
 2. **Actions** — Compile & Run, Complete Run Setup, Setup Doctor, Compile, Run Last Build,
-   Stop Running Program and Copy Compile Command, always visible.
-3. **Example Programs** — 3 game cards (Snake, 2-Player Football, Bounce), each with **Run**
-   (open, compile and launch in one click) and **Open** (open the source in the editor)
-   buttons, in a scrollable, collapsible section.
-4. **Cheat sheet** — the `?` button in the view title bar opens the searchable function
+   Stop Running Program, Copy Compile Command and **Reset Setup** (the same surgical restore
+   that runs on uninstall, behind a confirmation), always visible.
+3. **Example Programs** — the three games as cards with **Run** (open, compile and launch in one
+   click) and **Open** (open the source in the editor) buttons, in a scrollable, collapsible
+   section.
+4. **Computer Graphics Lab** — 18 lab programs arranged from zero to advanced: start-here labs
+   (first window, colors, shapes, input, animation), the interactive teaching tools, the classic
+   course algorithms, and advanced labs (sprites, scanline fill, Bézier curves, fractals, a 3-D
+   cube). Most print step-by-step explanations in the terminal while they draw.
+5. **Cheat sheet** — the `?` button in the view title bar opens the searchable function
    reference inside the panel.
 
 ## Extension settings
@@ -163,28 +168,52 @@ setup failures on any machine can be diagnosed and fixed without requiring users
 
 ## Tested and verified
 
-Every bundled game is compiled with the extension's own flag-building code, executed on a
+Every bundled sample is compiled with the extension's own flag-building code, executed on a
 virtual display and screenshot-verified by an automated pipeline (`test/run-tests.js`; machine-
-readable results in `test/test-results.json`). The same sources also compile against the
-WinBGIm headers (`test/win-header-tests.js`), so the Windows side is proven without a Windows
-machine. Current results — **3/3 passing**:
+readable results in `test/test-results.json`). Current results — **31/31 passing**:
 
-| Game | Verdict | What it does |
+| Sample | Verdict | What it renders |
 |---|---|---|
-| `01_snake_game.cpp` | ✅ PASS | playable demo run, HUD, resizable window, all menus and screens exercised |
-| `02_football_game.cpp` | ✅ PASS | kickoff, AI keepers, two-player controls, scoreboard and match clock |
-| `03_bounce_game.cpp` | ✅ PASS | level 1 with rings, spikes and the bouncing-ball physics loop |
+| `01_hello_graphics.cpp` | ✅ PASS | basic shapes and text |
+| `02_shapes_showcase.cpp` | ✅ PASS | bars, circles, ellipses, flood fill, 16-color palette |
+| `03_bouncing_ball.cpp` | ✅ PASS | animated ball with trail |
+| `04_moving_car.cpp` | ✅ PASS | scrolling road scene |
+| `05_tricolor_flag.cpp` | ✅ PASS | flag with sun emblem |
+| `06_fractal_tree.cpp` | ✅ PASS | recursive fractal tree |
+| `07_mandelbrot.cpp` | ✅ PASS | full Mandelbrot set (~120k pixels) |
+| `08_mouse_paint.cpp` | ✅ PASS | mouse painting with color cycling |
+| `09_keyboard_paddle.cpp` | ✅ PASS | paddle game with keyboard control |
+| `10_smiley_wink.cpp` | ✅ PASS | animated smiley with blinking eyes |
+| `11_bouncing_balls.cpp` | ✅ PASS | seven balls with ghost trails |
+| `12_fireworks.cpp` | ✅ PASS | shell-based fireworks over a city skyline |
+| `13_solar_system.cpp` | ✅ PASS | orbiting planets, moon and comet |
+| `14_aquarium.cpp` | ✅ PASS | fish, bubbles and swaying seaweed |
+| `15_rainbow_spiral.cpp` | ✅ PASS | growing rainbow spiral |
+| `16_helicopter.cpp` | ✅ PASS | helicopter over a night skyline |
+| `17_sunset.cpp` | ✅ PASS | sunset with rising stars and moon |
+| `18_starfield.cpp` | ✅ PASS | warp-speed starfield |
+| `19_dda_line.cpp` | ✅ PASS | DDA line from terminal input, pixel by pixel |
+| `20_turbo_tour.cpp` | ✅ PASS | `bar3d`, `pieslice`, `sector`, fill patterns |
+| `21_viewport_bounce.cpp` | ✅ PASS | viewport clipping with two panes |
+| `22_sprite_ride.cpp` | ✅ PASS | `getimage`/`putimage` sprite animation |
+| `23_conio_paint.cpp` | ✅ PASS | `conio.h` keyboard drawing pad |
+| `24_coordinate_viewer.cpp` | ✅ PASS | grid, axes, origin and coordinate labels |
+| `25_pixel_inspector.cpp` | ✅ PASS | mouse x/y and color readout |
+| `26_dda_lab.cpp` | ✅ PASS | DDA algorithm with step table |
+| `27_bresenham_line_lab.cpp` | ✅ PASS | all-integer Bresenham line, all octants |
+| `28_bresenham_circle_lab.cpp` | ✅ PASS | midpoint circle with 8-way symmetry |
+| `29_midpoint_ellipse_lab.cpp` | ✅ PASS | midpoint ellipse, region 1 / region 2 |
+| `30_2d_transforms_lab.cpp` | ✅ PASS | translate / rotate / scale with real matrices |
+| `31_cohen_sutherland_clipping.cpp` | ✅ PASS | outcode-based line clipping |
 
 The setup engine is tested end to end as well: fresh SDL_bgi download → patch → build →
 user-prefix install → compile → verified render.
 
 More rendered output: [`docs/screenshots/`](docs/screenshots/)
 
-![Snake game](docs/screenshots/01_snake_game.png)
+![Brick-breaker sample](docs/screenshots/09_keyboard_paddle.png)
 
-![2-Player Football](docs/screenshots/02_football_game.png)
-
-![Bounce game](docs/screenshots/03_bounce_game.png)
+![Fireworks sample](docs/screenshots/12_fireworks.png)
 
 ## Per-OS details
 

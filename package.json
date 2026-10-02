@@ -1,8 +1,8 @@
 {
   "name": "graphics-h-runner",
-  "displayName": "graphics.h Runner \u2014 One-Click Setup",
-  "description": "Compile and run C++ graphics.h (BGI/WinBGIm/SDL_bgi) programs with one keypress or F5. One command auto-installs the whole toolchain \u2014 compiler, graphics library and linker flags \u2014 then wires the native VS Code run options, shows compiler errors in the Problems panel, and ships three complete games (Snake, 2-Player Football, Bounce) as runnable examples, a searchable graphics.h reference and a Setup Doctor.",
-  "version": "1.5.17",
+  "displayName": "graphics.h Runner — One-Click Setup",
+  "description": "Compile and run C++ graphics.h (BGI/WinBGIm/SDL_bgi) programs with one keypress or F5. One command auto-installs the whole toolchain — compiler, graphics library and linker flags — then wires the native VS Code run options, shows compiler errors in the Problems panel, and ships three complete games (Snake, 2-Player Football, Bounce), an 18-program Computer Graphics Lab that teaches from zero to advanced, a searchable graphics.h reference and a Setup Doctor.",
+  "version": "1.5.19",
   "publisher": "mythos0-labs",
   "author": {
     "name": "Department of CSE, Dhaka International University",
@@ -122,7 +122,7 @@
       },
       {
         "command": "graphics-h-runner.doctor",
-        "title": "Setup Doctor \u2014 Check Environment",
+        "title": "Setup Doctor — Check Environment",
         "category": "graphics.h",
         "icon": "$(check)"
       },

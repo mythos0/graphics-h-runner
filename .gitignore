@@ -6,3 +6,4 @@ docs/screenshots/*.png.tmp
 .DS_Store
 dist/
 .vscode-test/
+test/test-results.json

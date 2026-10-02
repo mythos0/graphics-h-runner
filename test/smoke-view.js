@@ -5,10 +5,10 @@
  *
  * Validates:
  *  1. all three environment states render the right pill + CTA
- *  2. 3 game program cards (Snake / Football / Bounce) with Run + Open
- *     the Example Programs list and the Computer Graphics Lab section
- *  3. 7 action buttons wired to COMMAND_META ids (Open Examples Folder
- *     removed in v1.4.9), exactly one green accent
+ *  2. 3 game program cards (Snake / Football / Bounce) + the Computer
+ *     Graphics Lab section with 18 lab programs (8 restored + 10 new)
+ *  3. 9 action buttons wired to COMMAND_META ids (incl. Reset Setup;
+ *     Open Examples Folder removed in v1.4.9), exactly one green accent
  *  4. CSP + nonce + script tag + version are present; the DIU badge sits on
  *     the exact right side of the footer text, and the footer carries the
  *     "Powered by Department of CSE …" credit
@@ -87,27 +87,34 @@ check('checking state: amber pill', () => {
   assert.ok(h.includes('Checking environment'), 'no checking copy');
 });
 
-check('3 game program cards, each with Run + Open (v1.5.16 game suite)', () => {
+check('3 game cards + 18 lab cards, each with Run + Open (v1.5.16)', () => {
   const h = html({});
   const runs = (h.match(/data-run="/g) || []).length;
   const opens = (h.match(/data-open="/g) || []).length;
-  assert.strictEqual(runs, 3, 'data-run count ' + runs);
-  assert.strictEqual(opens, 3, 'data-open count ' + opens);
+  assert.strictEqual(runs, 21, 'data-run count ' + runs);
+  assert.strictEqual(opens, 21, 'data-open count ' + opens);
   for (const t of ['Snake', '2-Player Football', 'Bounce']) {
     assert.ok(h.includes(t), 'game program missing: ' + t);
   }
-  /* the old sections are gone for good */
-  assert.ok(!h.includes('id="lab-sec"'), 'lab section still rendered');
+  /* the lab section is BACK (restored as it was, then extended) */
+  assert.ok(h.includes('id="lab-sec"'), 'lab section missing');
+  assert.ok(h.includes('18 lab programs · tap to expand'), 'lab section count wrong');
+  for (const t of ['Coordinate Viewer', 'DDA Line Lab', 'Bresenham Circle Lab',
+                   'First Window (start here)', '3D Wireframe Cube']) {
+    assert.ok(h.includes(t), 'lab program missing: ' + t);
+  }
   assert.ok(!h.includes('Winking Smiley'), 'old program card leaked');
 });
 
-check('8 action buttons carrying COMMAND_META ids (no Open Examples Folder)', () => {
+check('9 action buttons carrying COMMAND_META ids (incl. Reset Setup)', () => {
   const h = html({});
   const cmds = (h.match(/data-cmd="/g) || []).length;
-  assert.strictEqual(cmds, 8, 'data-cmd count ' + cmds);
+  assert.strictEqual(cmds, 9, 'data-cmd count ' + cmds);
   for (const c of COMMAND_META) {
     assert.ok(h.includes(`id="${c.id}"`), 'button id missing: ' + c.id);
   }
+  assert.ok(h.includes('data-cmd="graphics-h-runner.restoreOriginalSettings"'), 'Reset Setup button not wired');
+  assert.ok(h.includes('Reset Setup'), 'Reset Setup label missing');
   assert.ok(!h.includes('data-cmd="graphics-h-runner.openExamplesFolder"'), 'Open Examples Folder button still present');
   assert.ok(!h.includes('Open Examples Folder'), 'Open Examples Folder text leaked');
 });
@@ -123,7 +130,7 @@ check('action buttons: exactly one green accent (primary), all others uniform ne
     if (m[1].includes('btn-accent')) { accent++; firstId = firstId || m[2]; }
     assert.ok(!/btn-(violet|amber|emerald|blue|cyan|rose|fuchsia|lime)/.test(m[1]), 'rainbow color class found on ' + m[2]);
   }
-  assert.strictEqual(total, 8, 'action button count ' + total);
+  assert.strictEqual(total, 9, 'action button count ' + total);
   assert.strictEqual(accent, 1, 'accent button count ' + accent);
   assert.strictEqual(firstId, 'cmd-compileAndRun', 'accent is not the 1st action button');
   const festive = btns.filter((b) => b.cls.includes('btn-festive') && !b.cls.includes('btn-festive-stop'));
@@ -276,14 +283,14 @@ check('hero button: exactly one, it is Compile & Run, full-width alone on its ro
   assert.ok(m && m[1].includes('btn-hero'), '1st action button is not the hero');
   assert.ok(h.includes('grid-column: 1 / -1'), 'hero must span the full row');
   assert.ok(h.includes('.btn-hero .btn-title'), 'hero typography rules missing');
-  /* the other 6 stay in the 2-per-row grid; the freed row belongs to the
+  /* the other 7 stay in the 2-per-row grid; the freed row belongs to the
      programs zone (flex:1) which grows for expansion + scrolling */
   const re = /<button class="([^"]*)" data-cmd="[^"]*" id="(cmd-[^"]+)"/g;
   let m2, grid = 0;
   while ((m2 = re.exec(h)) !== null) {
     if (!m2[1].includes('btn-hero')) grid++;
   }
-  assert.strictEqual(grid, 7, 'secondary buttons not in the grid: ' + grid);
+  assert.strictEqual(grid, 8, 'secondary buttons not in the grid: ' + grid);
   assert.ok(h.includes('repeat(2, minmax(0, 1fr))'), '2-per-row grid rule missing');
   assert.ok(h.includes('@media (max-width: 299px)'), 'very-narrow single-column fallback missing');
 });
@@ -305,11 +312,14 @@ check('example programs: collapsed by default, remembered, scroll inside their z
   assert.ok(h.includes('margin-top:auto'), 'footer not pinned to the bottom');
 });
 
-check('v1.5.16: the Computer Graphics Lab section is fully removed', () => {
+check('v1.5.16: the Computer Graphics Lab section is back with its own toggle', () => {
   const h = html({});
-  assert.ok(!h.includes('id="lab-sec"'), 'lab section header still rendered');
-  assert.ok(!h.includes('Computer Graphics Lab'), 'lab section title still rendered');
-  assert.ok(!h.includes('lab-programs'), 'lab list still rendered');
+  assert.ok(h.includes('id="lab-sec"'), 'lab section header missing');
+  assert.ok(h.includes('Computer Graphics Lab'), 'lab section title missing');
+  assert.ok(h.includes('id="lab-programs" class="collapsed"'), 'lab list not collapsed by default');
+  /* both toggles MERGE into the persisted state so they never wipe each other */
+  assert.ok(h.includes('st.labOpen = !labOpen(); vscode.setState(st)'), 'lab toggle does not merge persisted state');
+  assert.ok(h.includes("labSec.addEventListener('click', toggleLab)"), 'lab toggle click not wired');
   /* the Example Programs toggle keeps its persisted-state behaviour */
   assert.ok(h.includes('st.programsOpen = !programsOpen(); vscode.setState(st)'), 'programs toggle does not merge persisted state');
   assert.ok(h.includes("progSec.addEventListener('click', togglePrograms)"), 'programs toggle click not wired');
@@ -346,7 +356,7 @@ check('program count lives in the section header (per-button hint gone)', () => 
   const h = html({});
   assert.ok(!h.includes('all 23 programs'), 'old per-button count hint still rendered');
   assert.ok(h.includes('3 programs · tap to expand'), 'section count header wrong');
-  assert.ok(!h.includes('lab programs'), 'lab count header still rendered');
+  assert.ok(h.includes('18 lab programs · tap to expand'), 'lab count header wrong');
 });
 
 check('liveness: page pongs on load and answers pings (service-worker watchdog)', () => {
