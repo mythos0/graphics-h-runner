@@ -4,6 +4,22 @@ All notable changes to this extension are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.22] — 2026-10-02
+
+The Fireworks Simulator's sound stops being a video-game "pfft" and starts being a firework: open-air reverb, real explosion anatomy, stereo space, and positional playback.
+
+### Changed
+- **Open-air reverb — the single biggest missing piece.** A real shell detonates hundreds of meters up and the sound returns off terrain: a clean direct sound, a short pre-delay, discrete slap-back reflections, then a diffuse tail whose highs die first. Every burst is now dry+wet through a ConvolverNode driven by a synthetic impulse response built from exactly that recipe. The old buffers were bone-dry exponential decays — the huge "BOOM…oom…m" tail simply did not exist.
+- **Real explosion anatomy.** The burst is now a two-stage attack (a 5 ms ultrasharp crack on top of a 45 ms high-passed "BANG"), a broadband body whose brightness falls while a decaying tremolo adds the rattling quality, and a WAVESHAPED sub sweep (80→30 Hz through a soft saturator — the odd harmonics are what makes a boom read as displaced air instead of a test tone), plus a mid-band texture sweep.
+- **Stereo everywhere.** Buffers render to two channels; crackle pops are individually panned decisively left/right (a real crackle cloud is wide and spatially random, not a centered click track), and the crackle is far denser (~150 pops/s at onset, decaying).
+- **Grounded mortar lift.** Two saturated thumps (tube + echo), a fluttering pressurized-gas hiss, and the old 720→1400 Hz sine whistle demoted to a barely-there shimmer at 1/25th of its level — real lifts are thump + hiss, not a whistle solo.
+- **Positional playback.** playSound() now receives the event's stage position: each sound is panned by the shell's horizontal position, high bursts are low-passed (air absorbs highs over distance — sky-high bursts arrive muffled, ground-level stays bright) and slightly quieter, and per-event volume jitter keeps identical shells from sounding machine-stamped.
+- **No more chipmunk small bursts.** Upstream mapped shell size to up to 2× playback rate, which made small bursts sound fast rather than small; small shells are now only somewhat higher-pitched.
+
+### Verified
+- Real-Chromium proof: all 9 buffers (lift ×3, burst ×2, burstSmall ×2, crackle, crackleSmall) render offline in 621 ms through the exact pipeline the webview runs; exported WAVs pass a 9-point spectral gate — burst sub energy 70.6% (20–100 Hz), reverb tail RMS ratio 0.112 (was ~0 dry), stereo L/R correlation 0.478, crackle 109+ distinct onsets with 0.493 L/R correlation, lift thump-dominant (LF 0.820 vs whistle band 0.082), burstSmall shorter and brighter than burst. No clipping (peak 0.78).
+- `test/celebrate-tests.js` now pins the realism contracts (convolver + stereo IR, two-channel rendering, panned crackle, positional playSound, demoted whistle, gone chipmunk mapping); full unit battery, win-header 21/21 on real MinGW, run-tests 21/21 on SDL_bgi and e2e activation all green.
+
 ## [1.5.21] — 2026-10-02
 
 Ten of the twenty-one shipped programs relied on a standard header they never included — fixed for every compiler, and updated examples now actually reach the machines that have older copies.

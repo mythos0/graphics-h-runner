@@ -1618,7 +1618,7 @@ function floralEffect(star) {
         });
         // Queue burst flash render
         BurstFlash.add(star.x, star.y, 46);
-        soundManager.playSound('burstSmall');
+        soundManager.playSound('burstSmall', 1, star);
 }
 
 // Floral burst with willow stars
@@ -1643,7 +1643,7 @@ function fallingLeavesEffect(star) {
         });
         // Queue burst flash render
         BurstFlash.add(star.x, star.y, 46);
-        soundManager.playSound('burstSmall');
+        soundManager.playSound('burstSmall', 1, star);
 }
 
 // Crackle pops into a small cloud of golden sparks.
@@ -1759,7 +1759,7 @@ class Shell {
                 
                 comet.onDeath = comet => this.burst(comet.x, comet.y);
                 
-                soundManager.playSound('lift');
+                soundManager.playSound('lift', 1, { x: launchX, y: launchY });
         }
         
         burst(x, y) {
@@ -1773,14 +1773,14 @@ class Shell {
                 
                 if (this.crossette) onDeath = (star) => {
                         if (!playedDeathSound) {
-                                soundManager.playSound('crackleSmall');
+                                soundManager.playSound('crackleSmall', 1, star);
                                 playedDeathSound = true;
                         }
                         crossetteEffect(star);
                 }
                 if (this.crackle) onDeath = (star) => {
                         if (!playedDeathSound) {
-                                soundManager.playSound('crackle');
+                                soundManager.playSound('crackle', 1, star);
                                 playedDeathSound = true;
                         }
                         crackleEffect(star);
@@ -1983,7 +1983,7 @@ class Shell {
                         const maxDiff = 2;
                         const sizeDifferenceFromMaxSize = Math.min(maxDiff, shellSizeSelector() - this.shellSize);
                         const soundScale = (1 - sizeDifferenceFromMaxSize / maxDiff) * 0.3 + 0.7;
-                        soundManager.playSound('burst', soundScale);
+                        soundManager.playSound('burst', soundScale, { x, y });
                 }
         }
 }
@@ -2245,7 +2245,7 @@ const soundManager = {
         _lastSmallBurstTime: 0,
 
         /**
-         * Play a sound of `type`. Will randomly pick a file associated with type, and play it at the specified volume
+         * Play a sound of `type`. Will randomly pick a buffer associated with type, and play it at the specified volume
          * and play speed, with a bit of random variance in play speed. This is all based on `sources` config.
          *
          * @param  {string} type - The type of sound to play.
@@ -2253,8 +2253,13 @@ const soundManager = {
          *                             descrease volume and increase playback speed. This is because large explosions are
          *                             louder, deeper, and reverberate longer than small explosions.
          *                             Note that a scale of 0 will mute the sound.
+         * @param  {?Object} pos - Optional stage position of the EVENT in px ({x, y}).
+         *                             v1.5.22 realism: the event is PANNED by its horizontal
+         *                             position, and high events are low-passed (air absorbs
+         *                             highs over distance, so bursts high in the sky arrive
+         *                             muffled while ground-level sounds stay bright).
          */
-        playSound(type, scale=1) {
+        playSound(type, scale=1, pos) {
                 // Ensure `scale` is within valid range.
                 scale = MyMath.clamp(scale, 0, 1);
 
@@ -2280,9 +2285,9 @@ const soundManager = {
                         throw new Error(`Sound of type "${type}" doesn't exist.`);
                 }
 
-                // graphics.h Runner webview build: audio files are NOT bundled
-                // (upstream streams them from CodePen's S3; the overlay CSP rightly
-                // blocks remote fetches). Without buffers, skip silently instead of
+                // graphics.h Runner webview build: buffers come from the
+                // offline synth (media/fireworks/audio.js, rendered by
+                // preload()). Without buffers, skip silently instead of
                 // throwing inside the render loop when sound is toggled on.
                 if (!source.buffers || !source.buffers.length) {
                         return;
@@ -2294,11 +2299,14 @@ const soundManager = {
                         source.playbackRateMax
                 );
                 
-                // Volume descreases with scale.
-                const scaledVolume = initialVolume * scale;
-                // Playback rate increases with scale. For this, we map the scale of 0-1 to a scale of 2-1.
-                // So at a scale of 1, sound plays normally, but as scale approaches 0 speed approaches double.
-                const scaledPlaybackRate = initialPlaybackRate * (2 - scale);
+                // Volume descreases with scale, with a touch of per-event jitter
+                // so identical shells never sound machine-stamped.
+                const scaledVolume = initialVolume * scale * (0.92 + Math.random() * 0.08);
+                // v1.5.22: gentler size->rate mapping. Upstream mapped scale 0-1 to
+                // rate 2-1 (scale 0 played at double speed), which made small
+                // bursts sound chipmunk-fast rather than smaller. Real small
+                // shells are only somewhat higher-pitched.
+                const scaledPlaybackRate = initialPlaybackRate * (1.5 - 0.5 * scale);
                 
                 const gainNode = this.ctx.createGain();
                 gainNode.gain.value = scaledVolume;
@@ -2307,7 +2315,33 @@ const soundManager = {
                 const bufferSource = this.ctx.createBufferSource();
                 bufferSource.playbackRate.value = scaledPlaybackRate;
                 bufferSource.buffer = buffer;
-                bufferSource.connect(gainNode);
+
+                // v1.5.22 realism: positional playback.
+                //   pan      — event x mapped across the stereo field;
+                //   lowpass  — height mapped to air absorption (high bursts are
+                //              further away from the listener, so their highs
+                //              arrive attenuated; ground-level stays bright);
+                //   presence — high events are slightly quieter for the same reason.
+                let tail = bufferSource;
+                if (pos && isFinite(pos.x) && typeof this.ctx.createStereoPanner === 'function' && stageW > 0) {
+                        const pan = MyMath.clamp((pos.x / stageW) * 2 - 1, -1, 1) * 0.75;
+                        if (pan !== 0) {
+                                const panner = this.ctx.createStereoPanner();
+                                panner.pan.value = pan;
+                                tail.connect(panner);
+                                tail = panner;
+                        }
+                }
+                if (pos && isFinite(pos.y) && stageH > 0) {
+                        const groundness = MyMath.clamp(1 - pos.y / stageH, 0, 1);
+                        const airLP = this.ctx.createBiquadFilter();
+                        airLP.type = 'lowpass';
+                        airLP.frequency.value = 4200 + 7800 * groundness;
+                        airLP.Q.value = 0.4;
+                        tail.connect(airLP);
+                        tail = airLP;
+                }
+                tail.connect(gainNode);
                 gainNode.connect(this.ctx.destination);
                 bufferSource.start(0);
         }

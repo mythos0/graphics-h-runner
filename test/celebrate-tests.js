@@ -290,6 +290,38 @@ check('v1.5.15: script.js preload prefers the synth and playSound stays guarded'
   new Function(src); /* syntax check */
 });
 
+check('v1.5.22: the synth renders REAL open-air sound (reverb + stereo, not dry mono)', () => {
+  const src = fs.readFileSync(media.fireworksAudioJs, 'utf8');
+  /* open-air reverb: a synthetic impulse response through a convolver */
+  assert.ok(src.includes('createConvolver'), 'bursts must run through a convolver (open-air tail)');
+  assert.ok(/makeIR/.test(src), 'the reverb needs a synthetic IR builder');
+  /* stereo everywhere: crackle pops are individually panned */
+  assert.ok(src.includes('createStereoPanner'), 'crackle pops must be panned across the field');
+  assert.ok(/OfflineAudioContext\(2,/.test(src), 'buffers must render to TWO channels');
+  /* the old v1.5.15 whistle level (0.05) must stay demoted — real lifts
+   * are thump + hiss, not a sine solo */
+  assert.ok(!/exponentialRampToValueAtTime\(0\.05,/.test(src), 'toy whistle level must stay gone');
+  /* sub boom goes through the saturator so it reads as displaced air */
+  assert.ok(/saturator\(/.test(src) || /shaperCurve\(/.test(src), 'sub boom must be saturated');
+});
+
+check('v1.5.22: playSound is positional (pan by x, air absorption by height)', () => {
+  const src = fs.readFileSync(media.scriptJs, 'utf8');
+  assert.ok(/playSound\(type,\s*scale=1,\s*pos\)/.test(src), 'playSound must accept a position');
+  assert.ok(src.includes('createStereoPanner'), 'playback must pan with shell x');
+  assert.ok(/groundness/.test(src), 'playback must low-pass by burst height');
+  /* the chipmunk mapping (2 - scale) is gone — small shells are only
+   * somewhat higher-pitched now */
+  assert.ok(!/\(2 - scale\)/.test(src), 'upstream double-speed rate mapping must stay gone');
+  /* engine call sites pass positions */
+  assert.ok(/playSound\('burst', soundScale, \{ x, y \}\)/.test(src), 'burst must pass its position');
+  assert.ok(/playSound\('lift', 1, \{ x: launchX, y: launchY \}\)/.test(src), 'lift must pass its position');
+  assert.ok(/playSound\('crackle', 1, star\)/.test(src), 'crackle must pass its position');
+  assert.ok(/playSound\('burstSmall', 1, star\)/.test(src), 'small bursts must pass their position');
+  assert.ok(src.includes('skip silently'), 'the empty-buffer guard must stay');
+  new Function(src); /* syntax check */
+});
+
 check('v1.5.15: click-to-burst targets the clicked spot exactly', () => {
   const src = fs.readFileSync(media.scriptJs, 'utf8');
   /* launch() accepts an explicit burst target and clamps it to a sky band */

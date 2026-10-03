@@ -253,7 +253,7 @@
       "exitCode": 0,
       "shot": "/home/z/my-project/push-work/fresh-155/docs/screenshots/37_lab_sprite_getimage.png",
       "analysis": {
-        "nonblack": 0.0317,
+        "nonblack": 0.0321,
         "unique_colors": 8
       },
       "cmd": "g++ -I/home/z/my-project/bgi-env/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include/x86_64-linux-gnu /home/z/my-project/push-work/fresh-155/samples/37_lab_sprite_getimage.cpp -o /home/z/my-project/push-work/fresh-155/build/37_lab_sprite_getimage -L/home/z/my-project/bgi-env/usr/lib -Wl,-rpath,/home/z/my-project/bgi-env/usr/lib -L/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -Wl,-rpath,/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -lSDL_bgi -lSDL2 -lm",
@@ -313,7 +313,7 @@
       "exitCode": 0,
       "shot": "/home/z/my-project/push-work/fresh-155/docs/screenshots/41_lab_3d_wireframe_cube.png",
       "analysis": {
-        "nonblack": 0.0027,
+        "nonblack": 0.0029,
         "unique_colors": 4
       },
       "cmd": "g++ -I/home/z/my-project/bgi-env/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include -I/home/z/my-project/bgi-env/sysroot/usr/include/x86_64-linux-gnu /home/z/my-project/push-work/fresh-155/samples/41_lab_3d_wireframe_cube.cpp -o /home/z/my-project/push-work/fresh-155/build/41_lab_3d_wireframe_cube -L/home/z/my-project/bgi-env/usr/lib -Wl,-rpath,/home/z/my-project/bgi-env/usr/lib -L/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -Wl,-rpath,/home/z/my-project/bgi-env/sysroot/usr/lib/x86_64-linux-gnu -lSDL_bgi -lSDL2 -lm",
