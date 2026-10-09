@@ -59,6 +59,7 @@ exports.runProcessStreaming = runProcessStreaming;
 exports.installCompilerViaWinget = installCompilerViaWinget;
 exports.discoverGppWindows = discoverGppWindows;
 exports.verifyCompilerRun = verifyCompilerRun;
+exports.isNetworkFailureText = isNetworkFailureText;
 exports.compilerArchitecture = compilerArchitecture;
 exports.bgiLinkProbe = bgiLinkProbe;
 exports.installCompilerWindowsDirect = installCompilerWindowsDirect;
@@ -68,6 +69,7 @@ exports.validateWinbgimArtifact = validateWinbgimArtifact;
 exports.describeBgiProbeFailure = describeBgiProbeFailure;
 exports.patchSdlBgiSources = patchSdlBgiSources;
 exports.patchInstalledHeaderConstChar = patchInstalledHeaderConstChar;
+exports.classifySdlBgiBuildFailure = classifySdlBgiBuildFailure;
 exports.installSdlBgiUserPrefix = installSdlBgiUserPrefix;
 const child_process_1 = require("child_process");
 const crypto_1 = require("crypto");
@@ -481,22 +483,58 @@ function walkForFile(root, fileName, maxDepth, maxEntries, hit) {
         }
     }
 }
-/**
- * True when the candidate compiler runs and prints a version line.
- * Returns the first version line for display.
- */
 async function verifyCompilerRun(candidate) {
     try {
-        const res = await runProcess(candidate, ['--version'], { timeoutMs: 20000 });
+        /* self-contained execFile (not the shared runProcess) so the failure
+         * REASON survives — spawn errors carry string codes, real exits numbers. */
+        const res = await new Promise((resolve) => {
+            (0, child_process_1.execFile)(candidate, ['--version'], { timeout: 20000, windowsHide: true, maxBuffer: 4 * 1024 * 1024 }, (err, stdout, stderr) => {
+                if (!err) {
+                    resolve({ code: 0, stdout: String(stdout || ''), stderr: String(stderr || ''), reason: '' });
+                    return;
+                }
+                const code = typeof err.code === 'number' ? err.code : -1;
+                let reason;
+                if (typeof err.code === 'string') {
+                    reason = 'spawn-' + err.code; /* ENOENT, EACCES, ETIMEDOUT… */
+                }
+                else if (err.signal) {
+                    reason = 'signal-' + err.signal;
+                }
+                else if (err.message && /timeout/i.test(err.message)) {
+                    reason = 'timeout';
+                }
+                else if (code !== -1) {
+                    reason = 'exit-' + code;
+                }
+                else {
+                    reason = 'spawn-failed';
+                }
+                resolve({ code, stdout: String(stdout || ''), stderr: String(stderr || ''), reason });
+            });
+        });
         if (res.code !== 0) {
-            return { ok: false, version: '' };
+            return { ok: false, version: '', reason: res.reason || `exit-${res.code}`, exitCode: res.code !== -1 ? res.code : undefined };
         }
         const line = (res.stdout || res.stderr).split(/\r?\n/).find((l) => l.trim().length > 0) || '';
-        return { ok: true, version: line.trim().slice(0, 120) };
+        if (!line.trim()) {
+            return { ok: false, version: '', reason: 'no-output' };
+        }
+        return { ok: true, version: line.trim().slice(0, 120), reason: '' };
     }
     catch {
-        return { ok: false, version: '' };
+        return { ok: false, version: '', reason: 'spawn-failed' };
     }
+}
+/**
+ * v1.5.23: classify text as a TRANSIENT NETWORK failure (download paths).
+ * Seen live as GRAPHICS-H-RUNNER-N/P ("TypeError: fetch failed" +
+ * "TimeoutError" during install-winbgim — GitHub Pages unreachable):
+ * these are the user's connectivity, not extension bugs, so they must be
+ * reported as warnings with a retry hint, never as error-inbox entries.
+ */
+function isNetworkFailureText(text) {
+    return /fetch failed|TimeoutError|aborted due to timeout|ConnectTimeoutError|ETIMEDOUT|ECONNRESET|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|socket hang up|network error|ERR_(?:SOCKET|CONNECTION|HTTP)_|getaddrinfo/i.test(String(text || ''));
 }
 async function compilerArchitecture(compiler, run = (cmd, args, opts) => runProcess(cmd, args, opts)) {
     try {
@@ -677,9 +715,32 @@ async function installCompilerWindowsDirect(storageRoot, onProgress) {
     }
     const check = await verifyCompilerRun(gpp);
     if (!check.ok) {
-        throw new Error('downloaded g++.exe did not run');
+        /* v1.5.23 (GRAPHICS-H-RUNNER-T): "did not run" carried zero diagnostics.
+         * Try the classic Windows blocker first — a Mark-of-the-Web Zone.Identifier
+         * ADS on the extracted exe — then retry once; if it still will not start,
+         * fail with the classified reason and the antivirus guidance instead of a
+         * bare message. */
+        try {
+            fs.rmSync(gpp + ':Zone.Identifier', { force: true });
+            log.push('removed Zone.Identifier mark from downloaded g++.exe');
+        }
+        catch {
+            /* non-NTFS or already clean — non-fatal */
+        }
+        const retry = await verifyCompilerRun(gpp);
+        if (!retry.ok) {
+            const avHint = retry.reason.startsWith('exit-') || retry.reason === 'spawn-EACCES'
+                ? ' — most likely antivirus/SmartScreen quarantine: add an exclusion for ' +
+                    path.dirname(gpp) +
+                    ' and re-run Full Setup'
+                : '';
+            throw new Error(`downloaded g++.exe did not run (probe: ${retry.reason || 'unknown'}${retry.exitCode !== undefined ? ', exit ' + retry.exitCode : ''})${avHint}`);
+        }
+        log.push('compiler OK after unblock retry: ' + retry.version);
     }
-    log.push('compiler OK: ' + check.version);
+    else {
+        log.push('compiler OK: ' + check.version);
+    }
     /* 5. free the disk: the 274 MB zip is no longer needed */
     try {
         fs.rmSync(zipPath, { force: true });
@@ -1283,6 +1344,34 @@ function patchInstalledHeaderConstChar(includeDir, log) {
  * No administrator rights are required. Returns the paths to wire into
  * extraIncludePaths / extraLibPaths.
  */
+/**
+ * v1.5.23 (GRAPHICS-H-RUNNER-X, macOS): the SDL_bgi source build died with a
+ * raw clang dump when SDL2 development headers were missing
+ * ("SDL_bgi.h:44:10: fatal error: 'SDL2/SDL.h' file not found"). Classify the
+ * compiler stderr and return an actionable per-platform message when the cause
+ * is a missing SDL2 (headers or library); '' when it is something else.
+ */
+function classifySdlBgiBuildFailure(stderr) {
+    const s = String(stderr || '');
+    if (/SDL2\/SDL\.h|SDL\.h['\s]*(?:not|cannot)|sdl\.h.*not found|'SDL\.h' file not found/i.test(s)) {
+        return ('SDL2 development headers are not installed. Install them first, then re-run Full Setup: ' +
+            (process.platform === 'darwin'
+                ? 'brew install sdl2'
+                : process.platform === 'linux'
+                    ? 'sudo apt install libsdl2-dev (Debian/Ubuntu) | sudo dnf install SDL2-devel (Fedora) | sudo pacman -S sdl2 (Arch)'
+                    : 'install the SDL2 development package for your platform'));
+    }
+    if (/(?:cannot find|undefined reference|library not found).*lSDL2|cannot find -lSDL2|\-lSDL2.*(?:not found|missing)/i.test(s)) {
+        return ('The SDL2 runtime/development library is missing (linker cannot find -lSDL2). ' +
+            'Install it first, then re-run Full Setup: ' +
+            (process.platform === 'darwin'
+                ? 'brew install sdl2'
+                : process.platform === 'linux'
+                    ? 'sudo apt install libsdl2-dev (Debian/Ubuntu) | sudo dnf install SDL2-devel (Fedora)'
+                    : 'install the SDL2 development package for your platform'));
+    }
+    return '';
+}
 async function installSdlBgiUserPrefix(opts = {}) {
     const storageRoot = opts.storageRoot || path.join(os.homedir(), '.graphics-h-runner');
     const srcRoot = path.join(storageRoot, 'sdl_bgi-src');
@@ -1325,8 +1414,17 @@ async function installSdlBgiUserPrefix(opts = {}) {
     }
     /* 3. patch */
     patchSdlBgiSources(srcDir, log);
-    /* 4. build */
+    /* 3.5 v1.5.23 (GRAPHICS-H-RUNNER-X): never even ATTEMPT the build without
+     * SDL2 development headers — the failure would be a raw clang dump the user
+     * cannot act on ("SDL2/SDL.h file not found", 4 events from macOS). Probe
+     * with the SAME compiler the build will use and fail with the exact
+     * install command instead. */
     const cc = opts.cc || 'gcc';
+    const sdl2Ready = await checkSdl2Dev({ cc, sdl2IncludeDirs: opts.sdl2IncludeDirs });
+    if (!sdl2Ready) {
+        throw new Error(classifySdlBgiBuildFailure("fatal error: 'SDL2/SDL.h' file not found"));
+    }
+    /* 4. build */
     const args = ['-fPIC', '-O2', '-shared', '-o', path.join(libDir, 'libSDL_bgi.so'), path.join(srcDir, 'SDL_bgi.c'), `-I${srcDir}`];
     for (const d of opts.sdl2IncludeDirs || []) {
         args.push(`-I${d}`);
@@ -1337,6 +1435,10 @@ async function installSdlBgiUserPrefix(opts = {}) {
     }
     const build = await runProcess(cc, args, { cwd: srcDir, timeoutMs: 300000 });
     if (build.code !== 0) {
+        const classified = classifySdlBgiBuildFailure(build.stderr);
+        if (classified) {
+            throw new Error('SDL_bgi build failed: ' + classified);
+        }
         throw new Error('SDL_bgi build failed: ' + build.stderr.slice(-800));
     }
     log.push('built libSDL_bgi.so');

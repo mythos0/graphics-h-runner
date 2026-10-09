@@ -7,7 +7,7 @@
         "nonblack": 0.2277,
         "unique_colors": 7
       },
-      "secs": "6.9"
+      "secs": "6.7"
     },
     "rfx02_gravity_bounce.cpp": {
       "ok": true,
@@ -43,13 +43,13 @@
         "nonblack": 0.0104,
         "unique_colors": 6
       },
-      "secs": "6.1"
+      "secs": "6.2"
     },
     "rfx06_viewport_clip.cpp": {
       "ok": true,
       "exit": 0,
       "analysis": {
-        "nonblack": 0.013,
+        "nonblack": 0.0129,
         "unique_colors": 4
       },
       "secs": "5.3"
@@ -79,7 +79,7 @@
         "nonblack": 0.4946,
         "unique_colors": 16
       },
-      "secs": "5.3"
+      "secs": "5.2"
     },
     "rfx10_key_echo.cpp": {
       "ok": true,

@@ -35,7 +35,8 @@ import {
   verifyCompilerRun,
   compilerArchitecture,
   bgiLinkProbe,
-  describeBgiProbeFailure
+  describeBgiProbeFailure,
+  isNetworkFailureText
 } from './setup';
 import { loadProgramCatalog, LoadedProgram, resolveProgramTarget } from './programs';
 import { GhPanelProvider, PanelClick } from './panelView';
@@ -500,6 +501,9 @@ async function verifyWinbgimInstall(
     platform,
     arch: String(arch),
     undefinedRefs: String(Boolean(link.undefinedRefs)),
+    /* v1.5.23: the live events only said "link probe failed (exit 1)" — carry
+     * the classified verdict too so the root cause arrives with the event. */
+    verdict: scrubText(verdict).slice(0, 120),
     detail: scrubText(link.detail).slice(0, 180)
   });
   summary.push('WARNING: ' + verdict);
@@ -812,6 +816,18 @@ async function runFullSetup(context: vscode.ExtensionContext): Promise<void> {
             summary.push('SDL_bgi auto-install postponed: install the compiler first (step above), then re-run Full Setup.');
             continue;
           }
+          /* v1.5.23 (GRAPHICS-H-RUNNER-X): same gate for SDL2 itself — a macOS
+           * machine without SDL2 headers reached the clang build and died on
+           * "'SDL2/SDL.h' file not found" (4 events). The plan already shows
+           * the exact install command; honor it instead of failing. */
+          if (platform !== 'windows' && !sdl2DevOk) {
+            summary.push(
+              'SDL_bgi auto-install postponed: SDL2 development headers are missing — run the "Install SDL2 development files" command above ' +
+                (platform === 'macos' ? '(macOS: brew install sdl2)' : '(e.g. sudo apt install libsdl2-dev on Ubuntu)') +
+                ', then re-run Full Setup.'
+            );
+            continue;
+          }
           try {
             const res = await installSdlBgiUserPrefix({ storageRoot });
             await addPathsToSetting('extraIncludePaths', [res.includeDir]);
@@ -824,8 +840,28 @@ async function runFullSetup(context: vscode.ExtensionContext): Promise<void> {
             addExtensionBreadcrumb('setup.step', 'install-sdl_bgi ok');
           } catch (e) {
             log('[setup] SDL_bgi install error: ' + String(e));
-            summary.push('SDL_bgi auto-install FAILED: ' + String(e));
-            captureExtensionError(e, { setup_step: 'install-sdl_bgi', platform: platform });
+            const msg = String(e);
+            if (isNetworkFailureText(msg)) {
+              /* v1.5.23: download flake — the user's connectivity, not our bug.
+               * GRAPHICS-H-RUNNER-N/P were raw "fetch failed"/"TimeoutError"
+               * error-inbox entries; they are warnings with a retry hint now. */
+              summary.push('SDL_bgi download failed (network): check your internet connection and re-run Full Setup.');
+              captureExtensionWarning('setup download network failure', {
+                setup_step: 'install-sdl_bgi',
+                platform: platform,
+                detail: scrubText(msg).slice(0, 180)
+              });
+            } else if (/SDL2 development headers|SDL2 runtime\/development library/i.test(msg)) {
+              /* classified SDL2-missing failure — actionable, not our bug */
+              summary.push('SDL_bgi auto-install FAILED: ' + msg);
+              captureExtensionWarning('SDL_bgi install blocked: SDL2 missing', {
+                setup_step: 'install-sdl_bgi',
+                platform: platform
+              });
+            } else {
+              summary.push('SDL_bgi auto-install FAILED: ' + msg);
+              captureExtensionError(e, { setup_step: 'install-sdl_bgi', platform: platform });
+            }
           }
         } else if (step.kind === 'auto' && step.id === 'install-compiler-winget') {
           /* half-setup fast path: a compiler may already be on disk (previous
@@ -877,8 +913,19 @@ async function runFullSetup(context: vscode.ExtensionContext): Promise<void> {
               addExtensionBreadcrumb('setup.step', 'install-compiler-download ok');
             } catch (e) {
               log('[setup] direct download error: ' + String(e));
-              summary.push('Direct compiler download FAILED: ' + String(e));
-              captureExtensionError(e, { setup_step: 'install-compiler-download', platform: platform });
+              const msg = String(e);
+              if (isNetworkFailureText(msg)) {
+                /* v1.5.23: connectivity, not our bug — warning + retry hint */
+                summary.push('Direct compiler download failed (network): check your internet connection and re-run Full Setup.');
+                captureExtensionWarning('setup download network failure', {
+                  setup_step: 'install-compiler-download',
+                  platform: platform,
+                  detail: scrubText(msg).slice(0, 180)
+                });
+              } else {
+                summary.push('Direct compiler download FAILED: ' + msg);
+                captureExtensionError(e, { setup_step: 'install-compiler-download', platform: platform });
+              }
             }
           }
         } else if (step.kind === 'auto' && step.id === 'install-winbgim') {
@@ -892,8 +939,22 @@ async function runFullSetup(context: vscode.ExtensionContext): Promise<void> {
             await verifyWinbgimInstall(platform, storageRoot, res.includeDir, res.libDir, summary);
           } catch (e) {
             log('[setup] WinBGIM install error: ' + String(e));
-            summary.push('WinBGIM auto-install FAILED: ' + String(e));
-            captureExtensionError(e, { setup_step: 'install-winbgim', platform: platform });
+            const msg = String(e);
+            if (isNetworkFailureText(msg)) {
+              /* v1.5.23: GRAPHICS-H-RUNNER-N/P (fetch failed / TimeoutError
+               * while downloading WinBGIm) were error-inbox entries from a
+               * v1.5.17 machine whose GitHub Pages route was unreachable —
+               * a connectivity condition deserves a warning + retry hint. */
+              summary.push('WinBGIM download failed (network): check your internet connection and re-run Full Setup.');
+              captureExtensionWarning('setup download network failure', {
+                setup_step: 'install-winbgim',
+                platform: platform,
+                detail: scrubText(msg).slice(0, 180)
+              });
+            } else {
+              summary.push('WinBGIM auto-install FAILED: ' + msg);
+              captureExtensionError(e, { setup_step: 'install-winbgim', platform: platform });
+            }
           }
         } else if (step.kind === 'auto' && step.id === 'make-global') {
           /* v1.5.1 major feature: graphics.h must compile ANYWHERE after Full

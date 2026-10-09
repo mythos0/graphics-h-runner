@@ -61,20 +61,64 @@ function telemetryAllowed(): boolean {
   }
 }
 
-/** Replace user-identifying path segments with `~` (works on both separators). */
+/**
+ * Replace user-identifying path segments with `~`.
+ *
+ * v1.5.23 hardening (leaks seen in live events GRAPHICS-H-RUNNER-Q/Z):
+ *  - usernames with SPACES ("C:\\Users\\Taha Pervaiz\\…") survived the old
+ *    character class that stopped at whitespace — only "Taha" became ~;
+ *  - forward-slash Windows forms ("/c:/Users/name/…", "c:/Users/name/…")
+ *    escaped the backslash-only regex entirely;
+ *  - the os.homedir() literal split missed case variants (c:\users\…).
+ * The home-dir split is now a case-insensitive, separator-agnostic regex and
+ * the Windows "Users\\<name>" segment allows spaces and both separators.
+ */
 export function scrubText(value: string): string {
   let out = String(value);
   try {
     const home = os.homedir();
     if (home && home.length > 3) {
-      out = out.split(home).join('~');
+      const esc = home.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const reHome = new RegExp(esc.replace(/\\{1,2}/g, '[\\\\/]'), 'gi');
+      out = out.replace(reHome, '~');
     }
   } catch {
     /* ignore */
   }
-  out = out.replace(/([A-Za-z]:\\Users\\)[^\\/:*?"<>|\s]+/g, '$1~');
+  /* C:\Users\<name> | c:/Users/<name> | /c:/Users/<name> — spaces allowed in
+   * <name>, stopped by any path separator (or end of string). The whole
+   * "X:\Users\<sep>" prefix is captured and the NAME becomes `~`, so the
+   * shape stays exactly C:\Users\~\… (the pre-1.5.23 shape the tests and
+   * log readers know), for every separator style. */
+  out = out.replace(/([A-Za-z]:[\\/]+[Uu]sers[\\/]+)[^\\/:*?"<>|]*/g, '$1~');
   out = out.replace(/(\/home\/)[^/\s]+/g, '$1~');
   return out;
+}
+
+/**
+ * v1.5.1 shipped "drop Canceled" but only matched the exception TYPE. VS Code
+ * surfaces the same cancellation as type "Error" with value "Canceled: Canceled"
+ * (seen as GRAPHICS-H-RUNNER-A/-6/-5, 53 events from v1.4.x clients). Match the
+ * value/message pattern as well — an event is benign when EVERY exception value
+ * (or, for message events, the message itself) is a cancellation.
+ */
+const CANCELED_PATTERN = /^cance[l]{1,2}ed\b/i;
+
+export function isBenignCancellation(event: Sentry.Event): boolean {
+  try {
+    const values = event.exception?.values || [];
+    if (values.length > 0) {
+      return values.every(
+        (v) => v.type === 'Canceled' || CANCELED_PATTERN.test(String(v.value || ''))
+      );
+    }
+    if (typeof event.message === 'string') {
+      return CANCELED_PATTERN.test(event.message);
+    }
+  } catch {
+    /* filtering must never break delivery */
+  }
+  return false;
 }
 
 /** Recursively scrub strings inside breadcrumb/exception payloads. */
@@ -115,6 +159,11 @@ function scrubEvent<E extends Sentry.Event>(event: E): E {
             }
             if (typeof frame.abs_path === 'string') {
               frame.abs_path = scrubText(frame.abs_path);
+            }
+            /* defensive: some serialization paths use the camelCase form */
+            const camel = (frame as { absPath?: unknown }).absPath;
+            if (typeof camel === 'string') {
+              (frame as { absPath: string }).absPath = scrubText(camel);
             }
           }
         }
@@ -251,10 +300,19 @@ export function isAttributableToUs(event: Sentry.Event, extensionRootOverride?: 
   }
   const needle = 'graphics-h-runner';
   for (const f of frames) {
-    for (const p of [f.abs_path, f.filename]) {
+    for (const p of [f.abs_path, f.filename, (f as { absPath?: unknown }).absPath]) {
       if (typeof p === 'string') {
         const norm = p.replace(/\\/g, '/').toLowerCase();
-        if (norm.includes(needle) || norm.endsWith('/dist/extension.js')) {
+        /* v1.5.23: the bare "endsWith('/dist/extension.js')" clause was a LEAK
+         * — Copilot's built-in bundle lives at the same suffix
+         * (resources/app/extensions/copilot/dist/extension.js) and v10 host
+         * crashes from it (GRAPHICS-H-RUNNER-J/Q/Y/W/V, 42 events) were
+         * attributed to us. Only OUR install dir ("mythos0-labs.graphics-h-
+         * runner") may satisfy the dist-suffix shortcut now. */
+        if (norm.includes(needle)) {
+          return true;
+        }
+        if (norm.endsWith('/dist/extension.js') && norm.includes('mythos0-labs')) {
           return true;
         }
       }
@@ -279,8 +337,16 @@ export function isAttributableToUs(event: Sentry.Event, extensionRootOverride?: 
  * live: frame-less "Cannot find package 'prettier' imported from
  * .vscode\extensions\esbenp.prettier-vscode-..." unhandled rejections that
  * carry no frames to attribute (shared extension host, not our code).
+ *
+ * v1.5.23: also rejects VS Code BUILT-IN extension folders
+ * (<install>\resources\app\extensions\<name>\ — copilot, github, git, …).
+ * GRAPHICS-H-RUNNER-J/Q/Y/W/V/Z (41 events in 8 days) were exactly that:
+ * Copilot's and GitHub's own crashes whose frames end in
+ * "...\resources\app\extensions\copilot\dist\extension.js" — indistinguishable
+ * from our bundle by suffix alone. Our code NEVER lives under
+ * resources/app/extensions, so any such reference is foreign by definition.
  */
-function referencesOtherExtension(event: Sentry.Event): boolean {
+export function referencesOtherExtension(event: Sentry.Event): boolean {
   try {
     const paths: string[] = [];
     if (typeof event.message === 'string') {
@@ -297,11 +363,19 @@ function referencesOtherExtension(event: Sentry.Event): boolean {
         if (typeof f.abs_path === 'string') {
           paths.push(f.abs_path);
         }
+        if (typeof (f as { absPath?: unknown }).absPath === 'string') {
+          paths.push((f as { absPath: string }).absPath);
+        }
       }
     }
     for (const p of paths) {
+      /* user-installed extensions */
       const m = p.match(/\.vscode[/\\]+extensions[/\\]+([^/\\'"\s:]+)/i);
       if (m && !m[1].toLowerCase().startsWith('mythos0-labs.graphics-h-runner')) {
+        return true;
+      }
+      /* VS Code built-ins (copilot, github, git, …) — ours never ships there */
+      if (/resources[/\\]app[/\\]extensions[/\\]/i.test(p)) {
         return true;
       }
     }
@@ -327,6 +401,10 @@ export function initTelemetry(): void {
       dsn: SENTRY_DSN,
       release: `graphics-h-runner@${readExtensionVersion()}`,
       environment: process.env.SENTRY_ENVIRONMENT || 'production',
+      /* v1.5.23: the SDK defaults server_name to os.hostname() — live events
+       * shipped machine names ("DESKTOP-DIV8DM8", "Suhails-MacBook-Air.local").
+       * A constant identifier keeps events attributable without that leak. */
+      serverName: 'vscode-extension-host',
 
       /* Skill-recommended Node defaults: tracing on (0.1 in production). */
       tracesSampleRate: process.env.NODE_ENV === 'development' ? 1.0 : 0.1,
@@ -346,21 +424,25 @@ export function initTelemetry(): void {
         if (!telemetryAllowed()) {
           return null;
         }
-        /* v1.5.1: VS Code command cancellation (CancellationError) surfaces as
-         * "Canceled: Canceled" and is pure user noise, not an extension error —
-         * the only recurring issue the inbox ever saw for setupEverything. */
-        const exValues = event.exception?.values || [];
-        if (exValues.length > 0 && exValues.every((v) => v.type === 'Canceled')) {
+        /* v1.5.1: VS Code command cancellation (CancellationError) is pure user
+         * noise, not an extension error — broadened in v1.5.23 to also match
+         * the "type=Error, value=Canceled: Canceled" serialization. */
+        if (isBenignCancellation(event)) {
           return null;
         }
         /* Anything NOT captured deliberately by our own code must belong to
          * this extension: no frames at all (frame-less module-loader
-         * rejections), frames in another extension's folder, or paths naming
+         * rejections), frames in another extension's folder, frames in a
+         * VS Code built-in extension (copilot/github/git), or paths naming
          * another extension — all dropped. Handled captures (tag
          * ghr.source=handled) always pass. */
         const handled = ((event.tags || {}) as Record<string, string>)['ghr.source'] === 'handled';
         if (!handled && (referencesOtherExtension(event) || !isAttributableToUs(event))) {
           return null; /* another extension's / the host's own crash — not ours */
+        }
+        /* malformed / empty payload safety valve */
+        if (!event.exception && typeof event.message !== 'string') {
+          return null;
         }
         return scrubEvent(event);
       },
@@ -410,12 +492,79 @@ export function onTelemetryConsentChanged(enabled: boolean): void {
   }
 }
 
-/** Capture an exception that our own code caught and handled (with context tags). */
+/* ------------------------------------------------------------------
+ * v1.5.23 — session-level report dedupe + caps (inbox-spam hardening).
+ *
+ * Live data: "make-global probe failed" fired 38 times and "setup verify
+ * not ready" 25 times in 11 days — the same handful of machines whose
+ * environment legitimately cannot pass, re-reporting on EVERY Setup/Doctor
+ * run. Sentry groups them, but the inbox still drowns. From now on each
+ * distinct warning/error signature is reported ONCE per extension-host
+ * session, with hard caps as a safety valve for pathological loops.
+ * ------------------------------------------------------------------ */
+
+const reportedWarnings = new Set<string>();
+const reportedErrors = new Set<string>();
+let warningsSent = 0;
+let errorsSent = 0;
+const MAX_WARNINGS_PER_SESSION = 10;
+const MAX_ERRORS_PER_SESSION = 20;
+
+/** Canonical signature for dedupe (first 120 chars is plenty for grouping). */
+function eventSignature(parts: Array<string | undefined>): string {
+  return parts
+    .map((p) => (typeof p === 'string' ? p : ''))
+    .join('|')
+    .slice(0, 240);
+}
+
+/** Test/observability hook: has this warning signature already been reported? */
+export function hasReportedWarning(message: string): boolean {
+  return reportedWarnings.has(message.slice(0, 200));
+}
+
+/** Test hook: clear dedupe state (module state survives across suites). */
+export function resetReportedStateForTests(): void {
+  reportedWarnings.clear();
+  reportedErrors.clear();
+  warningsSent = 0;
+  errorsSent = 0;
+}
+
+/** Test-only: flip the module's active flag without Sentry.init. Capture calls
+ *  then exercise the real dedupe/cap logic while the SDK itself is a no-op
+ *  (no client configured -> nothing is ever sent). NEVER call from production
+ *  code. */
+export function setTelemetryActiveForTests(active: boolean): void {
+  telemetryActive = active;
+}
+
+/** Test/observability hook: has this error signature already been reported? */
+export function hasReportedError(type: string, message: string, setupStep: string): boolean {
+  return reportedErrors.has(
+    eventSignature([String(type || ''), String(message || '').slice(0, 120), String(setupStep || '')])
+  );
+}
+
+/** Capture an exception that our own code caught and handled (with context tags).
+ *  v1.5.23: identical (type+message+step) errors report once per session,
+ *  capped at MAX_ERRORS_PER_SESSION. */
 export function captureExtensionError(error: unknown, tags?: Record<string, string>): void {
   if (!telemetryActive) {
     return;
   }
   try {
+    const err = error as { name?: unknown; message?: unknown } | null;
+    const sig = eventSignature([
+      String((err && err.name) || typeof error),
+      String((err && err.message) || error || '').slice(0, 120),
+      tags && tags.setup_step ? tags.setup_step : ''
+    ]);
+    if (reportedErrors.has(sig) || errorsSent >= MAX_ERRORS_PER_SESSION) {
+      return;
+    }
+    reportedErrors.add(sig);
+    errorsSent++;
     Sentry.captureException(error, (scope) => {
       scope.setTag('ghr.source', 'handled'); /* attribution: ours by definition */
       if (tags) {
@@ -432,12 +581,17 @@ export function captureExtensionError(error: unknown, tags?: Record<string, stri
 
 /** Capture a handled-but-notable condition at WARNING level (the webview
  *  fallback engaging is resilience working as designed — visibility without
- *  polluting the error inbox). */
+ *  polluting the error inbox).
+ *  v1.5.23: each distinct warning reports ONCE per session, capped at
+ *  MAX_WARNINGS_PER_SESSION (the M/K/F trio alone was 81 events/11 days). */
 export function captureExtensionWarning(message: string, tags?: Record<string, string>): void {
-  if (!telemetryActive) {
+  const key = String(message || '').slice(0, 200);
+  if (!telemetryActive || reportedWarnings.has(key) || warningsSent >= MAX_WARNINGS_PER_SESSION) {
     return;
   }
   try {
+    reportedWarnings.add(key);
+    warningsSent++;
     Sentry.withScope((scope) => {
       scope.setLevel('warning');
       scope.setTag('ghr.source', 'handled');
