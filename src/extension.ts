@@ -79,6 +79,7 @@ import { Celebrator } from './celebrateHost';
 import type { CelebrationKind } from './celebrate';
 import { treeRunCommandId } from './programsTreeModel';
 import * as uninstallRestore from './uninstallRestore';
+import * as settingsHealth from './settingsHealth';
 
 const OUTPUT_CHANNEL_NAME = 'graphics.h Runner';
 const TERMINAL_NAME = 'graphics.h Runner';
@@ -317,6 +318,209 @@ async function applyUninstallRestore(): Promise<uninstallRestore.RestoreResult> 
   });
 }
 
+/* ------------------------------------------------------------------
+ * v1.5.24 — the "Unable to write into user settings" defusal
+ * (Sentry GRAPHICS-H-RUNNER-10).
+ *
+ * VS Code refuses EVERY global configuration update while the user's
+ * settings.json contains a JSON syntax error. Complete Setup used to call
+ * configuration.update() unguarded, so one hand-broken settings file turned
+ * the whole run into "Complete Setup failed: Error: Unable to write into
+ * user settings…". The guarded writer below (1) recognizes the refusal,
+ * (2) locates + repairs the broken file (verified conservative fixes, a
+ * timestamped backup first), (3) retries the write, and (4) when the file
+ * is beyond safe repair, degrades to a clear summary line + an "Open User
+ * Settings" shortcut instead of crashing Setup.
+ * ------------------------------------------------------------------ */
+
+/**
+ * Locate + analyze + (when safely possible) repair the user settings.json.
+ * Never deletes anything: the original is copied to
+ * settings.json.graphics-h-broken-backup-<timestamp> before any fix lands.
+ */
+function userSettingsCandidatesForThisHost(): string[] {
+  const out: string[] = [];
+  /* v1.5.24: the EXACT answer for this host — globalStorage lives at
+   * <user-data-dir>/User/globalStorage/<publisher>.<name>, so the user
+   * settings.json is <user-data-dir>/User/settings.json. This covers
+   * portable mode AND a custom --user-data-dir, which the env-based
+   * guesses below cannot see. */
+  if (storageDir) {
+    const norm = storageDir.replace(/\\/g, '/');
+    /* compare case-insensitively on BOTH sides (Windows/ macOS drives are
+     * case-preserving; a lowercase haystack never matches a Mixed-Case
+     * needle) */
+    const marker = '/user/globalstorage';
+    const idx = norm.toLowerCase().lastIndexOf(marker);
+    if (idx > 0) {
+      out.push(norm.slice(0, idx) + '/User/settings.json');
+    }
+  }
+  out.push(...settingsHealth.userSettingsCandidates(process.platform, process.env, os.homedir()));
+  return out;
+}
+
+async function repairUserSettingsJson(): Promise<{
+  found: boolean;
+  filePath?: string;
+  repaired: boolean;
+  fixes: string[];
+  backupPath?: string;
+  errors: settingsHealth.JsonError[];
+}> {
+  const candidates = userSettingsCandidatesForThisHost();
+  const filePath = candidates.find((p) => fs.existsSync(p));
+  if (!filePath) {
+    return { found: false, repaired: false, fixes: [], errors: [] };
+  }
+  let original: string;
+  try {
+    original = fs.readFileSync(filePath, 'utf8');
+  } catch (e) {
+    log('[settings-health] cannot read ' + filePath + ': ' + String(e));
+    return { found: true, filePath, repaired: false, fixes: [], errors: [] };
+  }
+  const analysis = settingsHealth.analyzeJsonc(original);
+  if (analysis.ok) {
+    /* the file parses here — VS Code's refusal came from something else
+     * (locked file, workspace trust). Nothing to repair blindly. */
+    log('[settings-health] ' + filePath + ' parses here — not touching it');
+    return { found: true, filePath, repaired: false, fixes: [], errors: [] };
+  }
+  log('[settings-health] ' + filePath + ' has JSON errors: ' + settingsHealth.describeErrors(analysis.errors));
+  const repair = settingsHealth.repairJsonc(original);
+  if (!repair.ok) {
+    /* beyond safe repair — leave the user's file exactly as it is */
+    log('[settings-health] no safe repair possible (remaining: ' + settingsHealth.describeErrors(repair.errors) + ')');
+    return { found: true, filePath, repaired: false, fixes: [], errors: repair.errors };
+  }
+  const backupPath = filePath + '.graphics-h-broken-backup-' + new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  try {
+    fs.writeFileSync(backupPath, original, 'utf8');
+    fs.writeFileSync(filePath, repair.text, 'utf8');
+  } catch (e) {
+    log('[settings-health] repair write failed: ' + String(e));
+    return { found: true, filePath, repaired: false, fixes: [], errors: analysis.errors };
+  }
+  log('[settings-health] repaired ' + filePath + ' (fixes: ' + repair.applied.join(', ') + '; backup: ' + backupPath + ')');
+  return { found: true, filePath, repaired: true, fixes: repair.applied, backupPath, errors: [] };
+}
+
+/** Offer the one-click jump to the file the user must fix by hand. */
+async function offerOpenUserSettings(kind: settingsHealth.SettingsWriteRefusal, detail: string): Promise<void> {
+  const pick = await vscode.window.showWarningMessage(
+    kind === 'user'
+      ? 'graphics.h Runner could not save its settings because your VS Code user settings.json has JSON errors in it (' +
+          detail.slice(0, 120) + '). Fix the marked problem, then re-run Complete Setup.'
+      : 'graphics.h Runner could not save its settings because this workspace\'s settings.json has JSON errors in it (' +
+          detail.slice(0, 120) + '). Fix the marked problem, then re-run Complete Setup.',
+    'Open User Settings'
+  );
+  if (pick === 'Open User Settings') {
+    try {
+      await vscode.commands.executeCommand('workbench.action.openSettingsJson');
+    } catch {
+      /* best effort */
+    }
+  }
+}
+
+/**
+ * A global configuration update that CANNOT crash the setup.
+ *
+ * On ANY write failure the user settings file is health-checked first: a
+ * broken settings.json poisons every write (the parse-error refusal
+ * GRAPHICS-H-RUNNER-10 reported) and also MASKS other errors — a key owned
+ * by an extension that is not loaded ("… is not a registered
+ * configuration") surfaces before the parse error even though the file is
+ * broken too. So: repair the file (backup first) when it does not parse,
+ * retry the write once, and only then classify:
+ *   - the parse-error refusal  -> degrade gracefully (summary + warning +
+ *     "Open User Settings"), never crash;
+ *   - any other error (e.g. the documented not-registered class) -> rethrow
+ *     so the caller's own handling decides.
+ * Returns false only for the graceful-degradation case.
+ */
+async function guardedGlobalUpdate(
+  section: string,
+  key: string,
+  value: unknown,
+  opts: { step: string; summary?: string[] } = { step: 'settings' }
+): Promise<boolean> {
+  const cfg = vscode.workspace.getConfiguration(section);
+  try {
+    await cfg.update(key, value, vscode.ConfigurationTarget.Global);
+    return true;
+  } catch (rawError) {
+    const rawMsg = String(
+      rawError && typeof rawError === 'object' && 'message' in (rawError as Record<string, unknown>)
+        ? (rawError as { message?: unknown }).message
+        : rawError
+    );
+    log(`[setup] settings write refused (${section}.${key}): ${rawMsg}`);
+
+    /* health-check + repair the settings file on ANY failure */
+    let repaired = false;
+    let fixes: string[] = [];
+    let backupPath: string | undefined;
+    const rep = await repairUserSettingsJson();
+    repaired = rep.repaired;
+    fixes = rep.fixes;
+    backupPath = rep.backupPath;
+    if (repaired) {
+      /* VS Code reloads its settings model asynchronously after an external
+       * file change — retry the write a few times across a short settle
+       * window before declaring the file unfixable for this run. */
+      for (const settleMs of [0, 400, 1200]) {
+        if (settleMs > 0) {
+          await new Promise((r) => setTimeout(r, settleMs));
+        }
+        try {
+          await cfg.update(key, value, vscode.ConfigurationTarget.Global);
+          const fixText = fixes.join(', ');
+          if (opts.summary) {
+            opts.summary.push(
+              `Your VS Code settings.json had JSON errors — graphics.h Runner repaired them automatically` +
+              ` (fixes: ${fixText}; backup saved next to the file) and the setting "${section}.${key}" was written.`
+            );
+          }
+          captureExtensionWarning('user settings repaired automatically during setup', {
+            setup_step: opts.step,
+            fixes: fixText.slice(0, 100),
+            key: scrubText(`${section}.${key}`).slice(0, 80)
+          });
+          addExtensionBreadcrumb('settings-health', 'repaired', { fixes: fixText.slice(0, 100) });
+          return true;
+        } catch (retryError) {
+          log(`[setup] settings write still refused after repair (+${settleMs} ms): ` + String(retryError));
+        }
+      }
+    }
+
+    /* the file is healthy (or unrepairable) and the write still failed —
+     * classify: the parse-error refusal degrades gracefully, everything
+     * else belongs to the caller's own handling */
+    const refusal = settingsHealth.classifySettingsWriteError(rawError);
+    if (!refusal) {
+      throw rawError;
+    }
+    const detail = scrubText(rawMsg).slice(0, 160);
+    if (opts.summary) {
+      opts.summary.push(
+        `WARNING: VS Code refused the settings write "${section}.${key}" because your ${refusal === 'user' ? 'user' : 'workspace'} settings.json has errors/warnings in it (${detail}). ` +
+        'The rest of the setup kept working — open your settings, fix the marked problem, then re-run Complete Setup.'
+      );
+    }
+    captureExtensionWarning('user settings write blocked by invalid settings.json', {
+      setup_step: opts.step,
+      key: scrubText(`${section}.${key}`).slice(0, 80),
+      detail: detail.slice(0, 140)
+    });
+    void offerOpenUserSettings(refusal, detail).catch(() => undefined);
+    return false;
+  }
+}
+
 /**
  * Palette command: manual undo of Complete Run Setup. Also covers the one
  * gap VS Code cannot close — uninstalling while VS Code is CLOSED runs no
@@ -399,12 +603,26 @@ async function describeUninstallCleanup(): Promise<string | undefined> {
 
 /* ---------------- full setup (0 -> running) ---------------- */
 
+/**
+ * Summary lines of the CURRENTLY RUNNING setup (set by runFullSetup). The
+ * settings writers below reach the user's summary through this ref, so a
+ * blocked/repaired settings write is explained in the setup summary no
+ * matter which step performed it (compiler heal, prune, …).
+ */
+let setupSummaryRef: string[] | undefined;
+
+function summarySink(): string[] | undefined {
+  return setupSummaryRef;
+}
+
 async function addPathsToSetting(key: 'extraIncludePaths' | 'extraLibPaths', additions: string[]): Promise<void> {
   const cfg = vscode.workspace.getConfiguration();
   const current = cfg.get<string[]>(CONFIG_PREFIX + key, []);
   const merged = Array.from(new Set([...current, ...additions]));
   if (merged.length !== current.length) {
-    await cfg.update(CONFIG_PREFIX + key, merged, vscode.ConfigurationTarget.Global);
+    /* v1.5.24: guarded — a broken user settings.json can no longer crash
+     * Setup here (Sentry GRAPHICS-H-RUNNER-10) */
+    await guardedGlobalUpdate('', CONFIG_PREFIX + key, merged, { step: 'install-libraries', summary: summarySink() });
     await noteGlobalWrite(CONFIG_PREFIX + key);
     log(`[setup] ${key} += ${additions.join(', ')}`);
   }
@@ -414,7 +632,12 @@ async function setCompilerPathSetting(gppPath: string): Promise<void> {
   const cfg = vscode.workspace.getConfiguration();
   const current = cfg.get<string>(CONFIG_PREFIX + 'compilerPath', 'g++');
   if (current !== gppPath) {
-    await cfg.update(CONFIG_PREFIX + 'compilerPath', gppPath, vscode.ConfigurationTarget.Global);
+    /* v1.5.24: guarded — this exact write was the unguarded crash at the
+     * heart of GRAPHICS-H-RUNNER-10 */
+    await guardedGlobalUpdate('', CONFIG_PREFIX + 'compilerPath', gppPath, {
+      step: 'install-compiler',
+      summary: summarySink()
+    });
     await noteGlobalWrite(CONFIG_PREFIX + 'compilerPath');
     log('[setup] compilerPath := ' + gppPath);
   }
@@ -515,12 +738,13 @@ async function verifyWinbgimInstall(
  */
 async function pruneStalePaths(): Promise<void> {
   try {
-    const cfg = vscode.workspace.getConfiguration();
     for (const key of ['extraIncludePaths', 'extraLibPaths'] as const) {
+      const cfg = vscode.workspace.getConfiguration();
       const current = normalizeDirList(cfg.get<string[]>(CONFIG_PREFIX + key, []), normOpts());
       const kept = pruneMissingDirs(current, normOpts());
       if (kept.length !== current.length) {
-        await cfg.update(CONFIG_PREFIX + key, kept, vscode.ConfigurationTarget.Global);
+        /* v1.5.24: guarded — same settings-refusal defusal as the writers above */
+        await guardedGlobalUpdate('', CONFIG_PREFIX + key, kept, { step: 'verify', summary: summarySink() });
         await noteGlobalWrite(CONFIG_PREFIX + key);
         log(`[setup] pruned ${current.length - kept.length} stale entrie(s) from ${key}`);
       }
@@ -636,35 +860,43 @@ async function applyNativeRunIntegration(summary?: string[]): Promise<void> {
     }
   } else {
     /* no folder open: best-effort write of the Code Runner map into the
-     * USER settings so single-file Ctrl+Alt+N still works */
+     * USER settings so single-file Ctrl+Alt+N still works.
+     * v1.5.24: every write is guarded — VS Code's "Unable to write into
+     * user settings" refusal (broken settings.json) repairs + retries via
+     * the shared defusal path instead of ending up as a raw catch-all. */
     try {
       const cr = vscode.workspace.getConfiguration('code-runner');
       const currentMap = cr.get<Record<string, string>>('executorMap') || {};
       if (currentMap['cpp'] !== executor) {
-        await cr.update('executorMap.cpp', executor, vscode.ConfigurationTarget.Global);
-        await noteGlobalWrite('code-runner.executorMap.cpp');
+        if (await guardedGlobalUpdate('code-runner', 'executorMap.cpp', executor, { step: 'native-run' })) {
+          await noteGlobalWrite('code-runner.executorMap.cpp');
+        }
       }
       if (cr.get<boolean>('runInTerminal', false) !== true) {
-        await cr.update('runInTerminal', true, vscode.ConfigurationTarget.Global);
-        await noteGlobalWrite('code-runner.runInTerminal');
+        if (await guardedGlobalUpdate('code-runner', 'runInTerminal', true, { step: 'native-run' })) {
+          await noteGlobalWrite('code-runner.runInTerminal');
+        }
       }
       if (cr.get<boolean>('saveFileBeforeRun', false) !== true) {
-        await cr.update('saveFileBeforeRun', true, vscode.ConfigurationTarget.Global);
-        await noteGlobalWrite('code-runner.saveFileBeforeRun');
+        if (await guardedGlobalUpdate('code-runner', 'saveFileBeforeRun', true, { step: 'native-run' })) {
+          await noteGlobalWrite('code-runner.saveFileBeforeRun');
+        }
       }
       if (cr.get<boolean>('fileDirectoryAsCwd', true) !== true) {
-        await cr.update('fileDirectoryAsCwd', true, vscode.ConfigurationTarget.Global);
-        await noteGlobalWrite('code-runner.fileDirectoryAsCwd');
+        if (await guardedGlobalUpdate('code-runner', 'fileDirectoryAsCwd', true, { step: 'native-run' })) {
+          await noteGlobalWrite('code-runner.fileDirectoryAsCwd');
+        }
       }
       const ccCfg = vscode.workspace.getConfiguration('C_Cpp.default');
       if (ccCfg.get<string>('compilerPath') !== cfg.compilerPath) {
-        await ccCfg.update('compilerPath', cfg.compilerPath, vscode.ConfigurationTarget.Global);
-        await noteGlobalWrite('C_Cpp.default.compilerPath');
+        if (await guardedGlobalUpdate('C_Cpp.default', 'compilerPath', cfg.compilerPath, { step: 'native-run', summary })) {
+          await noteGlobalWrite('C_Cpp.default.compilerPath');
+        }
       }
     } catch (e) {
       log('[native-run] global settings write skipped: ' + String(e));
       if (summary) {
-        summary.push('NATIVE RUN: user-level settings write was refused (settings file is write-protected or invalid) — open your code folder and run "Enable native VS Code run" there.');
+        summary.push('NATIVE RUN: user-level settings write was skipped (' + scrubText(String(e)).slice(0, 120) + ') — open your code folder and run "Enable native VS Code run" there.');
       }
     }
   }
@@ -739,10 +971,24 @@ async function applyNativeRunIntegration(summary?: string[]): Promise<void> {
 }
 
 async function runFullSetup(context: vscode.ExtensionContext): Promise<void> {
+  try {
+    await runFullSetupInner(context);
+  } finally {
+    /* v1.5.24: out-of-band writers (compiler heal, …) must not report into
+     * a finished run's summary */
+    setupSummaryRef = undefined;
+  }
+}
+
+async function runFullSetupInner(context: vscode.ExtensionContext): Promise<void> {
   const platform = currentPlatform();
   const storageRoot = context.globalStorageUri.fsPath;
   const cfg = getConfig();
   const summary: string[] = [];
+  /* v1.5.24: settings writers report blocked/repaired writes into THIS run's
+   * summary (compiler heal and other out-of-band writers reach it via the
+   * module ref); cleared when the run ends. */
+  setupSummaryRef = summary;
   /* v1.5.13: snapshot BEFORE anything is modified (first run wins). */
   await ensureUninstallSnapshot();
 
@@ -2472,6 +2718,7 @@ export function activate(context: vscode.ExtensionContext): void {
           log('[setup] crashed: ' + String(e));
           captureExtensionError(e, { command: 'setupEverything' });
           panel?.setBusy(false);
+          showOutput(true); /* v1.5.24: the summary survives the crash too */
           vscode.window.showErrorMessage('Complete Setup failed: ' + String(e));
         });
       })

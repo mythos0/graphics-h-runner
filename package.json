@@ -2,7 +2,7 @@
 	"name": "graphics-h-runner",
 	"displayName": "graphics.h Runner — One-Click Setup",
 	"description": "Compile and run C++ graphics.h (WinBGIm/SDL_bgi) with one keypress or F5. One command auto-installs the compiler, graphics library and native run integration; 21 bundled games and labs; Setup Doctor; Reset Setup.",
-	"version": "1.5.23",
+	"version": "1.5.24",
 	"publisher": "mythos0-labs",
 	"author": {
 		"name": "Department of CSE, Dhaka International University",
