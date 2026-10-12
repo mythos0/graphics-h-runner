@@ -63,6 +63,7 @@ const child_process_1 = require("child_process");
 const fs = __importStar(require("fs"));
 const os = __importStar(require("os"));
 const path = __importStar(require("path"));
+const toolchain_1 = require("./toolchain");
 const runwrap_1 = require("./runwrap");
 const defaultRunner = (cmd, args, timeoutMs = 30000) => new Promise((resolve) => {
     (0, child_process_1.execFile)(cmd, args, { timeout: timeoutMs, windowsHide: true, maxBuffer: 16 * 1024 * 1024 }, (err, stdout, stderr) => {
@@ -242,7 +243,12 @@ async function makeGlobalWindows(opts) {
                 say('probe compile WITHOUT -I/-L flags: OK (headers: ' + incDir + ')');
             }
             else {
-                say('probe with ' + incDir + ' failed (exit ' + res.code + '): ' + res.stderr.trim().split(/\r?\n/).slice(-1)[0].slice(0, 200));
+                /* v1.5.25: smart tail — the v1.5.24 events (GRAPHICS-H-RUNNER-F)
+                 * arrived as "probe with C:\msys64\mingw64\include failed (exit 1):"
+                 * followed by NOTHING whenever the failing compiler wrote to stdout
+                 * or crashed silently; the last-stderr-line slice was empty. */
+                say('probe with ' + incDir + ' failed (exit ' + res.code + '): ' +
+                    (0, toolchain_1.smartCompilerTail)(res.stderr, res.stdout, res.code));
             }
         }
         catch (e) {

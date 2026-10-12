@@ -20,7 +20,7 @@ import { createHash } from 'crypto';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { Platform } from './toolchain';
+import { Platform, smartCompilerTail } from './toolchain';
 
 /* ------------------------------------------------------------------ */
 /* types                                                               */
@@ -331,10 +331,18 @@ function runProcess(cmd: string, args: string[], opts: { cwd?: string; timeoutMs
       { cwd: opts.cwd, timeout: opts.timeoutMs ?? 120000, windowsHide: true, maxBuffer: 16 * 1024 * 1024 },
       (err: Error | null, stdout: string | Buffer, stderr: string | Buffer) => {
         const anyErr = err as { code?: number | string } | null;
+        const code = err ? (typeof anyErr?.code === 'number' ? anyErr.code : -1) : 0;
+        const stderrText = String(stderr || '');
         resolve({
-          code: err ? (typeof anyErr?.code === 'number' ? anyErr.code : -1) : 0,
+          code,
           stdout: String(stdout || ''),
-          stderr: String(stderr || '')
+          /* v1.5.25: a SPAWN-level failure (code -1: ENOENT/EACCES/EBUSY…)
+           * leaves both streams empty — without this fallback the caller's
+           * tail was empty and the live events arrived blind. A plain
+           * non-zero exit keeps its real (empty or not) stderr: falling back
+           * to err.message there would return "Command failed: <whole
+           * command>" and eat the diagnostic budget. */
+          stderr: stderrText || (code === -1 && err ? String(err.message || '') : '')
         });
       }
     );
@@ -539,13 +547,16 @@ export interface CompilerRunResult {
   reason: string;
   /** process exit code when known (number), else undefined */
   exitCode?: number;
+  /** v1.5.25: first line of the underlying error message ("spawn … EACCES",
+   * "Command failed …") so a spawn-failure reports WHY, not just a class. */
+  detail?: string;
 }
 
 export async function verifyCompilerRun(candidate: string): Promise<CompilerRunResult> {
   try {
     /* self-contained execFile (not the shared runProcess) so the failure
      * REASON survives — spawn errors carry string codes, real exits numbers. */
-    const res = await new Promise<{ code: number; stdout: string; stderr: string; reason: string }>(
+    const res = await new Promise<{ code: number; stdout: string; stderr: string; reason: string; detail?: string }>(
       (resolve) => {
         execFile(
           candidate,
@@ -569,21 +580,25 @@ export async function verifyCompilerRun(candidate: string): Promise<CompilerRunR
             } else {
               reason = 'spawn-failed';
             }
-            resolve({ code, stdout: String(stdout || ''), stderr: String(stderr || ''), reason });
+            /* v1.5.25: carry the underlying message ("spawn g++.exe ENOENT",
+             * "spawn EBUSY", "Command failed …") — v1.5.23's live event was
+             * literally just "probe: spawn-failed" with zero diagnostics. */
+            const detail = String(err.message || '').split(/\r?\n/).filter((l) => l.trim())[0]?.slice(0, 240);
+            resolve({ code, stdout: String(stdout || ''), stderr: String(stderr || ''), reason, detail });
           }
         );
       }
     );
     if (res.code !== 0) {
-      return { ok: false, version: '', reason: res.reason || `exit-${res.code}`, exitCode: res.code !== -1 ? res.code : undefined };
+      return { ok: false, version: '', reason: res.reason || `exit-${res.code}`, exitCode: res.code !== -1 ? res.code : undefined, detail: res.detail };
     }
     const line = (res.stdout || res.stderr).split(/\r?\n/).find((l) => l.trim().length > 0) || '';
     if (!line.trim()) {
       return { ok: false, version: '', reason: 'no-output' };
     }
     return { ok: true, version: line.trim().slice(0, 120), reason: '' };
-  } catch {
-    return { ok: false, version: '', reason: 'spawn-failed' };
+  } catch (e) {
+    return { ok: false, version: '', reason: 'spawn-failed', detail: String((e as Error)?.message || e || '').slice(0, 240) };
   }
 }
 
@@ -693,13 +708,18 @@ export async function bgiLinkProbe(opts: {
       args.push('-lgdi32', '-lcomdlg32', '-luuid', '-loleaut32', '-lole32');
     }
     const res = await runProcess(opts.compiler, args, { timeoutMs: 60000 });
-    const tail = res.stderr.trim().split(/\r?\n/).slice(-3).join(' ').slice(0, 300);
+    /* v1.5.25: smart tail — the v1.5.24 events (GRAPHICS-H-RUNNER-K) sometimes
+     * arrived as bare "link probe failed (exit 1)" because the last stderr
+     * line was EMPTY (silent compiler crash / stdout-only output). The smart
+     * tail prefers diagnostic lines, falls back across BOTH streams and
+     * never returns an empty string. */
+    const tail = smartCompilerTail(res.stderr, res.stdout, res.code);
     if (res.code === 0) {
       return { ok: true, detail: 'probe compiled AND linked', undefinedRefs: false };
     }
     return {
       ok: false,
-      detail: tail || `link probe failed (exit ${res.code})`,
+      detail: tail,
       undefinedRefs: /undefined reference to [`'](circle|line|initwindow|initgraph|cleardevice|closegraph)/i.test(res.stderr)
     };
   } catch (e) {
@@ -738,12 +758,30 @@ export async function installCompilerWindowsDirect(
     preFound.find((p) => /mingw32/i.test(p)) ||
     preFound[0];
   if (preGpp) {
-    const pre = await verifyCompilerRun(preGpp);
+    let pre = await verifyCompilerRun(preGpp);
+    /* v1.5.25 (GRAPHICS-H-RUNNER-T round 2): a previously extracted toolchain
+     * that no longer runs is usually AV-blocked, not corrupt. The unblock
+     * (Zone.Identifier removal) used to happen only for FRESHLY extracted
+     * exes, so a blocked cache forced a full 274 MB re-download that the
+     * AV then blocked again. Unblock + retry here first. */
+    if (!pre.ok) {
+      try {
+        fs.rmSync(preGpp + ':Zone.Identifier', { force: true });
+        log.push('removed Zone.Identifier mark from the cached g++.exe');
+      } catch {
+        /* non-NTFS or already clean — non-fatal */
+      }
+      pre = await verifyCompilerRun(preGpp);
+      if (pre.ok) {
+        log.push('cached compiler OK after unblock retry: ' + pre.version);
+      }
+    }
     if (pre.ok) {
       log.push('re-using previously extracted toolchain: ' + preGpp);
       onProgress?.({ message: 'Compiler already downloaded — re-using it.', percent: 100 });
       return { gppPath: preGpp, binDir: path.dirname(preGpp), log };
     }
+    log.push('cached toolchain did not run (' + pre.reason + ') — re-downloading');
   }
 
   /* 1. download (streaming + progress) */
@@ -835,19 +873,46 @@ export async function installCompilerWindowsDirect(
     } catch {
       /* non-NTFS or already clean — non-fatal */
     }
-    const retry = await verifyCompilerRun(gpp);
+    let retry = await verifyCompilerRun(gpp);
+    /* v1.5.25: SPAWN-type failures are frequently the antivirus holding the
+     * freshly written exe while it scans (EBUSY/EACCES/ENOENT-that-is-not);
+     * the file usually becomes runnable seconds later. The live event fired
+     * exactly once with no retry at all — give the scanner time to finish
+     * before declaring defeat. Deterministic failures (exit-*, signal,
+     * timeout) are not retried. */
+    const transient = (r: string) => r === 'spawn-failed' || r.startsWith('spawn-');
+    if (!retry.ok && transient(retry.reason)) {
+      await new Promise((r) => setTimeout(r, 1500));
+      retry = await verifyCompilerRun(gpp);
+    }
+    if (!retry.ok && transient(retry.reason)) {
+      await new Promise((r) => setTimeout(r, 4000));
+      retry = await verifyCompilerRun(gpp);
+    }
     if (!retry.ok) {
+      let exeBytes = -1;
+      try {
+        exeBytes = fs.statSync(gpp).size;
+      } catch {
+        /* file vanished — say so */
+      }
       const avHint =
-        retry.reason.startsWith('exit-') || retry.reason === 'spawn-EACCES'
+        retry.reason.startsWith('exit-') ||
+        retry.reason === 'spawn-EACCES' ||
+        retry.reason === 'spawn-EPERM' ||
+        retry.reason === 'spawn-EBUSY'
           ? ' — most likely antivirus/SmartScreen quarantine: add an exclusion for ' +
             path.dirname(gpp) +
             ' and re-run Full Setup'
           : '';
-      throw new Error(
+      const why =
         `downloaded g++.exe did not run (probe: ${retry.reason || 'unknown'}${
           retry.exitCode !== undefined ? ', exit ' + retry.exitCode : ''
-        })${avHint}`
-      );
+        }${retry.detail ? `: ${retry.detail}` : ''}` +
+        (exeBytes < 0 ? '; the exe is GONE (removed after extraction — antivirus quarantine)' : `; exe exists, ${exeBytes} bytes`) +
+        avHint;
+      log.push(why);
+      throw new Error(why);
     }
     log.push('compiler OK after unblock retry: ' + retry.version);
   } else {
@@ -1047,6 +1112,18 @@ export function describeBgiProbeFailure(
   }
   if (undefinedRefs) {
     return 'the compiler is 64-bit but the graphics library still fails to link — the downloaded libbgi.a is probably corrupt or was quarantined by security software; re-run Full Setup to re-download it.';
+  }
+  /* v1.5.25 (GRAPHICS-H-RUNNER-K round 2): the live mingw32 event failed
+   * WITHOUT undefined references — its ld printed "skipping incompatible
+   * …libbgi.a when searching for -lbgi" and treated the archive as missing
+   * (undefinedRefs stayed false), so the verdict degenerated to the raw
+   * tail. Recognize the bitness-mismatch family explicitly. */
+  if (/skipping incompatible[^\n]*libbgi/i.test(detail || '')) {
+    return 'the linker SKIPS the graphics library as incompatible — a bitness mismatch (64-bit libbgi.a vs this ' +
+      (arch && arch !== 'unknown' ? arch : 'possibly 32-bit') + ' compiler). Install a 64-bit MinGW-w64 g++ (WinLibs) and re-run Full Setup.';
+  }
+  if (/cannot find\s+-lbgi/i.test(detail || '')) {
+    return 'the linker cannot find -lbgi (libbgi.a) — the library folder did not reach the link step or the archive was removed by security software; re-run Full Setup to re-install it.';
   }
   if (/graphics\.h[:\s]|No such file/i.test(detail || '')) {
     return 'the compiler cannot find graphics.h — the WinBGIM include folder did not reach the build; re-run Full Setup.';

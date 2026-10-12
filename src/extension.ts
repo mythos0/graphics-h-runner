@@ -989,6 +989,11 @@ async function runFullSetupInner(context: vscode.ExtensionContext): Promise<void
    * summary (compiler heal and other out-of-band writers reach it via the
    * module ref); cleared when the run ends. */
   setupSummaryRef = summary;
+  /* v1.5.25: set when the CURRENT compiler is definitively 32-bit at the
+   * winbgim step — every later library-dependent step (make-global) then
+   * skips with one clear message instead of running a cascade of doomed
+   * probes (the GRAPHICS-H-RUNNER-K + F + M triple on 2026-10-12). */
+  let compilerBlocked32: string | null = null;
   /* v1.5.13: snapshot BEFORE anything is modified (first run wins). */
   await ensureUninstallSnapshot();
 
@@ -1026,8 +1031,21 @@ async function runFullSetupInner(context: vscode.ExtensionContext): Promise<void
             libDir: wbLib,
             platform
           });
-          compilerBgiIncompatible = !link.ok && link.undefinedRefs;
-          log('[setup] bgi link probe: ' + (link.ok ? 'OK' : 'FAILED — ' + link.detail.slice(0, 160)));
+          /* v1.5.25 (Sentry round 2, GRAPHICS-H-RUNNER-K/F/M): the old
+           * `!ok && undefinedRefs` missed the live 32-bit machine whose ld
+           * printed "skipping incompatible … libbgi.a when searching for
+           * -lbgi" — undefinedRefs stayed FALSE, so compilerBgiIncompatible
+           * was false, the plan SKIPPED the compiler steps entirely and the
+           * doomed 64-bit library install + make-global copy + failed verify
+           * all ran anyway (2026-10-12 11:42 cascade). A definitively 32-bit
+           * compiler (mingw32 / i686) is incompatible no matter HOW the link
+           * failed. */
+          const arch = await compilerArchitecture(cfg.compilerPath || 'g++');
+          compilerBgiIncompatible =
+            !link.ok && (link.undefinedRefs || arch === 'mingw32' || arch === 'i686');
+          log(
+            '[setup] bgi link probe: ' + (link.ok ? 'OK' : 'FAILED (arch ' + arch + ') — ' + link.detail.slice(0, 160))
+          );
           if (compilerBgiIncompatible) {
             addExtensionBreadcrumb('setup.probe', 'compiler cannot link the graphics library');
           }
@@ -1175,6 +1193,29 @@ async function runFullSetupInner(context: vscode.ExtensionContext): Promise<void
             }
           }
         } else if (step.kind === 'auto' && step.id === 'install-winbgim') {
+          /* v1.5.25 (Sentry round 2): a definitively 32-bit compiler
+           * (mingw32 / i686) can NEVER link the bundled 64-bit libbgi.a.
+           * The plan only knows the probe-time state — the compiler steps
+           * above may have just changed the compiler (or failed to). Re-check
+           * the CURRENT compiler HERE: skip the download, the doomed probe
+           * and the warning cascade, and say exactly what to do instead. */
+          if (platform === 'windows') {
+            const curCfg = getConfig();
+            const curCompiler = curCfg.compilerPath || 'g++';
+            const curOk = (await verifyCompilerRun(curCompiler)).ok;
+            const curArch = curOk ? await compilerArchitecture(curCompiler) : 'unknown';
+            if (curOk && (curArch === 'mingw32' || curArch === 'i686')) {
+              compilerBlocked32 = curArch;
+              summary.push(
+                `Skipped the graphics-library step: your compiler (${scrubText(curCompiler)}) is a 32-bit compiler (${curArch}) and the bundled graphics library is 64-bit — the two can never link.`
+              );
+              summary.push(
+                'Install a 64-bit MinGW-w64 compiler (the compiler steps above try this automatically; manual route: winlibs.com or MSYS2), then re-run Complete Setup.'
+              );
+              addExtensionBreadcrumb('setup.step', 'winbgim skipped: 32-bit compiler', { arch: curArch });
+              continue;
+            }
+          }
           try {
             const res = await installWinbgimWindows(storageRoot);
             await addPathsToSetting('extraIncludePaths', [res.includeDir]);
@@ -1203,6 +1244,15 @@ async function runFullSetupInner(context: vscode.ExtensionContext): Promise<void
             }
           }
         } else if (step.kind === 'auto' && step.id === 'make-global') {
+          /* v1.5.25: a 32-bit compiler must not receive the 64-bit library
+           * copies — the v1.5.24 run wrote unusable files into C:\MinGW and
+           * then reported the inevitable probe failure (GRAPHICS-H-RUNNER-F). */
+          if (compilerBlocked32) {
+            summary.push(
+              'Global setup skipped: the 32-bit compiler (' + compilerBlocked32 + ') cannot use the 64-bit graphics library — copying it into the toolchain would only add unusable files. Fix the compiler first (see above).'
+            );
+            continue;
+          }
           /* v1.5.1 major feature: graphics.h must compile ANYWHERE after Full
            * Setup — not only inside this extension. */
           const fresh = getConfig();

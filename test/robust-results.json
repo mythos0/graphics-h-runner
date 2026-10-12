@@ -13,7 +13,7 @@
       "ok": true,
       "exit": 0,
       "analysis": {
-        "nonblack": 0.0327,
+        "nonblack": 0.0326,
         "unique_colors": 6
       },
       "secs": "7.5"
@@ -79,7 +79,7 @@
         "nonblack": 0.4946,
         "unique_colors": 16
       },
-      "secs": "5.3"
+      "secs": "5.2"
     },
     "rfx10_key_echo.cpp": {
       "ok": true,
@@ -88,7 +88,7 @@
         "nonblack": 0.0091,
         "unique_colors": 5
       },
-      "secs": "9.4"
+      "secs": "9.3"
     }
   },
   "B": {

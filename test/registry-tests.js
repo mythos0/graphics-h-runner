@@ -48,8 +48,8 @@ const INTERNAL = new Set(['setContext']); /* workbench-internal, not ours to reg
 
 console.log('registry-tests — command graph consistency\n');
 
-check('version is 1.5.24', () => {
-  assert.strictEqual(pkg.version, '1.5.24');
+check('version is 1.5.25', () => {
+  assert.strictEqual(pkg.version, '1.5.25');
 });
 
 check('v1.5.9 regression: view title = the single ? cheat-sheet icon (setup/doctor/fireworks icons removed)', () => {

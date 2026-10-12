@@ -4,6 +4,25 @@ All notable changes to this extension are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.25] — 2026-10-12
+
+Second Sentry round: every issue that still fired ON v1.5.24 builds, fixed at the root.
+
+### Fixed
+
+- **32-bit compilers no longer run a doomed, noisy Setup cascade** (GRAPHICS-H-RUNNER-K + F + M, one Windows machine, twice): its legacy MinGW.org g++ (`C:\MinGW`, target `mingw32`) prints `skipping incompatible … libbgi.a when searching for -lbgi`, which kept `undefinedRefs` FALSE — so the up-front incompatibility check missed it, the plan SKIPPED the compiler steps entirely, and Setup then downloaded the 64-bit library, failed the link probe, copied it into the 32-bit toolchain (make-global) and failed the final verify — three warnings from one run that could never succeed.
+  - the incompatibility check is now ARCH-AWARE: a definitively 32-bit compiler (`mingw32` / `i686`) is incompatible no matter HOW the link probe fails;
+  - the WinBGIm step re-checks the CURRENT compiler at execution time and SKIPS download + probe for 32-bit compilers, with one clear summary line (install a 64-bit MinGW-w64 compiler, then re-run Setup);
+  - the make-global step skips its toolchain copy for 32-bit compilers — no more unusable files written into `C:\MinGW`.
+- **Downloaded-compiler spawn failures are diagnosed and retried** (GRAPHICS-H-RUNNER-T, "downloaded g++.exe did not run (probe: spawn-failed)"): the compiler probe now reports the underlying error message ("spawn … EACCES/EBUSY/ENOENT"), spawn-type failures get two timed retries (1.5 s / 4 s — antivirus scanners usually release a freshly written exe within seconds), the error states whether the exe still exists and its size ("the exe is GONE — antivirus quarantine"), EPERM/EBUSY join the antivirus-hint family, and a previously cached toolchain that fails to run is UNBLOCKED (Zone.Identifier removed) and retried BEFORE a 274 MB re-download is started.
+- **Compiler diagnostics are never blind again**: new shared `smartCompilerTail` (used by the link probe, the Setup Doctor and make-global) prefers diagnostic lines (error / undefined reference / fatal / cannot find / skipping incompatible / permission …), falls back across BOTH streams and NEVER returns an empty string — the live events literally read "probe with C:\msys64\mingw64\include failed (exit 1):" followed by NOTHING. The Doctor no longer substitutes execFile's "Command failed: <the entire command line>" for a silent non-zero exit (that string ate the whole 300-char tail budget before any useful character); silence itself is now reported as "exit N with no compiler output (possible antivirus interference or a crashed process)".
+- **The bitness-mismatch and missing-archive verdicts are explicit**: `describeBgiProbeFailure` recognizes "skipping incompatible … libbgi" (→ 64-bit library vs 32-bit compiler, install WinLibs) and "cannot find -lbgi" (→ library folder did not reach the link or the archive was quarantined) instead of degenerating to the raw tail.
+
+### Added
+
+- `test/sentry-round2-tests.js` (20 checks): smartCompilerTail contracts (stdout fallback, never-empty, dedupe, tail-keeping, the exact live mingw32 stderr), verifyCompilerRun `detail` on spawn failures, the new probe-verdict classes, the Doctor's pure-stream/smart-tail behavior against a silent fake compiler, and the make-global probe line carrying stdout diagnostics.
+- GRAPHICS-H-RUNNER-J/Z (v1.5.22-era "source too short" / "Channel has been closed") remain fixed by the v1.5.23 attribution change — they only fired for users not yet upgraded.
+
 ## [1.5.24] — 2026-10-10
 
 The last open item in the production Sentry inbox (GRAPHICS-H-RUNNER-10) fixed at the root: a broken user `settings.json` can no longer crash Complete Setup — it is diagnosed, repaired when safe, and explained when not.

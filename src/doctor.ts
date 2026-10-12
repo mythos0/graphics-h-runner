@@ -8,7 +8,7 @@ import { execFile } from 'child_process';
 import { mkdtempSync, writeFileSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import * as path from 'path';
-import { Platform } from './toolchain';
+import { Platform, smartCompilerTail } from './toolchain';
 import { LinuxLibrary } from './buildArgs';
 import { normalizeCompilerPath } from './normalize';
 
@@ -74,7 +74,18 @@ function runProcess(cmd: string, args: string[], timeoutMs: number): Promise<Run
           } else if (anyErr.killed) {
             code = 124; // timeout-like
           }
-          resolve({ code, stderr: String(stderr || err.message || ''), stdout });
+          /* v1.5.25: keep the streams PURE — the old "stderr || err.message"
+           * fallback turned a silent non-zero exit into "Command failed:
+           * <the entire command line>", whose 300-char tail budget ran out
+           * before any diagnostic character (live GRAPHICS-H-RUNNER-M event,
+           * 2026-10-12). err.message is only useful for SPAWN-level failures
+           * (code -1), where it says "spawn … ENOENT/EACCES". */
+          const stderrText = String(stderr || '');
+          resolve({
+            code,
+            stderr: stderrText || (code === -1 && !anyErr.killed ? String(err.message || '') : ''),
+            stdout
+          });
         }
       }
     );
@@ -134,7 +145,10 @@ async function probeLibrary(
     }
 
     const res = await runProcess(compiler, args, 30000);
-    const tail = res.stderr.trim().split('\n').slice(-3).join(' ').slice(0, 300);
+    /* v1.5.25: smart tail across BOTH streams — the old last-3-stderr-lines
+     * slice was empty on silent crashes and left the verify-not-ready event
+     * with nothing to say. */
+    const tail = smartCompilerTail(res.stderr, res.stdout, res.code);
     /* v1.5.6: undefined references to graphics symbols mean the library
      * exists but THIS compiler cannot link it (classic: 32-bit MinGW.org
      * g++ + 64-bit libbgi.a — its ld skips the incompatible archive). */
@@ -151,7 +165,7 @@ async function probeLibrary(
             ? 'headers compile but the graphics library cannot be LINKED — every graphics symbol is unresolved. ' +
               'This compiler is incompatible with the installed graphics library ' +
               '(e.g. a 32-bit MinGW.org g++ with the 64-bit library).'
-            : `probe failed (exit ${res.code})${tail ? ': ' + tail : ''}`,
+            : `probe failed (exit ${res.code}): ${tail}`,
       fix:
         res.code === 0
           ? undefined

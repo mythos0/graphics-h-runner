@@ -23,6 +23,7 @@ import { execFile } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { smartCompilerTail } from './toolchain';
 import { universalCommandDoc, buildAnywhereReadme } from './runwrap';
 
 export interface RunnerResult {
@@ -281,7 +282,14 @@ export async function makeGlobalWindows(opts: GlobalizeOptions): Promise<Globali
         libTarget = libDir;
         say('probe compile WITHOUT -I/-L flags: OK (headers: ' + incDir + ')');
       } else {
-        say('probe with ' + incDir + ' failed (exit ' + res.code + '): ' + res.stderr.trim().split(/\r?\n/).slice(-1)[0].slice(0, 200));
+        /* v1.5.25: smart tail — the v1.5.24 events (GRAPHICS-H-RUNNER-F)
+         * arrived as "probe with C:\msys64\mingw64\include failed (exit 1):"
+         * followed by NOTHING whenever the failing compiler wrote to stdout
+         * or crashed silently; the last-stderr-line slice was empty. */
+        say(
+          'probe with ' + incDir + ' failed (exit ' + res.code + '): ' +
+            smartCompilerTail(res.stderr, res.stdout, res.code)
+        );
       }
     } catch (e) {
       say('probe crashed: ' + String(e));
