@@ -5,7 +5,7 @@
  *
  * Covers the production recovery contract:
  *  - a healthy page (pong) -> state 'alive', no retry / no fallback
- *  - a dead page: up to TWO retry renders (v1.5.15 maxRetryRounds), one
+ *  - a dead page: up to FOUR retry renders (v1.5.26 maxRetryRounds), one
  *    after each unanswered window, then fall back to the tree view
  *  - recovery mid-way (pong after a retry) -> alive, no fallback
  *  - stop()/restart()/reset() semantics used by visibility + reloadPanel
@@ -107,24 +107,24 @@ check('unanswered pings: retry render after the first window', () => {
   assert.strictEqual(health.getRetriesUsed(), 1, 'retry counter must be exposed for telemetry');
 });
 
-check('v1.5.15: a dead webview gets a SECOND retry render before fallback', () => {
+check('v1.5.26: a dead webview gets FOUR retry renders before fallback', () => {
   const { clock, events, health } = makeHarness({ pingIntervalMs: 100, pingsBeforeRetry: 4, pingsBeforeFallback: 4 });
   health.start();
-  clock.advance(800); /* window 1 -> retry#1, window 2 -> retry#2 */
-  assert.strictEqual(events.filter((e) => e === 'retry').length, 2, 'two retry renders expected');
+  clock.advance(1600); /* windows 1-4 (16 ticks) -> retry #1..#4 */
+  assert.strictEqual(events.filter((e) => e === 'retry').length, 4, 'four retry renders expected');
   assert.ok(!events.includes('fallback'), 'must not fall back while retry rounds remain');
   assert.strictEqual(health.getState(), 'watching');
-  clock.advance(400); /* window 3 -> fallback */
-  assert.ok(events.includes('fallback'), 'no fallback after the third dead window');
+  assert.strictEqual(health.getRetriesUsed(), 4);
+  clock.advance(400); /* final window -> fallback */
+  assert.ok(events.includes('fallback'), 'no fallback after the final dead window');
   assert.strictEqual(health.getState(), 'fallback');
-  assert.strictEqual(health.getRetriesUsed(), 2);
 });
 
 check('dead webview: fallback fires exactly once after the last window', () => {
   const { clock, events, health } = makeHarness({ pingIntervalMs: 100, pingsBeforeRetry: 4, pingsBeforeFallback: 4 });
   health.start();
-  clock.advance(1200); /* 3 dead windows: retry#1, retry#2, fallback */
-  assert.ok(events.includes('fallback'), 'no fallback after third dead window');
+  clock.advance(2400); /* 4 retries + final window: retry#1..#4, fallback */
+  assert.ok(events.includes('fallback'), 'no fallback after final dead window');
   assert.strictEqual(events.filter((e) => e === 'fallback').length, 1, 'fallback more than once');
   assert.strictEqual(health.getState(), 'fallback');
   assert.strictEqual(clock.pending(), 0, 'timers must stop after fallback');
@@ -189,21 +189,25 @@ check('reset() clears the retry budget for a user-triggered reload', () => {
 check('fallback state survives stop/start (dead webview never resurrects itself)', () => {
   const { clock, health } = makeHarness({ pingIntervalMs: 100, pingsBeforeRetry: 2, pingsBeforeFallback: 2 });
   health.start();
-  clock.advance(600); /* 2+2+2 -> fallback */
+  clock.advance(1000); /* 2+2+2 -> fallback */
   health.start(); /* provider guards, but the FSM must also hold the line */
   assert.strictEqual(health.getState(), 'fallback', 'start() must not clear a fallback verdict');
 });
 
-check('default options are production-tuned (1s ping, 4 pings per window, 2 retry rounds)', () => {
+check('default options are production-tuned (1s ping, 4 pings per window, 4 retry rounds, 6-ping final window)', () => {
   const { clock, events, health } = makeHarness();
   health.start();
   clock.advance(4000); /* 4 ticks at the default 1000ms */
   assert.ok(events.includes('retry'), 'default retry window should be ~4s');
   clock.advance(4000);
   assert.strictEqual(events.filter((e) => e === 'retry').length, 2, 'second retry round by ~8s');
-  assert.ok(!events.includes('fallback'), 'no fallback while a retry round remains');
+  clock.advance(8000);
+  assert.strictEqual(events.filter((e) => e === 'retry').length, 4, 'all four retry rounds by ~16s');
+  assert.ok(!events.includes('fallback'), 'no fallback during the retry budget');
   clock.advance(4000);
-  assert.ok(events.includes('fallback'), 'default fallback verdict by ~12s');
+  assert.ok(!events.includes('fallback'), 'a slow boot still gets grace after retry #4');
+  clock.advance(2000);
+  assert.ok(events.includes('fallback'), 'default fallback verdict by ~22s of dead watching');
 });
 
 console.log(failures === 0 ? '\nHEALTH TESTS ALL PASS' : `\n${failures} FAILURES`);

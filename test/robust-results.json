@@ -70,7 +70,7 @@
         "nonblack": 0.5737,
         "unique_colors": 9
       },
-      "secs": "6.6"
+      "secs": "6.7"
     },
     "rfx09_stress_prims.cpp": {
       "ok": true,
@@ -79,7 +79,7 @@
         "nonblack": 0.4946,
         "unique_colors": 16
       },
-      "secs": "5.2"
+      "secs": "5.3"
     },
     "rfx10_key_echo.cpp": {
       "ok": true,

@@ -18,7 +18,7 @@ import { randomBytes } from 'crypto';
 import * as path from 'path';
 import { buildPanelHtml, buildFallbackPanelHtml, PanelStatus } from './panelHtml';
 import { COMMAND_META, LoadedProgram } from './programs';
-import { WebviewHealth, WebviewEvent } from './webviewHealth';
+import { WebviewHealth, WebviewEvent, WebviewHealthOptions } from './webviewHealth';
 import { CELEBRATION_DURATIONS_MS } from './celebrate';
 
 /** v1.5.6: the kinds that play INSIDE the activity panel (full panel
@@ -37,6 +37,10 @@ export type PanelClick =
   | { type: 'runProgram'; id: string }
   | { type: 'openProgram'; id: string }
   | { type: 'cheat'; open: boolean }
+  /** v1.5.26: the page's own error trap (window error / unhandledrejection)
+   * proves the script RAN and reports WHY it failed — the old "no pong"
+   * telemetry could never tell a crashed script from a dead webview. */
+  | { type: 'script-error'; message: string; line?: number; col?: number }
   | { type: 'pong' };
 
 export interface PanelHooks {
@@ -45,6 +49,14 @@ export interface PanelHooks {
   /** v1.5.5: fired ONCE per session, the first time the panel view
    * resolves — the user just opened the activity-bar panel. */
   onPanelFirstOpen?(): void;
+  /**
+   * v1.5.26: the RECOVERY page answered a liveness ping — the service
+   * worker race that killed the real panel has cleared, so a fresh
+   * render of the real panel will very likely boot now. The extension
+   * uses this to pull its auto-repair ladder attempt forward instead of
+   * waiting out the full delay.
+   */
+  onRecoveryPageAlive?(): void;
 }
 
 export class GhPanelProvider implements vscode.WebviewViewProvider {
@@ -75,14 +87,27 @@ export class GhPanelProvider implements vscode.WebviewViewProvider {
   private pendingCheatOpen = false;
   /* v1.5.9: did the page script answer since the last html render? */
   private pageAlive = false;
+  /* v1.5.26: the recovery page gets its own slow liveness probe while it
+   * is on screen — if it EVER answers a ping, the webview is healthy
+   * again and the extension can re-render the real panel right away. */
+  private recoveryProbeTimer: unknown = undefined;
+  private recoveryAliveReported = false;
+  /* v1.5.26: injectable timers + watchdog tuning (tests; defaults are
+   * the production-tuned values from webviewHealth.ts). */
+  private readonly healthOptions: WebviewHealthOptions;
+  private readonly recoveryProbeIntervalMs: number;
 
   constructor(
     private readonly extensionRoot: string,
     private readonly version: string,
     private readonly programs: LoadedProgram[],
     private readonly onClick: (msg: PanelClick) => void,
-    private readonly hooks: PanelHooks = {}
-  ) {}
+    private readonly hooks: PanelHooks = {},
+    tuning: { healthOptions?: WebviewHealthOptions; recoveryProbeIntervalMs?: number } = {}
+  ) {
+    this.healthOptions = tuning.healthOptions || {};
+    this.recoveryProbeIntervalMs = tuning.recoveryProbeIntervalMs ?? 5000;
+  }
 
   setDoctorResult(res: ViewDoctorStatus | undefined): void {
     this.doctorStatus = res;
@@ -139,11 +164,11 @@ export class GhPanelProvider implements vscode.WebviewViewProvider {
    */
   reloadPanel(): void {
     this.fallbackActive = false;
+    this.stopRecoveryProbe();
+    this.recoveryAliveReported = false;
     this.health?.reset();
     if (this.view) {
-      this.pageAlive = false;
-      this.view.webview.html = this.renderHtml();
-      this.health?.start();
+      this.renderAndWatch();
     }
   }
 
@@ -195,41 +220,44 @@ export class GhPanelProvider implements vscode.WebviewViewProvider {
       localResourceRoots: [vscode.Uri.file(path.join(this.extensionRoot, 'media'))]
     };
 
-    this.health = WebviewHealth.create({
-      onEvent: (ev) => this.notify(ev),
-      ping: () => {
-        void view.webview
-          .postMessage({ type: 'ping' })
-          .then(
-            () => undefined,
-            () => undefined
-          );
+    this.health = WebviewHealth.create(
+      {
+        onEvent: (ev) => this.notify(ev),
+        ping: () => {
+          void view.webview
+            .postMessage({ type: 'ping' })
+            .then(
+              () => undefined,
+              () => undefined
+            );
+        },
+        retry: () => {
+          /* re-navigating the webview clears the service-worker race */
+          this.fallbackActive = false;
+          this.pageAlive = false;
+          view.webview.html = this.renderHtml();
+          this.health?.start();
+        },
+        fallback: () => {
+          this.fallbackActive = true;
+          this.pageAlive = false;
+          view.webview.html = this.renderFallbackHtml();
+          this.startRecoveryProbe(); /* v1.5.26: watch the recovery page */
+        }
       },
-      retry: () => {
-        /* re-navigating the webview clears the service-worker race */
-        this.fallbackActive = false;
-        this.pageAlive = false;
-        view.webview.html = this.renderHtml();
-        this.health?.start();
-      },
-      fallback: () => {
-        this.fallbackActive = true;
-        this.pageAlive = false;
-        view.webview.html = this.renderFallbackHtml();
-      }
-    });
+      this.healthOptions
+    );
 
     try {
-      this.pageAlive = false;
-      view.webview.html = this.renderHtml();
+      this.renderAndWatch();
     } catch {
       /* html construction itself failed — go straight to the tree fallback */
       this.fallbackActive = true;
       view.webview.html = this.renderFallbackHtml();
+      this.startRecoveryProbe();
       this.notify('fallback');
       return;
     }
-    this.health.start();
 
     /* v1.5.5: first panel open of the session (School Pride trigger) */
     if (!this.firstOpenNotified) {
@@ -239,16 +267,32 @@ export class GhPanelProvider implements vscode.WebviewViewProvider {
 
     view.webview.onDidReceiveMessage((msg: PanelClick) => {
       try {
-        if (msg && msg.type === 'pong') {
-          this.health?.pong();
-          this.pageAlive = true;
+        if (!msg || typeof msg !== 'object') {
+          return;
+        }
+        /* v1.5.26: the recovery page answering a PROBE ping means the
+         * service-worker race has cleared — the real panel will boot now.
+         * Reported to the extension once per fallback episode. */
+        if (msg.type === 'pong' && (msg as { probe?: boolean }).probe === true) {
+          if (this.fallbackActive && !this.recoveryAliveReported) {
+            this.recoveryAliveReported = true;
+            this.stopRecoveryProbe();
+            this.notifyRecoveryAlive();
+          }
+          return;
+        }
+        /* v1.5.26: ANY inbound message from the real page is proof its
+         * script executed — not just pongs. A user click on a healthy
+         * page can never be misread as a dead webview again. */
+        this.pageAlive = true;
+        this.health?.pong();
+        if (msg.type === 'pong') {
           return;
         }
         /* v1.5.8: cheat-sheet open/close sync from the page.
          * v1.5.9: this message is also the boot handshake — a parked
          * view-title "?" open request is delivered right here. */
-        if (msg && msg.type === 'cheat') {
-          this.pageAlive = true;
+        if (msg.type === 'cheat') {
           this.cheatOpen = !!msg.open;
           if (this.pendingCheatOpen) {
             /* the title-bar ? opened the panel itself — now that the
@@ -267,6 +311,13 @@ export class GhPanelProvider implements vscode.WebviewViewProvider {
           }
           return;
         }
+        /* v1.5.26: page-side crash reports — forward to the extension for
+         * telemetry (they prove the service worker works AND explain the
+         * failure the old "no pong" events could not). */
+        if (msg.type === 'script-error') {
+          this.onClick(msg);
+          return;
+        }
         this.onClick(msg);
       } catch {
         /* never let a panel click crash the host */
@@ -281,9 +332,12 @@ export class GhPanelProvider implements vscode.WebviewViewProvider {
         /* resume watching — a healthy page answers the next ping in ~1s */
         if (!this.fallbackActive && this.health.getState() !== 'fallback') {
           this.health.start();
+        } else if (this.fallbackActive) {
+          this.startRecoveryProbe(); /* v1.5.26: keep probing the recovery page */
         }
       } else {
         this.health.stop();
+        this.stopRecoveryProbe();
       }
       if (view.visible) {
         this.postState();
@@ -294,6 +348,7 @@ export class GhPanelProvider implements vscode.WebviewViewProvider {
       this.health?.dispose();
       this.health = undefined;
       this.pageAlive = false;
+      this.stopRecoveryProbe();
       if (this.view === view) {
         this.view = undefined;
       }
@@ -306,6 +361,32 @@ export class GhPanelProvider implements vscode.WebviewViewProvider {
     } catch {
       /* hooks must never crash the provider */
     }
+  }
+
+  private notifyRecoveryAlive(): void {
+    try {
+      this.hooks.onRecoveryPageAlive?.();
+    } catch {
+      /* hooks must never crash the provider */
+    }
+  }
+
+  /**
+   * v1.5.26: ONE code path for "swap in a fresh real panel page" — every
+   * full re-render (boot, reloadPanel, doctor/busy/celebration updates)
+   * restarts the watchdog, because unanswered-ping counts from the old
+   * page are meaningless for the new one. Without this, a doctor refresh
+   * landing mid-watch carried stale counts into the new page's boot and
+   * could trigger false retry renders / a false fallback verdict.
+   */
+  private renderAndWatch(): void {
+    if (!this.view) {
+      return;
+    }
+    this.pageAlive = false;
+    this.view.webview.html = this.renderHtml();
+    this.health?.reset();
+    this.health?.start();
   }
 
   private notifyFirstOpen(): void {
@@ -343,9 +424,16 @@ export class GhPanelProvider implements vscode.WebviewViewProvider {
     }
     this.pendingRender = false;
     this.cheatOpen = false;
-    this.pageAlive = false;
-    /* full re-render: the HTML is cheap to rebuild and always consistent */
-    this.view.webview.html = this.fallbackActive ? this.renderFallbackHtml() : this.renderHtml();
+    if (this.fallbackActive) {
+      /* v1.5.26: refresh the RECOVERY page without touching the watchdog
+       * — the real panel is still down; the probe keeps running. */
+      this.pageAlive = false;
+      this.view.webview.html = this.renderFallbackHtml();
+      return;
+    }
+    /* full re-render: the HTML is cheap to rebuild and always consistent.
+     * The watchdog restarts with the fresh page (renderAndWatch). */
+    this.renderAndWatch();
   }
 
   private postBusy(): void {
@@ -410,5 +498,51 @@ export class GhPanelProvider implements vscode.WebviewViewProvider {
       cspSource: this.view.webview.cspSource,
       reason: 'The panel page failed to load in this VS Code window (service worker error).'
     });
+  }
+
+  /**
+   * v1.5.26: while the recovery page is on screen, ping it slowly. If it
+   * ever answers (pong probe:true), the webview itself is healthy again
+   * and the extension can immediately re-render the real panel instead of
+   * waiting for the next ladder slot.
+   */
+  private startRecoveryProbe(): void {
+    this.stopRecoveryProbe();
+    if (!this.fallbackActive) {
+      return;
+    }
+    const timers = this.probeTimers();
+    const tick = (): void => {
+      if (!this.fallbackActive || !this.view) {
+        this.stopRecoveryProbe();
+        return;
+      }
+      void this.view.webview
+        .postMessage({ type: 'ping' })
+        .then(
+          () => undefined,
+          () => undefined
+        );
+      this.recoveryProbeTimer = timers.setTimer(tick, this.recoveryProbeIntervalMs);
+    };
+    this.recoveryProbeTimer = timers.setTimer(tick, this.recoveryProbeIntervalMs);
+  }
+
+  private stopRecoveryProbe(): void {
+    if (this.recoveryProbeTimer !== undefined) {
+      this.probeTimers().clearTimer(this.recoveryProbeTimer);
+      this.recoveryProbeTimer = undefined;
+    }
+  }
+
+  private probeTimers(): { setTimer: NonNullable<WebviewHealthOptions['setTimer']>; clearTimer: NonNullable<WebviewHealthOptions['clearTimer']> } {
+    return {
+      setTimer:
+        this.healthOptions.setTimer ||
+        ((fn: () => void, ms: number) => setTimeout(fn, ms)),
+      clearTimer:
+        this.healthOptions.clearTimer ||
+        ((h: unknown) => clearTimeout(h as ReturnType<typeof setTimeout>))
+    };
   }
 }

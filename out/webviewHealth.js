@@ -14,10 +14,15 @@
  *      the webview clears the service-worker race in the vast majority of
  *      cases. v1.5.15: up to TWO retry renders (maxRetryRounds) before
  *      giving up — production telemetry (Sentry GRAPHICS-H-RUNNER-E) showed
- *      a real machine where one retry was not enough.
+ *      a real machine where one retry was not enough. v1.5.26: FOUR retry
+ *      rounds with a longer final window (~22 s of continuous watching
+ *      before the verdict) — GRAPHICS-H-RUNNER-S kept firing on slow
+ *      Windows machines (spinning disks + antivirus) where the service
+ *      worker needed more than the old ~12 s budget to boot.
  *   3. If pings still go unanswered the provider raises `fallback()` and the
  *      extension instantly reveals a native TreeView copy of the panel so
- *      the user is never blocked.
+ *      the user is never blocked — and then keeps auto-repairing in the
+ *      background (extension-side escalating ladder, v1.5.26).
  *
  * Pure state machine: timers are injectable, so the whole lifecycle is unit
  * testable without VS Code or real clocks.
@@ -37,8 +42,8 @@ class WebviewHealth {
         return new WebviewHealth(hooks, {
             pingIntervalMs: o.pingIntervalMs ?? 1000,
             pingsBeforeRetry: o.pingsBeforeRetry ?? 4,
-            pingsBeforeFallback: o.pingsBeforeFallback ?? 4,
-            maxRetryRounds: o.maxRetryRounds ?? 2,
+            pingsBeforeFallback: o.pingsBeforeFallback ?? 6,
+            maxRetryRounds: o.maxRetryRounds ?? 4,
             setTimer: o.setTimer,
             clearTimer: o.clearTimer
         });
@@ -97,9 +102,9 @@ class WebviewHealth {
         }
         this.hooks.ping();
         this.unanswered++;
-        /* v1.5.15: give the re-render TWO chances (maxRetryRounds) before the
-         * fallback verdict — the second re-render clears the service-worker
-         * race on machines where the first did not. */
+        /* v1.5.26: give the re-render FOUR chances (maxRetryRounds) before the
+         * fallback verdict — slow machines (AV + spinning disk) needed more
+         * than the old two-shot budget (GRAPHICS-H-RUNNER-S). */
         if (this.unanswered >= this.opts.pingsBeforeRetry) {
             if (this.retriesUsed < this.opts.maxRetryRounds) {
                 this.retriesUsed++;

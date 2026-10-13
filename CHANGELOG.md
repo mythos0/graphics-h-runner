@@ -4,6 +4,25 @@ All notable changes to this extension are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.26] — 2026-10-13
+
+Third Sentry round: the webview panel can no longer stay dead — the last unresolved production issue (GRAPHICS-H-RUNNER-S, "webview failed to load (no pong after 2 retry renders)") was still firing on 1.5.25 builds, so the recovery machinery itself got the root-cause treatment.
+
+### Fixed
+
+- **The watchdog verdict now tolerates genuinely slow machines** (GRAPHICS-H-RUNNER-S, low-end Windows laptops with antivirus + spinning disks): the old budget was ~12 s of continuous watching (2 retry renders × 4 unanswered pings + a 4-ping final window). The verdict now comes after FOUR retry renders and a 6-ping final window — ~22 s of continuous watching — because real telemetry showed service workers that needed longer than the old budget to boot.
+- **A full re-render can no longer inherit stale ping counts.** Doctor/busy/celebration updates re-render the whole panel HTML, but the watchdog kept counting unanswered pings ACROSS the page swap — a re-render landing mid-watch could trigger a false retry render of the brand-new page, or even a false fallback verdict. Every full re-render now restarts the watchdog with the fresh page (one centralized render path).
+- **Any page message proves liveness, not just pongs.** Only `pong` (and `cheat`) used to count — a user clicking a working page that happened to miss pings could still be "verdicted" dead. Every inbound message from the page (a click, a boot handshake, a crash report) now marks the panel alive first.
+- **The fallback verdict is no longer a one-way door.** The single 60 s self-repair attempt became an ESCALATING AUTO-REPAIR LADDER: re-renders at 1, 2, 4 and 8 minutes after the verdict (~15 minutes of background coverage). Each failed attempt re-verdicts through the watchdog and schedules the next rung; a success closes the fallback lists and resets the budget. The recovery page says so ("auto-retry on") instead of silently waiting for the user to click Retry.
+- **The fallback lists are FOCUSED only on the first verdict of an episode** — the ladder re-verdicts after every failed attempt, and focus-stealing each time would be hostile.
+
+### Added
+
+- **The recovery page is probed and can now resurrect the panel itself.** The static recovery page answers a slow probe ping (`pong probe:true`) while it is on screen; when it EVER answers, the service-worker race has demonstrably cleared, and the extension re-renders the real panel after 5 s instead of waiting for the next ladder rung.
+- **Page-side crash reports (never blind again).** The panel script traps `error` and `unhandledrejection` and reports `{type:'script-error', message, line, col}` to the host, which logs it, breadcrumbs it and reaches the telemetry inbox as `webview-script-error` — the next "the panel is dead" event will say WHY (a script exception was indistinguishable from a dead webview before). Receiving the report also proves the page is alive.
+- **`test/webview-round3-tests.js` (9 checks)** — drives the REAL provider against a stubbed `vscode` + virtual clock: boot render + pings, click-as-liveness, four retries → recovery page, probe + latched `onRecoveryPageAlive`, the stale-count regression, script-error forwarding, reloadPanel re-arm, probe stop/start on visibility, and latch re-arm per fallback episode.
+- `test/health-tests.js` updated to the new production contract (4 retry rounds, 6-ping final window, verdict ~22 s).
+
 ## [1.5.25] — 2026-10-12
 
 Second Sentry round: every issue that still fired ON v1.5.24 builds, fixed at the root.

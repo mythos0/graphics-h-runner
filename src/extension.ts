@@ -2413,25 +2413,50 @@ async function copyCompileCommand(): Promise<void> {
 const FALLBACK_VIEW_ID = 'graphics-h-runner.fallback';
 const FALLBACK_PROGRAMS_VIEW_ID = 'graphics-h-runner.fallbackPrograms';
 
+/** v1.5.26: the fallback lists are FOCUSED only on the first verdict of an
+ * episode — later verdicts (failed ladder attempts) must not steal focus. */
+let fallbackFocusLatched = false;
+
 /** v1.5.15: one delayed self-repair attempt after the webview was declared
  * unrecoverable. If the panel answers after it, the fallback views close
- * again; if not, the fallback stays (sticky) until the user acts. */
-const WEBVIEW_SELF_REPAIR_DELAY_MS = 60_000;
+ * again; if not, the fallback stays (sticky) until the user acts.
+ * v1.5.26: a SINGLE 60 s attempt was not enough — GRAPHICS-H-RUNNER-S kept
+ * firing on 1.5.25 builds. The repair is now an ESCALATING LADDER: 1, 2,
+ * 4 and 8 minutes after the verdict (~15 min of background coverage).
+ * Each failed attempt re-verdicts through the watchdog and schedules the
+ * next rung; a success cancels the ladder and resets the budget. The
+ * recovery page answering its probe (panelView) pulls the next rung
+ * forward to 5 s — the race has demonstrably cleared at that point. */
+const WEBVIEW_SELF_REPAIR_DELAYS_MS = [60_000, 120_000, 240_000, 480_000];
+const WEBVIEW_SELF_REPAIR_EARLY_MS = 5_000;
 
 let webviewSelfRepairTimer: ReturnType<typeof setTimeout> | undefined;
+let webviewSelfRepairAttempt = 0;
 
-/** v1.5.15: 60 s after a fallback verdict, re-render the real panel ONCE —
- * a later attempt often clears a stubborn service-worker race that beat the
- * watchdog's two immediate retries. Guarded: cancelled when the webview
- * answers first, and never stacked. */
-function scheduleWebviewSelfRepair(): void {
+function scheduleWebviewSelfRepair(early = false): void {
   cancelWebviewSelfRepair();
+  if (early) {
+    /* the recovery page just proved the webview is healthy again */
+    webviewSelfRepairTimer = setTimeout(() => {
+      webviewSelfRepairTimer = undefined;
+      log('[panel] self-repair: recovery page answered — re-rendering the real panel now');
+      addExtensionBreadcrumb('panel', 'webview self-repair (recovery page answered)');
+      panel?.reloadPanel();
+    }, WEBVIEW_SELF_REPAIR_EARLY_MS);
+    return;
+  }
+  if (webviewSelfRepairAttempt >= WEBVIEW_SELF_REPAIR_DELAYS_MS.length) {
+    /* ladder exhausted — the fallback lists + Retry button take over */
+    return;
+  }
+  const delay = WEBVIEW_SELF_REPAIR_DELAYS_MS[webviewSelfRepairAttempt];
+  webviewSelfRepairAttempt++;
   webviewSelfRepairTimer = setTimeout(() => {
     webviewSelfRepairTimer = undefined;
-    log('[panel] self-repair: re-rendering the webview one more time');
+    log('[panel] self-repair: re-rendering the webview (attempt ' + webviewSelfRepairAttempt + '/' + WEBVIEW_SELF_REPAIR_DELAYS_MS.length + ')');
     addExtensionBreadcrumb('panel', 'webview self-repair re-render');
     panel?.reloadPanel();
-  }, WEBVIEW_SELF_REPAIR_DELAY_MS);
+  }, delay);
 }
 
 function cancelWebviewSelfRepair(): void {
@@ -2441,6 +2466,11 @@ function cancelWebviewSelfRepair(): void {
   }
 }
 
+function resetWebviewSelfRepairLadder(): void {
+  cancelWebviewSelfRepair();
+  webviewSelfRepairAttempt = 0;
+}
+
 /** Panel click router: buttons in the webview land here. */
 async function handlePanelClick(msg: PanelClick): Promise<void> {
   if (msg.type === 'pong') {
@@ -2448,6 +2478,22 @@ async function handlePanelClick(msg: PanelClick): Promise<void> {
   }
   if (msg.type === 'cheat') {
     return; /* v1.5.8: cheat-sheet open/close sync — handled by the panel provider itself */
+  }
+  if (msg.type === 'script-error') {
+    /* v1.5.26: the panel page's own crash trap — the service worker works
+     * and the script ran, so this names the REAL failure (a JS exception)
+     * that the old blind "no pong" events could never report. Warning
+     * level: the watchdog still recovers the panel on its own. */
+    const detail = scrubText(String(msg.message || 'unknown')).slice(0, 180);
+    log('[panel] page script error: ' + detail + (msg.line ? ' (line ' + msg.line + ')' : ''));
+    addExtensionBreadcrumb('panel', 'webview script error: ' + detail);
+    captureExtensionWarning('panel page script error', {
+      stage: 'webview-script-error',
+      detail,
+      line: msg.line ? String(msg.line) : '',
+      col: msg.col ? String(msg.col) : ''
+    });
+    return;
   }
   if (msg.type === 'command') {
     const known = await vscode.commands.getCommands().then((all) => all.includes(msg.command));
@@ -2530,7 +2576,7 @@ export function activate(context: vscode.ExtensionContext): void {
     },
     onWebviewEvent: (ev) => {
       if (ev === 'retry') {
-        log('[panel] webview did not answer — re-rendering once to clear the service-worker race');
+        log('[panel] webview did not answer — re-rendering to clear the service-worker race');
         return;
       }
       if (ev === 'fallback') {
@@ -2538,23 +2584,37 @@ export function activate(context: vscode.ExtensionContext): void {
         addExtensionBreadcrumb('panel', 'webview fallback engaged');
         /* resilience WORKED here (automatic retries + list-view fallback):
          * warning-level visibility, not an error issue */
-        captureExtensionWarning('webview failed to load (no pong after 2 retry renders)', {
+        captureExtensionWarning('webview failed to load (no pong after 4 retry renders, ~22 s)', {
           stage: 'webview-fallback'
         });
         scheduleWebviewSelfRepair();
         void (async () => {
           await vscode.commands.executeCommand('setContext', 'graphics-h-runner.showFallback', true);
-          await vscode.commands.executeCommand(FALLBACK_VIEW_ID + '.focus');
+          /* v1.5.26: FOCUS the fallback lists only the first time per
+           * episode — the escalating ladder re-verdicts on every failed
+           * attempt, and stealing focus each time would be hostile. */
+          if (!fallbackFocusLatched) {
+            fallbackFocusLatched = true;
+            await vscode.commands.executeCommand(FALLBACK_VIEW_ID + '.focus');
+          }
         })().catch(() => undefined);
         return;
       }
       if (ev === 'alive') {
         /* the webview answers again — the fallback lists no longer needed */
-        cancelWebviewSelfRepair();
+        fallbackFocusLatched = false;
+        resetWebviewSelfRepairLadder();
         void vscode.commands
           .executeCommand('setContext', 'graphics-h-runner.showFallback', false)
           .then(() => undefined, () => undefined);
       }
+    },
+    onRecoveryPageAlive: () => {
+      /* v1.5.26: the recovery page answered its probe — the service-worker
+       * race has cleared, so re-render the real panel in 5 s instead of
+       * waiting for the next ladder rung. */
+      log('[panel] recovery page is alive — pulling the self-repair attempt forward');
+      scheduleWebviewSelfRepair(true);
     }
   });
   panel = panelProvider;

@@ -56,7 +56,7 @@ const programs_1 = require("./programs");
 const webviewHealth_1 = require("./webviewHealth");
 const celebrate_1 = require("./celebrate");
 class GhPanelProvider {
-    constructor(extensionRoot, version, programs, onClick, hooks = {}) {
+    constructor(extensionRoot, version, programs, onClick, hooks = {}, tuning = {}) {
         this.extensionRoot = extensionRoot;
         this.version = version;
         this.programs = programs;
@@ -84,6 +84,13 @@ class GhPanelProvider {
         this.pendingCheatOpen = false;
         /* v1.5.9: did the page script answer since the last html render? */
         this.pageAlive = false;
+        /* v1.5.26: the recovery page gets its own slow liveness probe while it
+         * is on screen — if it EVER answers a ping, the webview is healthy
+         * again and the extension can re-render the real panel right away. */
+        this.recoveryProbeTimer = undefined;
+        this.recoveryAliveReported = false;
+        this.healthOptions = tuning.healthOptions || {};
+        this.recoveryProbeIntervalMs = tuning.recoveryProbeIntervalMs ?? 5000;
     }
     setDoctorResult(res) {
         this.doctorStatus = res;
@@ -135,11 +142,11 @@ class GhPanelProvider {
      */
     reloadPanel() {
         this.fallbackActive = false;
+        this.stopRecoveryProbe();
+        this.recoveryAliveReported = false;
         this.health?.reset();
         if (this.view) {
-            this.pageAlive = false;
-            this.view.webview.html = this.renderHtml();
-            this.health?.start();
+            this.renderAndWatch();
         }
     }
     isFallbackActive() {
@@ -203,20 +210,20 @@ class GhPanelProvider {
                 this.fallbackActive = true;
                 this.pageAlive = false;
                 view.webview.html = this.renderFallbackHtml();
+                this.startRecoveryProbe(); /* v1.5.26: watch the recovery page */
             }
-        });
+        }, this.healthOptions);
         try {
-            this.pageAlive = false;
-            view.webview.html = this.renderHtml();
+            this.renderAndWatch();
         }
         catch {
             /* html construction itself failed — go straight to the tree fallback */
             this.fallbackActive = true;
             view.webview.html = this.renderFallbackHtml();
+            this.startRecoveryProbe();
             this.notify('fallback');
             return;
         }
-        this.health.start();
         /* v1.5.5: first panel open of the session (School Pride trigger) */
         if (!this.firstOpenNotified) {
             this.firstOpenNotified = true;
@@ -224,16 +231,32 @@ class GhPanelProvider {
         }
         view.webview.onDidReceiveMessage((msg) => {
             try {
-                if (msg && msg.type === 'pong') {
-                    this.health?.pong();
-                    this.pageAlive = true;
+                if (!msg || typeof msg !== 'object') {
+                    return;
+                }
+                /* v1.5.26: the recovery page answering a PROBE ping means the
+                 * service-worker race has cleared — the real panel will boot now.
+                 * Reported to the extension once per fallback episode. */
+                if (msg.type === 'pong' && msg.probe === true) {
+                    if (this.fallbackActive && !this.recoveryAliveReported) {
+                        this.recoveryAliveReported = true;
+                        this.stopRecoveryProbe();
+                        this.notifyRecoveryAlive();
+                    }
+                    return;
+                }
+                /* v1.5.26: ANY inbound message from the real page is proof its
+                 * script executed — not just pongs. A user click on a healthy
+                 * page can never be misread as a dead webview again. */
+                this.pageAlive = true;
+                this.health?.pong();
+                if (msg.type === 'pong') {
                     return;
                 }
                 /* v1.5.8: cheat-sheet open/close sync from the page.
                  * v1.5.9: this message is also the boot handshake — a parked
                  * view-title "?" open request is delivered right here. */
-                if (msg && msg.type === 'cheat') {
-                    this.pageAlive = true;
+                if (msg.type === 'cheat') {
                     this.cheatOpen = !!msg.open;
                     if (this.pendingCheatOpen) {
                         /* the title-bar ? opened the panel itself — now that the
@@ -247,6 +270,13 @@ class GhPanelProvider {
                         /* sheet closed — deliver the re-render that was deferred */
                         this.postState();
                     }
+                    return;
+                }
+                /* v1.5.26: page-side crash reports — forward to the extension for
+                 * telemetry (they prove the service worker works AND explain the
+                 * failure the old "no pong" events could not). */
+                if (msg.type === 'script-error') {
+                    this.onClick(msg);
                     return;
                 }
                 this.onClick(msg);
@@ -264,9 +294,13 @@ class GhPanelProvider {
                 if (!this.fallbackActive && this.health.getState() !== 'fallback') {
                     this.health.start();
                 }
+                else if (this.fallbackActive) {
+                    this.startRecoveryProbe(); /* v1.5.26: keep probing the recovery page */
+                }
             }
             else {
                 this.health.stop();
+                this.stopRecoveryProbe();
             }
             if (view.visible) {
                 this.postState();
@@ -276,6 +310,7 @@ class GhPanelProvider {
             this.health?.dispose();
             this.health = undefined;
             this.pageAlive = false;
+            this.stopRecoveryProbe();
             if (this.view === view) {
                 this.view = undefined;
             }
@@ -288,6 +323,31 @@ class GhPanelProvider {
         catch {
             /* hooks must never crash the provider */
         }
+    }
+    notifyRecoveryAlive() {
+        try {
+            this.hooks.onRecoveryPageAlive?.();
+        }
+        catch {
+            /* hooks must never crash the provider */
+        }
+    }
+    /**
+     * v1.5.26: ONE code path for "swap in a fresh real panel page" — every
+     * full re-render (boot, reloadPanel, doctor/busy/celebration updates)
+     * restarts the watchdog, because unanswered-ping counts from the old
+     * page are meaningless for the new one. Without this, a doctor refresh
+     * landing mid-watch carried stale counts into the new page's boot and
+     * could trigger false retry renders / a false fallback verdict.
+     */
+    renderAndWatch() {
+        if (!this.view) {
+            return;
+        }
+        this.pageAlive = false;
+        this.view.webview.html = this.renderHtml();
+        this.health?.reset();
+        this.health?.start();
     }
     notifyFirstOpen() {
         try {
@@ -323,9 +383,16 @@ class GhPanelProvider {
         }
         this.pendingRender = false;
         this.cheatOpen = false;
-        this.pageAlive = false;
-        /* full re-render: the HTML is cheap to rebuild and always consistent */
-        this.view.webview.html = this.fallbackActive ? this.renderFallbackHtml() : this.renderHtml();
+        if (this.fallbackActive) {
+            /* v1.5.26: refresh the RECOVERY page without touching the watchdog
+             * — the real panel is still down; the probe keeps running. */
+            this.pageAlive = false;
+            this.view.webview.html = this.renderFallbackHtml();
+            return;
+        }
+        /* full re-render: the HTML is cheap to rebuild and always consistent.
+         * The watchdog restarts with the fresh page (renderAndWatch). */
+        this.renderAndWatch();
     }
     postBusy() {
         if (!this.view || this.fallbackActive) {
@@ -383,6 +450,44 @@ class GhPanelProvider {
             cspSource: this.view.webview.cspSource,
             reason: 'The panel page failed to load in this VS Code window (service worker error).'
         });
+    }
+    /**
+     * v1.5.26: while the recovery page is on screen, ping it slowly. If it
+     * ever answers (pong probe:true), the webview itself is healthy again
+     * and the extension can immediately re-render the real panel instead of
+     * waiting for the next ladder slot.
+     */
+    startRecoveryProbe() {
+        this.stopRecoveryProbe();
+        if (!this.fallbackActive) {
+            return;
+        }
+        const timers = this.probeTimers();
+        const tick = () => {
+            if (!this.fallbackActive || !this.view) {
+                this.stopRecoveryProbe();
+                return;
+            }
+            void this.view.webview
+                .postMessage({ type: 'ping' })
+                .then(() => undefined, () => undefined);
+            this.recoveryProbeTimer = timers.setTimer(tick, this.recoveryProbeIntervalMs);
+        };
+        this.recoveryProbeTimer = timers.setTimer(tick, this.recoveryProbeIntervalMs);
+    }
+    stopRecoveryProbe() {
+        if (this.recoveryProbeTimer !== undefined) {
+            this.probeTimers().clearTimer(this.recoveryProbeTimer);
+            this.recoveryProbeTimer = undefined;
+        }
+    }
+    probeTimers() {
+        return {
+            setTimer: this.healthOptions.setTimer ||
+                ((fn, ms) => setTimeout(fn, ms)),
+            clearTimer: this.healthOptions.clearTimer ||
+                ((h) => clearTimeout(h))
+        };
     }
 }
 exports.GhPanelProvider = GhPanelProvider;

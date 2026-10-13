@@ -892,6 +892,22 @@ ${cheatSheetHtml()}
        webview (service-worker race) never answers, which the extension
        detects and recovers from (retry render / list-view fallback) */
     vscode.postMessage({ type: 'pong' });
+    /* v1.5.26: page-side crash trap. A script that CRASHES after boot used
+       to be indistinguishable from a dead webview (no pong, blind "webview
+       failed to load" events). Now the failure itself is reported with its
+       reason, and receiving it also proves the page is alive. */
+    function reportScriptError(msg, line, col) {
+      try {
+        vscode.postMessage({ type: 'script-error', message: String(msg || 'unknown error').slice(0, 300), line: line, col: col });
+      } catch (e) {}
+    }
+    window.addEventListener('error', function (ev) {
+      reportScriptError((ev && (ev.message || (ev.error && ev.error.message))) || 'script error', ev && ev.lineno, ev && ev.colno);
+    });
+    window.addEventListener('unhandledrejection', function (ev) {
+      var r = ev && ev.reason;
+      reportScriptError('unhandledrejection: ' + ((r && r.message) || String(r || 'unknown')), r && r.lineNumber, r && r.columnNumber);
+    });
     /* Example Programs: collapsed by default; the choice is remembered
        across panel re-renders via the webview's persisted state */
     var progSec = document.getElementById('programs-sec');
@@ -1107,14 +1123,25 @@ export function buildFallbackPanelHtml(opts: {
     <b>graphics.h Programs (List)</b> view that was just opened.</p>
     <button data-cmd="graphics-h-runner.reloadPanel">Retry panel</button>
   </div>
-  <p class="hint">You can also reload later from the Command Palette:
-  <span class="kbd">graphics.h: Reload Panel</span>. In a .cpp file,
-  <span class="kbd">Ctrl+Alt+R</span> keeps working regardless of this panel.</p>
-  <p class="ver">v${esc(version)} · fallback view active</p>
+  <p class="hint">The panel keeps retrying automatically in the background — it
+  will reappear on its own as soon as the webview recovers. You can also retry
+  from the Command Palette: <span class="kbd">graphics.h: Reload Panel</span>.
+  In a .cpp file, <span class="kbd">Ctrl+Alt+R</span> keeps working regardless
+  of this panel.</p>
+  <p class="ver">v${esc(version)} · fallback view active · auto-retry on</p>
 <script nonce="${nonce}">
   (function () {
     var vscode = acquireVsCodeApi();
     vscode.postMessage({ type: 'pong' });
+    /* v1.5.26: answer the host's slow recovery PROBE. A probe pong proves
+       the service-worker race has cleared, so the extension can re-render
+       the real panel immediately instead of waiting for its next ladder
+       slot. (probe:true keeps this distinct from the boot pong above.) */
+    window.addEventListener('message', function (e) {
+      if (e && e.data && e.data.type === 'ping') {
+        try { vscode.postMessage({ type: 'pong', probe: true }); } catch (err) {}
+      }
+    });
     document.addEventListener('click', function (ev) {
       var el = ev.target;
       while (el && el !== document.body) {
