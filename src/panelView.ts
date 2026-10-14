@@ -18,7 +18,7 @@ import { randomBytes } from 'crypto';
 import * as path from 'path';
 import { buildPanelHtml, buildFallbackPanelHtml, PanelStatus } from './panelHtml';
 import { COMMAND_META, LoadedProgram } from './programs';
-import { WebviewHealth, WebviewEvent, WebviewHealthOptions } from './webviewHealth';
+import { WebviewHealth, WebviewEvent, WebviewHealthOptions, WebviewWatchDetail } from './webviewHealth';
 import { CELEBRATION_DURATIONS_MS } from './celebrate';
 
 /** v1.5.6: the kinds that play INSIDE the activity panel (full panel
@@ -44,8 +44,10 @@ export type PanelClick =
   | { type: 'pong' };
 
 export interface PanelHooks {
-  /** Lifecycle notifications from the liveness watchdog. */
-  onWebviewEvent?(ev: WebviewEvent): void;
+  /** Lifecycle notifications from the liveness watchdog. v1.5.27: the
+   * fallback (and retry) events carry WebviewWatchDetail — the facts that
+   * discriminate WHY the page never answered (Sentry GRAPHICS-H-RUNNER-11). */
+  onWebviewEvent?(ev: WebviewEvent, detail?: WebviewWatchDetail): void;
   /** v1.5.5: fired ONCE per session, the first time the panel view
    * resolves — the user just opened the activity-bar panel. */
   onPanelFirstOpen?(): void;
@@ -96,6 +98,12 @@ export class GhPanelProvider implements vscode.WebviewViewProvider {
    * the production-tuned values from webviewHealth.ts). */
   private readonly healthOptions: WebviewHealthOptions;
   private readonly recoveryProbeIntervalMs: number;
+  /* v1.5.27: verdict diagnostics (GRAPHICS-H-RUNNER-11). everAlive answers
+   * "did ANY page script run at all this session" — the single fact that
+   * separates a hidden-view false verdict from a genuinely dead webview.
+   * watchStartedAt timestamps the final continuous watch for watchMs. */
+  private aliveSinceResolve = false;
+  private watchStartedAt = 0;
 
   constructor(
     private readonly extensionRoot: string,
@@ -215,6 +223,7 @@ export class GhPanelProvider implements vscode.WebviewViewProvider {
 
   resolveWebviewView(view: vscode.WebviewView): void {
     this.view = view;
+    this.aliveSinceResolve = false;
     view.webview.options = {
       enableScripts: true,
       localResourceRoots: [vscode.Uri.file(path.join(this.extensionRoot, 'media'))]
@@ -232,17 +241,34 @@ export class GhPanelProvider implements vscode.WebviewViewProvider {
             );
         },
         retry: () => {
-          /* re-navigating the webview clears the service-worker race */
+          /* v1.5.27: a retry while the view is HIDDEN can never clear a
+           * service-worker race (the iframe is not even loaded) and would
+           * burn the retry budget for nothing — the visibility flip below
+           * re-renders with a fresh budget instead. Lost-event defense:
+           * pause the watch, the reveal path restarts it. */
+          if (!view.visible) {
+            this.health?.stop();
+            return;
+          }
+          /* re-navigating the webview clears the service-worker race.
+           * watchStartedAt restarts with the page: the verdict's watchMs
+           * measures the FINAL continuous watch, not the first one. */
           this.fallbackActive = false;
           this.pageAlive = false;
           view.webview.html = this.renderHtml();
+          this.watchStartedAt = Date.now();
           this.health?.start();
         },
         fallback: () => {
           this.fallbackActive = true;
           this.pageAlive = false;
           view.webview.html = this.renderFallbackHtml();
-          this.startRecoveryProbe(); /* v1.5.26: watch the recovery page */
+          /* v1.5.26: watch the recovery page — but only while VISIBLE;
+           * a hidden view cannot answer, and the reveal handler restarts
+           * the probe with the correct visibility (v1.5.27). */
+          if (view.visible) {
+            this.startRecoveryProbe();
+          }
         }
       },
       this.healthOptions
@@ -270,6 +296,10 @@ export class GhPanelProvider implements vscode.WebviewViewProvider {
         if (!msg || typeof msg !== 'object') {
           return;
         }
+        /* v1.5.27: ANY inbound message proves a page script RAN this session
+         * (pong, click, cheat sync, crash report) — liveness evidence for
+         * the fallback-verdict diagnostics below. */
+        this.aliveSinceResolve = true;
         /* v1.5.26: the recovery page answering a PROBE ping means the
          * service-worker race has cleared — the real panel will boot now.
          * Reported to the extension once per fallback episode. */
@@ -329,7 +359,10 @@ export class GhPanelProvider implements vscode.WebviewViewProvider {
         return;
       }
       if (view.visible) {
-        /* resume watching — a healthy page answers the next ping in ~1s */
+        /* resume watching — a healthy page answers the next ping in ~1s.
+         * v1.5.27: the watch start itself is visibility-gated inside
+         * renderAndWatch/postState below, so a view that resolved while
+         * hidden gets its FIRST fresh watch here, on the reveal. */
         if (!this.fallbackActive && this.health.getState() !== 'fallback') {
           this.health.start();
         } else if (this.fallbackActive) {
@@ -357,10 +390,33 @@ export class GhPanelProvider implements vscode.WebviewViewProvider {
 
   private notify(ev: WebviewEvent): void {
     try {
-      this.hooks.onWebviewEvent?.(ev);
+      /* v1.5.27: retry + fallback verdicts carry the discriminating facts
+       * so the telemetry names WHY the page never answered. */
+      this.hooks.onWebviewEvent?.(ev, ev === 'retry' || ev === 'fallback' ? this.getWatchDiagnostics() : undefined);
     } catch {
       /* hooks must never crash the provider */
     }
+  }
+
+  /**
+   * v1.5.27: the facts that discriminate WHY the page never answered.
+   * Sent with every retry/fallback event (see WebviewWatchDetail).
+   */
+  private getWatchDiagnostics(): WebviewWatchDetail {
+    let windowFocused: boolean | undefined;
+    try {
+      /* the tests' vscode stub has no window — best effort by design */
+      windowFocused = (vscode.window.state as { focused?: boolean } | undefined)?.focused;
+    } catch {
+      windowFocused = undefined;
+    }
+    return {
+      visible: this.view?.visible ?? false,
+      windowFocused,
+      retriesUsed: this.health?.getRetriesUsed() ?? 0,
+      watchMs: this.watchStartedAt > 0 ? Math.max(0, Date.now() - this.watchStartedAt) : 0,
+      everAlive: this.aliveSinceResolve
+    };
   }
 
   private notifyRecoveryAlive(): void {
@@ -386,7 +442,18 @@ export class GhPanelProvider implements vscode.WebviewViewProvider {
     this.pageAlive = false;
     this.view.webview.html = this.renderHtml();
     this.health?.reset();
-    this.health?.start();
+    /* v1.5.27 ROOT FIX (GRAPHICS-H-RUNNER-11): only WATCH a visible view.
+     * VS Code may resolve (or re-render) a restored view while it is NOT
+     * visible — a hidden view never loads its iframe, so its page script
+     * can never answer a ping, and a running watchdog produced a guaranteed
+     * FALSE fallback verdict (~22 s later, stealing focus to the fallback
+     * lists while the user never had the panel open). The visibility flip
+     * below starts a fresh watch with a full budget when the view actually
+     * appears. */
+    if (this.view.visible) {
+      this.watchStartedAt = Date.now();
+      this.health?.start();
+    }
   }
 
   private notifyFirstOpen(): void {

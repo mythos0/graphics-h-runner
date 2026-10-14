@@ -35,7 +35,10 @@ exports.run = async function () {
      inside the panel — the outer CDP driver verifies the real DOM. */
   await vscode.commands.executeCommand('graphics-h-runner.cheatSheet');
   fs.writeFileSync(READY, String(Date.now()));
-  for (let i = 0; i < 900; i++) { /* up to 90 s for the outer driver */
+  for (let i = 0; i < 2400; i++) { /* up to 240 s for the outer driver —
+      slow CI/VM boots park the sheet open until the webview's first boot
+      handshake, and the 90 s window expired before the CDP driver could
+      verify (seen on this machine: ~50 s first boot + driver attach) */
     if (fs.existsSync(PHASE1) && !fs.existsSync(PHASE2)) {
       /* phase 1 verified open — toggle close via the same command */
       await vscode.commands.executeCommand('graphics-h-runner.cheatSheet');

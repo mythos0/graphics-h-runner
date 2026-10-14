@@ -14,20 +14,51 @@
  *      cases. v1.5.15: up to TWO retry renders (maxRetryRounds) before
  *      giving up — production telemetry (Sentry GRAPHICS-H-RUNNER-E) showed
  *      a real machine where one retry was not enough. v1.5.26: FOUR retry
- *      rounds with a longer final window (~22 s of continuous watching
- *      before the verdict) — GRAPHICS-H-RUNNER-S kept firing on slow
- *      Windows machines (spinning disks + antivirus) where the service
- *      worker needed more than the old ~12 s budget to boot.
+ *      rounds with a longer final window — GRAPHICS-H-RUNNER-S kept firing
+ *      on slow Windows machines (spinning disks + antivirus) where the
+ *      service worker needed more than the old ~12 s budget to boot.
  *   3. If pings still go unanswered the provider raises `fallback()` and the
  *      extension instantly reveals a native TreeView copy of the panel so
  *      the user is never blocked — and then keeps auto-repairing in the
  *      background (extension-side escalating ladder, v1.5.26).
+ *
+ * v1.5.27 root cause (GRAPHICS-H-RUNNER-11): the verdict clock used to run
+ * REGARDLESS of webview visibility. VS Code may resolve a restored view
+ * while it is NOT visible (startup layout restore) — a hidden view never
+ * loads its iframe, so no page script can ever answer, and the watchdog
+ * produced a guaranteed FALSE verdict ~22 s later (plus a focus-stealing
+ * fallback). The PROVIDER now starts/pauses the watch with visibility
+ * (panelView.ts renderAndWatch), and the verdict carries discriminating
+ * diagnostics (WebviewWatchDetail) so the next event names its real cause.
  *
  * Pure state machine: timers are injectable, so the whole lifecycle is unit
  * testable without VS Code or real clocks.
  */
 
 export type WebviewHealthState = 'idle' | 'watching' | 'alive' | 'fallback';
+
+/**
+ * v1.5.27: the facts that discriminate WHY a page never answered.
+ * Attached to every fallback verdict (Sentry GRAPHICS-H-RUNNER-11 taught us
+ * the old event answered none of the questions that mattered):
+ *   - visible=false + everAlive=false  -> hidden-view resolution (host bug
+ *     class, now structurally prevented by the visibility gate)
+ *   - visible=true + everAlive=false   -> genuine service-worker stall /
+ *     page that never booted despite re-renders
+ *   - everAlive=true                   -> the page ran but died later
+ */
+export interface WebviewWatchDetail {
+  /** Was the webview view visible when the verdict fired? */
+  visible: boolean;
+  /** Was the VS Code window focused (best effort; undefined = unknown)? */
+  windowFocused?: boolean;
+  /** Retry renders used by the watchdog before the verdict. */
+  retriesUsed: number;
+  /** ms from the start of the final continuous watch to the verdict. */
+  watchMs: number;
+  /** Did ANY page message (pong, click, crash report) arrive this session? */
+  everAlive: boolean;
+}
 
 export type WebviewEvent = 'alive' | 'retry' | 'fallback';
 
@@ -49,7 +80,11 @@ export interface WebviewHealthOptions {
   pingsBeforeRetry?: number;
   /**
    * Unanswered pings tolerated (after the last retry) before falling back to
-   * the tree view. Default 6 (~6s more — the last chance for a slow boot).
+   * the tree view. Default 10 (~10 s more — the last chance for a slow boot).
+   * v1.5.27: 6 -> 10. The hidden-view false verdicts (the real cause of
+   * GRAPHICS-H-RUNNER-11) are now prevented by the provider's visibility
+   * gate, so a longer final window costs nothing and buys genuinely slow
+   * machines another 4 s before the fallback swap.
    */
   pingsBeforeFallback?: number;
   /**
@@ -57,8 +92,8 @@ export interface WebviewHealthOptions {
    * fallback verdict. Default 4 — one re-render is usually enough to clear
    * the service-worker race, but real telemetry (GRAPHICS-H-RUNNER-S:
    * still firing on 1.5.25 builds) shows low-end Windows machines where
-   * TWO were not. Four rounds + a 6-ping final window give a slow page
-   * ~22 s of continuous watching before the fallback verdict.
+   * TWO were not. Four rounds + a 10-ping final window (v1.5.27) give a
+   * slow page ~26 s of continuous watching before the fallback verdict.
    */
   maxRetryRounds?: number;
   /** Timer injection (tests). Defaults to the global setTimeout/clearTimeout. */
@@ -85,7 +120,7 @@ export class WebviewHealth {
     return new WebviewHealth(hooks, {
       pingIntervalMs: o.pingIntervalMs ?? 1000,
       pingsBeforeRetry: o.pingsBeforeRetry ?? 4,
-      pingsBeforeFallback: o.pingsBeforeFallback ?? 6,
+      pingsBeforeFallback: o.pingsBeforeFallback ?? 10,
       maxRetryRounds: o.maxRetryRounds ?? 4,
       setTimer: o.setTimer,
       clearTimer: o.clearTimer

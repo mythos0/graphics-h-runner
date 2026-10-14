@@ -15,14 +15,22 @@
  *      cases. v1.5.15: up to TWO retry renders (maxRetryRounds) before
  *      giving up — production telemetry (Sentry GRAPHICS-H-RUNNER-E) showed
  *      a real machine where one retry was not enough. v1.5.26: FOUR retry
- *      rounds with a longer final window (~22 s of continuous watching
- *      before the verdict) — GRAPHICS-H-RUNNER-S kept firing on slow
- *      Windows machines (spinning disks + antivirus) where the service
- *      worker needed more than the old ~12 s budget to boot.
+ *      rounds with a longer final window — GRAPHICS-H-RUNNER-S kept firing
+ *      on slow Windows machines (spinning disks + antivirus) where the
+ *      service worker needed more than the old ~12 s budget to boot.
  *   3. If pings still go unanswered the provider raises `fallback()` and the
  *      extension instantly reveals a native TreeView copy of the panel so
  *      the user is never blocked — and then keeps auto-repairing in the
  *      background (extension-side escalating ladder, v1.5.26).
+ *
+ * v1.5.27 root cause (GRAPHICS-H-RUNNER-11): the verdict clock used to run
+ * REGARDLESS of webview visibility. VS Code may resolve a restored view
+ * while it is NOT visible (startup layout restore) — a hidden view never
+ * loads its iframe, so no page script can ever answer, and the watchdog
+ * produced a guaranteed FALSE verdict ~22 s later (plus a focus-stealing
+ * fallback). The PROVIDER now starts/pauses the watch with visibility
+ * (panelView.ts renderAndWatch), and the verdict carries discriminating
+ * diagnostics (WebviewWatchDetail) so the next event names its real cause.
  *
  * Pure state machine: timers are injectable, so the whole lifecycle is unit
  * testable without VS Code or real clocks.
@@ -42,7 +50,7 @@ class WebviewHealth {
         return new WebviewHealth(hooks, {
             pingIntervalMs: o.pingIntervalMs ?? 1000,
             pingsBeforeRetry: o.pingsBeforeRetry ?? 4,
-            pingsBeforeFallback: o.pingsBeforeFallback ?? 6,
+            pingsBeforeFallback: o.pingsBeforeFallback ?? 10,
             maxRetryRounds: o.maxRetryRounds ?? 4,
             setTimer: o.setTimer,
             clearTimer: o.clearTimer

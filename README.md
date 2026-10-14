@@ -77,6 +77,22 @@ code --install-extension mythos0-labs.graphics-h-runner
   compiler messages on failure, and a bundled Fireworks Simulator (click-to-burst). No network
   requests; disable with `graphics-h-runner.celebrations.enabled`.
 
+## Architecture
+
+Everything above funnels through one command hub into eight feature modules, all driving the
+same per-user toolchain. Every box names the modules in `src/` that implement it — so the map
+below doubles as a reading guide to the codebase:
+
+<p align="center">
+  <img src="media/architecture.png" alt="Architecture of graphics.h Runner: user entry points (keybindings, command palette, activity-bar panel, programs tree) funnel through the extension.ts command hub into eight core feature modules (setup &amp; doctor, compile &amp; run engine, native VS Code run, diagnostics, panel webview + watchdog, settings healing &amp; restore, celebrations, content library), which drive the compilers, graphics libraries and the runtime window; a cross-cutting telemetry note sits underneath." width="100%"/>
+</p>
+
+The resilience wiring is part of the design, not an afterthought: the panel webview is watched
+by a **visibility-gated liveness watchdog** (silent views are never declared dead), dead pages
+are re-rendered automatically, and if the webview truly cannot load a native TreeView copy of
+the whole panel takes over — with an escalating background repair ladder that brings the real
+panel back on its own.
+
 ## Commands & keybindings
 
 | Command | Key |

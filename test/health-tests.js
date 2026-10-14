@@ -194,7 +194,7 @@ check('fallback state survives stop/start (dead webview never resurrects itself)
   assert.strictEqual(health.getState(), 'fallback', 'start() must not clear a fallback verdict');
 });
 
-check('default options are production-tuned (1s ping, 4 pings per window, 4 retry rounds, 6-ping final window)', () => {
+check('default options are production-tuned (1s ping, 4 pings per window, 4 retry rounds, 10-ping final window)', () => {
   const { clock, events, health } = makeHarness();
   health.start();
   clock.advance(4000); /* 4 ticks at the default 1000ms */
@@ -204,10 +204,12 @@ check('default options are production-tuned (1s ping, 4 pings per window, 4 retr
   clock.advance(8000);
   assert.strictEqual(events.filter((e) => e === 'retry').length, 4, 'all four retry rounds by ~16s');
   assert.ok(!events.includes('fallback'), 'no fallback during the retry budget');
-  clock.advance(4000);
+  clock.advance(6000); /* 22s — the old verdict time */
   assert.ok(!events.includes('fallback'), 'a slow boot still gets grace after retry #4');
   clock.advance(2000);
-  assert.ok(events.includes('fallback'), 'default fallback verdict by ~22s of dead watching');
+  assert.strictEqual(events.filter((e) => e === 'retry').length, 4, 'no extra retries in the final window');
+  clock.advance(2000);
+  assert.ok(events.includes('fallback'), 'default fallback verdict by ~26s of dead watching');
 });
 
 console.log(failures === 0 ? '\nHEALTH TESTS ALL PASS' : `\n${failures} FAILURES`);

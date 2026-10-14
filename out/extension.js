@@ -2349,18 +2349,32 @@ function activate(context) {
                 celebrate('schoolpride');
             }
         },
-        onWebviewEvent: (ev) => {
+        onWebviewEvent: (ev, detail) => {
             if (ev === 'retry') {
                 log('[panel] webview did not answer — re-rendering to clear the service-worker race');
                 return;
             }
             if (ev === 'fallback') {
-                log('[panel] webview failed to load — switching to the list views automatically');
+                /* v1.5.27: the verdict now carries the facts that NAME the real
+                 * cause (GRAPHICS-H-RUNNER-11 produced a blind event three rounds
+                 * in a row). page_visible=false + ever_alive=false means the view
+                 * resolved while hidden (host restore edge — now prevented); a
+                 * visible verdict with ever_alive=false is a genuine service-worker
+                 * stall; ever_alive=true means the page ran but died later. */
+                const d = detail || { visible: true, retriesUsed: 0, watchMs: 0, everAlive: false };
+                const msg = 'webview failed to load (no pong after ' + d.retriesUsed + ' retry renders, ~' +
+                    Math.round(d.watchMs / 1000) + ' s of watching)';
+                log('[panel] ' + msg);
                 (0, instrument_1.addExtensionBreadcrumb)('panel', 'webview fallback engaged');
                 /* resilience WORKED here (automatic retries + list-view fallback):
                  * warning-level visibility, not an error issue */
-                (0, instrument_1.captureExtensionWarning)('webview failed to load (no pong after 4 retry renders, ~22 s)', {
-                    stage: 'webview-fallback'
+                (0, instrument_1.captureExtensionWarning)(msg, {
+                    stage: 'webview-fallback',
+                    page_visible: String(d.visible),
+                    window_focused: d.windowFocused === undefined ? 'unknown' : String(d.windowFocused),
+                    ever_alive: String(d.everAlive),
+                    retries: String(d.retriesUsed),
+                    watch_ms: String(Math.round(d.watchMs))
                 });
                 scheduleWebviewSelfRepair();
                 void (async () => {

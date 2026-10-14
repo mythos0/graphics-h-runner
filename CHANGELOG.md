@@ -4,6 +4,31 @@ All notable changes to this extension are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.27] — 2026-10-14
+
+Fourth Sentry round — the ROOT CAUSE of the "panel failed to load" class (GRAPHICS-H-RUNNER-11, the third verdict of this family) is fixed, not just tolerated. Plus: the README now ships an architecture map of the core features.
+
+### Fixed
+
+- **The liveness watchdog no longer runs against hidden views — the real cause of GRAPHICS-H-RUNNER-11.** The production event (v1.5.26, Windows 11, VS Code 1.141) showed the panel receiving zero signals — no pong, no boot handshake, no script error — and the page-side script provably answers the instant it runs, so its iframe had never loaded. VS Code may resolve a restored view while it is NOT visible (startup layout restore); a hidden view never mounts its webview content, yet the old code started the ~22 s verdict clock unconditionally in `resolveWebviewView` — a guaranteed false verdict and a focus-stealing fallback swap while the user never had the panel open. The watch now starts only when the view is actually visible (`renderAndWatch` is visibility-gated), and the reveal path starts a fresh watch with a full retry budget.
+- **A retry decision while hidden pauses the watch instead of burning the budget.** If a visibility change is ever lost (deferred workbench event), a retry render into a hidden view cannot clear a service-worker race and would spend the whole budget for nothing; the watchdog now pauses there, and the next reveal re-renders with the full budget. A hidden view can therefore never be verdicted dead — the "no signal at all" false-verdict class is structurally eliminated.
+- **The recovery-page probe only runs while the view is visible** (pings into a hidden view cannot be answered); the reveal handler restarts it.
+- **The fallback verdict finally names its real cause.** Every retry/fallback event now carries `WebviewWatchDetail` — `page_visible`, `window_focused`, `ever_alive`, `retries`, `watch_ms` — the facts that discriminate a hidden-view false verdict from a genuine service-worker stall from a page that ran and died later. The v1.5.26 event answered none of these questions, which is why this class needed three rounds of blind tolerance tuning.
+- **The final grace window is 10 pings (~26 s total watching, up from 6 / ~22 s).** With the false verdicts prevented at the source, the extra 4 s cost nothing and buys genuinely slow machines more boot time before the fallback swap. The telemetry message is now built from the real numbers (`no pong after N retry renders, ~N s of watching`) instead of a hardcoded string.
+
+### Added
+
+- **`test/webview-round4-tests.js`** — 10 checks driving the real provider against hidden/silent views: hidden resolve never pings or verdicts (K), reveal starts the first real watch (L), doctor re-renders stay passive while hidden (M), the lost-visibility-event defense (N), the fresh-budget reveal (O), the visible dead page still verdicts (P), the verdict diagnostics contract (Q, R, S), and the hidden fallback probe lifecycle (T).
+- `scripts/cheat-e2e-cdp-driver.js` — the missing outer CDP driver for the real-host cheat-sheet e2e: attaches to the webview's OOPIF target over raw CDP, reaches through the nested `iframe#active-frame`, and verifies the sheet really opens and closes in the DOM (the inner wait window grew 90 s → 240 s for slow VM boots).
+
+### Documentation
+
+- **README gains an Architecture section** with a full architecture map of the core features (entry points → command hub → the eight feature modules → toolchain & runtime, plus the cross-cutting telemetry note). The image lives in `media/`, so it renders both on GitHub and in the Marketplace listing; every box names the `src/` modules that implement it.
+
+### Test results
+
+23 unit suites + 5 real-VS-Code e2e suites green, including run-tests 21/21 on real SDL_bgi with screenshots, strict-include 21/21, win-header 21/21 (real MinGW), registry pin 1.5.27, webview-round3 9 + webview-round4 10 + health 13.
+
 ## [1.5.26] — 2026-10-13
 
 Third Sentry round: the webview panel can no longer stay dead — the last unresolved production issue (GRAPHICS-H-RUNNER-S, "webview failed to load (no pong after 2 retry renders)") was still firing on 1.5.25 builds, so the recovery machinery itself got the root-cause treatment.
