@@ -36,7 +36,9 @@ import {
   compilerArchitecture,
   bgiLinkProbe,
   describeBgiProbeFailure,
-  isNetworkFailureText
+  isNetworkFailureText,
+  shouldReportVerifyFailure,
+  shouldReportMakeGlobalFailure
 } from './setup';
 import { loadProgramCatalog, LoadedProgram, resolveProgramTarget } from './programs';
 import { GhPanelProvider, PanelClick } from './panelView';
@@ -1067,6 +1069,13 @@ async function runFullSetupInner(context: vscode.ExtensionContext): Promise<void
 
       const plan = planSetup(platform, { ...probe, compilerBgiIncompatible }, sdl2DevOk);
       log('[setup] plan: ' + plan.map((s) => `${s.id}(${s.kind})`).join(' -> '));
+      /* v1.5.29 (GRAPHICS-H-RUNNER-M): in-run cause tracking — a step that
+       * already reported its own failure (or a terminal step the user must
+       * perform) EXPLAINS a subsequent not-ready verify; the verify warning
+       * then adds a second event for one cause. Only unexplained failures
+       * are worth a Sentry warning now. */
+      let reportedInstallFailure = false;
+      let sawActionNeeded = false;
 
       for (const step of plan) {
         progress.report({ message: step.title });
@@ -1115,6 +1124,7 @@ async function runFullSetupInner(context: vscode.ExtensionContext): Promise<void
                 platform: platform,
                 detail: scrubText(msg).slice(0, 180)
               });
+              reportedInstallFailure = true;
             } else if (/SDL2 development headers|SDL2 runtime\/development library/i.test(msg)) {
               /* classified SDL2-missing failure — actionable, not our bug */
               summary.push('SDL_bgi auto-install FAILED: ' + msg);
@@ -1122,9 +1132,11 @@ async function runFullSetupInner(context: vscode.ExtensionContext): Promise<void
                 setup_step: 'install-sdl_bgi',
                 platform: platform
               });
+              reportedInstallFailure = true;
             } else {
               summary.push('SDL_bgi auto-install FAILED: ' + msg);
               captureExtensionError(e, { setup_step: 'install-sdl_bgi', platform: platform });
+              reportedInstallFailure = true;
             }
           }
         } else if (step.kind === 'auto' && step.id === 'install-compiler-winget') {
@@ -1186,9 +1198,11 @@ async function runFullSetupInner(context: vscode.ExtensionContext): Promise<void
                   platform: platform,
                   detail: scrubText(msg).slice(0, 180)
                 });
+                reportedInstallFailure = true;
               } else {
                 summary.push('Direct compiler download FAILED: ' + msg);
                 captureExtensionError(e, { setup_step: 'install-compiler-download', platform: platform });
+                reportedInstallFailure = true;
               }
             }
           }
@@ -1238,9 +1252,11 @@ async function runFullSetupInner(context: vscode.ExtensionContext): Promise<void
                 platform: platform,
                 detail: scrubText(msg).slice(0, 180)
               });
+              reportedInstallFailure = true;
             } else {
               summary.push('WinBGIM auto-install FAILED: ' + msg);
               captureExtensionError(e, { setup_step: 'install-winbgim', platform: platform });
+              reportedInstallFailure = true;
             }
           }
         } else if (step.kind === 'auto' && step.id === 'make-global') {
@@ -1283,6 +1299,19 @@ async function runFullSetupInner(context: vscode.ExtensionContext): Promise<void
                   summary.push(`GLOBAL: WinBGIM lives in the toolchain itself (${res.includeTarget}, ${res.libTarget}).`);
                 }
                 addExtensionBreadcrumb('setup.step', 'make-global ok');
+              } else if (!shouldReportMakeGlobalFailure(res)) {
+                /* v1.5.29 (GRAPHICS-H-RUNNER-F): every candidate was skipped
+                 * as not writable (administrators-only toolchain, e.g. a
+                 * Code::Blocks under C:\Program Files) — an expected property
+                 * of this machine, not a defect. The output channel explains
+                 * the admin route; no telemetry warning. */
+                summary.push(
+                  'GLOBAL: skipped — the compiler folder is administrators-only (compilers under C:\\Program Files need elevated rights). ' +
+                  'The extension keeps working via its own settings; run VS Code once as administrator to copy graphics.h machine-wide.'
+                );
+                addExtensionBreadcrumb('setup.step', 'make-global skipped: toolchain not writable', {
+                  notWritableSkips: String(res.notWritableSkips)
+                });
               } else {
                 summary.push('Global setup could NOT make plain "g++ ..." resolve graphics.h (details in the output). The extension keeps working via its own settings.');
                 /* v1.5.11: the warning used to carry NOTHING but the platform —
@@ -1309,8 +1338,10 @@ async function runFullSetupInner(context: vscode.ExtensionContext): Promise<void
             }
           }
         } else if (step.kind === 'terminal') {
+          sawActionNeeded = true;
           summary.push(`ACTION NEEDED (run in a terminal): ${step.command}`);
         } else if (step.kind === 'manual') {
+          sawActionNeeded = true;
           summary.push(`ACTION NEEDED (manual): ${step.detail}${step.url ? ' — ' + step.url : ''}`);
         } else if (step.kind === 'verify') {
           await pruneStalePaths();
@@ -1354,18 +1385,31 @@ async function runFullSetupInner(context: vscode.ExtensionContext): Promise<void
             /* v1.5.11: a failed verify used to be INVISIBLE to error reporting
              * (only a breadcrumb) — the Win-26200 machine failed the verify 12
              * times and produced ZERO events, so the root cause never reached
-             * us. Capture it now with the failing checks + compiler arch. */
+             * us. Capture it now with the failing checks + compiler arch.
+             * v1.5.29 (GRAPHICS-H-RUNNER-M): EXCEPT when this run already
+             * knows the cause — an earlier step reported its own failure
+             * (e.g. the compiler download lost the network, GRAPHICS-H-RUNNER-12
+             * fired first) or ACTION NEEDED steps are pending. A second warning
+             * for one cause is noise; only UNEXPLAINED failures are captured. */
             const failing = res.libraryChecks
               .filter((c) => !c.ok)
               .map((c) => `${c.name}: ${String(c.detail || '').split(/\r?\n/)[0]}`)
               .join(' | ');
             const vArch = await compilerArchitecture(fresh.compilerPath || 'g++');
-            captureExtensionWarning('setup verify not ready', {
-              platform: platform,
-              arch: String(vArch),
-              compilerOk: String(res.compilerCheck.ok),
-              detail: scrubText(failing).slice(0, 180)
-            });
+            if (shouldReportVerifyFailure({ reportedInstallFailure, sawActionNeeded })) {
+              captureExtensionWarning('setup verify not ready', {
+                platform: platform,
+                arch: String(vArch),
+                compilerOk: String(res.compilerCheck.ok),
+                detail: scrubText(failing).slice(0, 180)
+              });
+            } else {
+              addExtensionBreadcrumb('setup.verify', 'not ready — explained by earlier steps', {
+                compilerOk: String(res.compilerCheck.ok),
+                downloadFailed: String(reportedInstallFailure),
+                actionNeeded: String(sawActionNeeded)
+              });
+            }
             log('[setup] verify NOT ready: ' + (failing || '(no detail)'));
           }
         }

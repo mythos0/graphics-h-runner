@@ -60,6 +60,9 @@ exports.installCompilerViaWinget = installCompilerViaWinget;
 exports.discoverGppWindows = discoverGppWindows;
 exports.verifyCompilerRun = verifyCompilerRun;
 exports.isNetworkFailureText = isNetworkFailureText;
+exports.withNetworkRetry = withNetworkRetry;
+exports.shouldReportVerifyFailure = shouldReportVerifyFailure;
+exports.shouldReportMakeGlobalFailure = shouldReportMakeGlobalFailure;
 exports.compilerArchitecture = compilerArchitecture;
 exports.bgiLinkProbe = bgiLinkProbe;
 exports.installCompilerWindowsDirect = installCompilerWindowsDirect;
@@ -549,6 +552,68 @@ async function verifyCompilerRun(candidate) {
 function isNetworkFailureText(text) {
     return /fetch failed|TimeoutError|aborted due to timeout|ConnectTimeoutError|ETIMEDOUT|ECONNRESET|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|socket hang up|network error|ERR_(?:SOCKET|CONNECTION|HTTP)_|getaddrinfo/i.test(String(text || ''));
 }
+/**
+ * v1.5.29 (GRAPHICS-H-RUNNER-12): one transient hiccup during the 274 MB
+ * compiler download used to abort the whole step ("TypeError: fetch failed"
+ * in the production inbox) and force the user to re-run Full Setup.
+ * withNetworkRetry reruns a step-level operation a limited number of times
+ * when (and ONLY when) the error classifies as transient network trouble —
+ * real failures (HTTP 404, sha256 mismatch, extraction errors) rethrow
+ * immediately. Default: 3 attempts, 2 s then 5 s between tries.
+ */
+async function withNetworkRetry(fn, opts) {
+    const attempts = Math.max(1, opts?.attempts ?? 3);
+    const transient = opts?.isTransient ?? ((e) => isNetworkFailureText(String(e)));
+    const sleep = opts?.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
+    const backoff = opts?.backoffMs ?? ((n) => (n === 1 ? 2000 : 5000));
+    let lastErr;
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+        try {
+            return await fn();
+        }
+        catch (e) {
+            lastErr = e;
+            if (attempt >= attempts || !transient(e)) {
+                throw e;
+            }
+            opts?.onRetry?.(attempt, e);
+            await sleep(await backoff(attempt));
+        }
+    }
+    throw lastErr; // unreachable — the loop always returns or throws
+}
+/**
+ * v1.5.29 (GRAPHICS-H-RUNNER-M): "setup verify not ready" used to fire on
+ * EVERY run whose earlier steps had already reported their own failure —
+ * e.g. the compiler download lost the network (GRAPHICS-H-RUNNER-12 fired
+ * first), the WinBGIm step then ran without a compiler and the verify
+ * reported the inevitable NOT READY as a SECOND warning for ONE cause.
+ * The same cascade followed every ACTION NEEDED run (terminal steps the
+ * user must perform) — expected by design, invisible as signal.
+ * The verify warning now fires only when NOTHING earlier in the run
+ * explains the failure — genuinely mysterious failures still reach us
+ * (the v1.5.11 observability goal is preserved).
+ */
+function shouldReportVerifyFailure(state) {
+    return !state.reportedInstallFailure && !state.sawActionNeeded;
+}
+/**
+ * v1.5.29 (GRAPHICS-H-RUNNER-F): make-global on a compiler under
+ * C:\Program Files (Code::Blocks bundles) can NEVER copy the headers —
+ * the destination is administrators-only, so every candidate failed with
+ * EPERM and the step fired "make-global probe failed" forever. The
+ * not-writable condition is an EXPECTED environment property, not a
+ * defect: the extension keeps working via its -I/-L settings and the
+ * output channel explains the admin route. Suppress the telemetry
+ * warning exactly when no candidate could even be attempted because all
+ * of them were skipped as not writable.
+ */
+function shouldReportMakeGlobalFailure(res) {
+    if (res.globalProbeOk) {
+        return false;
+    }
+    return !(res.probeAttempts === 0 && res.notWritableSkips > 0);
+}
 async function compilerArchitecture(compiler, run = (cmd, args, opts) => runProcess(cmd, args, opts)) {
     try {
         const res = await run(compiler, ['-dumpmachine'], { timeoutMs: 20000 });
@@ -683,28 +748,39 @@ async function installCompilerWindowsDirect(storageRoot, onProgress) {
         }
         log.push('cached toolchain did not run (' + pre.reason + ') — re-downloading');
     }
-    /* 1. download (streaming + progress) */
+    /* 1. download (streaming + progress) — v1.5.29: retried on transient
+     * network failures (2 s, then 5 s) instead of aborting the whole step;
+     * a fresh attempt re-fetches from byte 0, so no partial zip can leak. */
     onProgress?.({ message: `Downloading WinLibs GCC (${Math.round(exports.WINLIBS_FALLBACK.sizeBytes / 1e6)} MB)…`, percent: 0 });
-    const res = await fetch(exports.WINLIBS_FALLBACK.url, { redirect: 'follow', signal: AbortSignal.timeout(60 * 60 * 1000) });
-    if (!res.ok || !res.body) {
-        throw new Error(`download failed: HTTP ${res.status}`);
-    }
-    const total = Number(res.headers.get('content-length')) || exports.WINLIBS_FALLBACK.sizeBytes;
-    let received = 0;
-    const reader = res.body.getReader();
-    const chunks = [];
-    for (;;) {
-        const { done, value } = await reader.read();
-        if (done)
-            break;
-        chunks.push(Buffer.from(value));
-        received += value.length;
-        onProgress?.({
-            message: `Downloading WinLibs GCC… ${(received / 1e6).toFixed(0)} / ${(total / 1e6).toFixed(0)} MB`,
-            percent: Math.min(99, Math.round((received / total) * 90))
-        });
-    }
-    const zip = Buffer.concat(chunks);
+    const zip = await withNetworkRetry(async () => {
+        const res = await fetch(exports.WINLIBS_FALLBACK.url, { redirect: 'follow', signal: AbortSignal.timeout(60 * 60 * 1000) });
+        if (!res.ok || !res.body) {
+            throw new Error(`download failed: HTTP ${res.status}`);
+        }
+        const total = Number(res.headers.get('content-length')) || exports.WINLIBS_FALLBACK.sizeBytes;
+        let received = 0;
+        const reader = res.body.getReader();
+        const chunks = [];
+        for (;;) {
+            const { done, value } = await reader.read();
+            if (done)
+                break;
+            chunks.push(Buffer.from(value));
+            received += value.length;
+            onProgress?.({
+                message: `Downloading WinLibs GCC… ${(received / 1e6).toFixed(0)} / ${(total / 1e6).toFixed(0)} MB`,
+                percent: Math.min(99, Math.round((received / total) * 90))
+            });
+        }
+        return Buffer.concat(chunks);
+    }, {
+        attempts: 3,
+        onRetry: (attempt, err) => {
+            const msg = String(err?.message || err);
+            log.push(`download attempt ${attempt} failed (${msg.slice(0, 120)}) — retrying`);
+            onProgress?.({ message: `Network hiccup — retrying download (${attempt + 1}/3)…`, percent: 0 });
+        }
+    });
     fs.writeFileSync(zipPath, zip);
     log.push(`downloaded ${zip.length} bytes`);
     /* 2. verify sha256 (first token of the .sha256 asset) */

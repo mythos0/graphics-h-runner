@@ -166,6 +166,11 @@ export interface GlobalizeResult {
   pathChanged: boolean;
   includeTarget?: string;
   libTarget?: string;
+  /** v1.5.29: candidates skipped because the destination is not writable
+   * (compilers under C:\Program Files are administrators-only — EPERM). */
+  notWritableSkips: number;
+  /** v1.5.29: candidates that actually reached the probe compile. */
+  probeAttempts: number;
   universalCommand: string;
   log: string[];
 }
@@ -211,6 +216,8 @@ export async function makeGlobalWindows(opts: GlobalizeOptions): Promise<Globali
       globalProbeOk: false,
       pathOk: false,
       pathChanged: false,
+      notWritableSkips: 0,
+      probeAttempts: 0,
       universalCommand: universalCommandDoc(),
       log
     };
@@ -226,6 +233,8 @@ export async function makeGlobalWindows(opts: GlobalizeOptions): Promise<Globali
       globalProbeOk: false,
       pathOk: false,
       pathChanged: false,
+      notWritableSkips: 0,
+      probeAttempts: 0,
       universalCommand: universalCommandDoc(),
       log
     };
@@ -233,10 +242,20 @@ export async function makeGlobalWindows(opts: GlobalizeOptions): Promise<Globali
   say('toolchain root: ' + targets.toolchainRoot + ' (compiler: ' + realCompiler + ')');
 
   /* 1. copy the trio into the toolchain's own include/lib, probe-compile
-   *    with ZERO -I/-L flags; on failure try the next layout candidate. */
+   *    with ZERO -I/-L flags; on failure try the next layout candidate.
+   *    v1.5.29 (GRAPHICS-H-RUNNER-F): a compiler under C:\Program Files
+   *    (Code::Blocks bundles) is administrators-only — the copies can NEVER
+   *    succeed, every candidate used to die with EPERM and the step fired
+   *    "make-global probe failed" on every run. Writability is preflighted
+   *    now, the skip is explained with the admin route, and the count is
+   *    reported so the caller can suppress the expected-condition warning. */
   let globalProbeOk = false;
   let includeTarget: string | undefined;
   let libTarget: string | undefined;
+  let notWritableSkips = 0;
+  let probeAttempts = 0;
+  const NOT_WRITABLE_HINT =
+    'The extension keeps working via its own -I/-L settings; run VS Code once as administrator if you want graphics.h available machine-wide.';
 
   for (let i = 0; i < targets.includeCandidates.length && !globalProbeOk; i++) {
     const incDir = targets.includeCandidates[i];
@@ -244,6 +263,25 @@ export async function makeGlobalWindows(opts: GlobalizeOptions): Promise<Globali
     try {
       fs.mkdirSync(incDir, { recursive: true });
       fs.mkdirSync(libDir, { recursive: true });
+    } catch (e) {
+      const err = e as NodeJS.ErrnoException;
+      if (err?.code === 'EPERM' || err?.code === 'EACCES' || /EPERM|EACCES|operation not permitted/i.test(String(e))) {
+        notWritableSkips++;
+        say('copy into ' + incDir + ' skipped: the folder is not writable (administrators-only) — ' + NOT_WRITABLE_HINT);
+        continue;
+      }
+      say('copy into ' + incDir + ' failed: ' + String(e));
+      continue;
+    }
+    try {
+      fs.accessSync(incDir, fs.constants.W_OK);
+      fs.accessSync(libDir, fs.constants.W_OK);
+    } catch {
+      notWritableSkips++;
+      say('copy into ' + incDir + ' skipped: the folder is not writable (administrators-only) — ' + NOT_WRITABLE_HINT);
+      continue;
+    }
+    try {
       if (path.resolve(incDir) !== path.resolve(opts.includeDir)) {
         fs.copyFileSync(gfx, path.join(incDir, 'graphics.h'));
         fs.copyFileSync(wbh, path.join(incDir, 'winbgim.h'));
@@ -252,9 +290,16 @@ export async function makeGlobalWindows(opts: GlobalizeOptions): Promise<Globali
         fs.copyFileSync(lib, path.join(libDir, 'libbgi.a'));
       }
     } catch (e) {
+      const err = e as NodeJS.ErrnoException;
+      if (err?.code === 'EPERM' || err?.code === 'EACCES' || /EPERM|EACCES|operation not permitted/i.test(String(e))) {
+        notWritableSkips++;
+        say('copy into ' + incDir + ' skipped: the folder is not writable (administrators-only) — ' + NOT_WRITABLE_HINT);
+        continue;
+      }
       say('copy into ' + incDir + ' failed: ' + String(e));
       continue;
     }
+    probeAttempts++;
 
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bgi-global-'));
     try {
@@ -363,6 +408,8 @@ export async function makeGlobalWindows(opts: GlobalizeOptions): Promise<Globali
     pathChanged,
     includeTarget,
     libTarget,
+    notWritableSkips,
+    probeAttempts,
     universalCommand: universalCommandDoc(),
     log
   };

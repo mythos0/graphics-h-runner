@@ -4,6 +4,20 @@ All notable changes to this extension are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.29] — 2026-10-15
+
+Fifth Sentry round — the v1.5.27-era events located three REAL root causes that the earlier rounds could not see yet, and each is now fixed at the source.
+
+### Fixed
+
+- **One transient network hiccup no longer aborts the 274 MB compiler download (GRAPHICS-H-RUNNER-12).** The production event was a bare `TypeError: fetch failed` at `setup_step=install-compiler-download` — a single flake killed the whole step and forced a full re-run. The download phase is now retried up to 3 attempts (2 s, then 5 s) via the new `withNetworkRetry` helper, which retries ONLY transient network errors (`fetch failed`, timeouts, `ECONNRESET`, DNS hiccups, …); real failures (HTTP 404, checksum mismatch, extraction errors) still rethrow immediately. The progress UI shows `Network hiccup — retrying download (2/3)…` and the log records every attempt.
+- **"setup verify not ready" no longer fires when the run already knows why (GRAPHICS-H-RUNNER-M).** The v1.5.27 event arrived from the same machine that had fired GRAPHICS-H-RUNNER-12 ten seconds earlier: the compiler download lost the network, so the verify could never pass — a SECOND warning for ONE cause. The same cascade followed every run with pending ACTION NEEDED terminal steps (the user still has to install the system packages — of course it is not ready yet). Setup now tracks in-run causes (`reportedInstallFailure`, `sawActionNeeded`) and the verify warning fires only when NOTHING earlier explains the failure — genuinely mysterious failures still reach the inbox exactly as in v1.5.11 (new `shouldReportVerifyFailure` predicate, explained failures leave a breadcrumb instead).
+- **"make-global probe failed" no longer fires on administrators-only toolchains (GRAPHICS-H-RUNNER-F).** The production event: `copy into C:\Program Files\CodeBlocks\MinGW\include failed: EPERM` — a Code::Blocks-bundled compiler lives in an admin-protected folder, so the global-setup copies can NEVER succeed. `makeGlobalWindows` now preflights writability of every include/lib candidate, skips the doomed copies with a clear line (`the folder is not writable (administrators-only) … run VS Code once as administrator …`), classifies mid-copy EPERM/EACCES the same way, and reports `notWritableSkips` / `probeAttempts` in its result. The telemetry warning is suppressed exactly when every candidate was skipped for this reason (new `shouldReportMakeGlobalFailure` predicate) — a real probe failure on a writable toolchain remains a genuine signal.
+
+### Added
+
+- `test/sentry-round3-tests.js` (20 checks): retry semantics (transient vs real vs exhausted), both suppression predicates, and the real-filesystem Program-Files story (a read-only toolchain gets zero probe attempts, zero copied files, and an explained skip).
+
 ## [1.5.28] — 2026-10-15
 
 README refresh — the listing now leads with the product, not the institution.
