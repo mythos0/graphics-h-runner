@@ -1,10 +1,3 @@
-<p align="center">
-  <img src="media/diu-logo.png" alt="Dhaka International University — Knowledge is Power" width="260"/>
-</p>
-<h3 align="center">Developed by the Department of CSE, <a href="https://www.diu.ac.bd/">Dhaka International University</a>, Bangladesh</h3>
-
----
-
 # graphics.h Runner — One-Click Setup
 
 **Compile and run C++ `graphics.h` (BGI / WinBGIm / SDL_bgi) programs in VS Code — with one keypress.**
@@ -79,13 +72,29 @@ code --install-extension mythos0-labs.graphics-h-runner
 
 ## Architecture
 
-Everything above funnels through one command hub into eight feature modules, all driving the
-same per-user toolchain. Every box names the modules in `src/` that implement it — so the map
-below doubles as a reading guide to the codebase:
+Everything above funnels through one command hub in `src/extension.ts` into eight feature
+modules, all driving the same per-user toolchain:
 
-<p align="center">
-  <img src="media/architecture.png" alt="Architecture of graphics.h Runner: user entry points (keybindings, command palette, activity-bar panel, programs tree) funnel through the extension.ts command hub into eight core feature modules (setup &amp; doctor, compile &amp; run engine, native VS Code run, diagnostics, panel webview + watchdog, settings healing &amp; restore, celebrations, content library), which drive the compilers, graphics libraries and the runtime window; a cross-cutting telemetry note sits underneath." width="100%"/>
-</p>
+```text
+              ┌───────────────────────────────┐
+              │  your graphics.h program.cpp  │
+              └───────────────┬───────────────┘
+              ┌───────────────┴────────────────┐
+              ▼                                ▼
+    ┌───────────────────┐          ┌───────────────────────┐
+    │      Compile      │          │          Run          │
+    │  g++ + WinBGIm /  │          │  persistent terminal  │
+    │   SDL_bgi flags   │          │    stdin / stdout     │
+    └─────────┬─────────┘          └───────────┬───────────┘
+              └─────►  graphics window  ◄──────┘
+          (one keypress: Ctrl+Alt+R — zero config)
+```
+
+Around that pipeline live the supporting modules: Complete Setup & the Setup Doctor (install
+and verify the toolchain by really compiling a graphics program), the native VS Code run
+integration (`graphics-h` debug adapter, Code Runner, a default build task), compiler
+diagnostics in the Problems panel, settings healing & uninstall restore, the activity-bar
+panel with its programs library and cheat sheet, and the optional celebrations.
 
 The resilience wiring is part of the design, not an afterthought: the panel webview is watched
 by a **visibility-gated liveness watchdog** (silent views are never declared dead), dead pages

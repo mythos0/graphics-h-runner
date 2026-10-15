@@ -4,6 +4,20 @@ All notable changes to this extension are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.28] — 2026-10-15
+
+README refresh — the listing now leads with the product, not the institution.
+
+### Changed
+
+- **Removed the university attribution block** (logo image, "Developed by the Department of CSE …" heading and the external university link) from the README; the page now opens directly with the extension title and its one-line pitch. Only the README was in scope — the in-panel footer credit and the packaged `media/diu-logo.png` it uses are untouched.
+- **The Architecture section is now a compact ASCII diagram instead of a rendered PNG** — the same fork-join shape (source → parallel engines → converged result) drawn with box characters inside a `text` code block, so it renders identically on GitHub, in the Marketplace listing, in dark themes and in plain-text viewers, with no image to load.
+- **`media/architecture.png` (615 KB) is no longer shipped** — the README image was its only reference, so the package is ~0.6 MB lighter.
+
+### Fixed
+
+- `package-lock.json` records the real extension version again (it had lagged at 1.5.26 since the 1.5.27 round).
+
 ## [1.5.27] — 2026-10-14
 
 Fourth Sentry round — the ROOT CAUSE of the "panel failed to load" class (GRAPHICS-H-RUNNER-11, the third verdict of this family) is fixed, not just tolerated. Plus: the README now ships an architecture map of the core features.
