@@ -680,22 +680,31 @@ async function findWorkingGpp(opts: { requireBgiCapable?: boolean } = {}): Promi
  * surfaced only as a blind "make-global probe failed" warning after the
  * user had already retried a dozen times (Sentry GRAPHICS-H-RUNNER-F).
  */
+/**
+ * v1.5.30 (GRAPHICS-H-RUNNER-K/F/M cascade on v1.5.29): the live event burst
+ * fired THREE warnings for ONE cause — the winbgim link probe failed (K,
+ * 18:02:42), make-global probed the same broken combination (F, 18:02:44)
+ * and the verify then reported the inevitable NOT READY (M, 18:04:47).
+ * This flag records "the graphics-library probe already reported its own
+ * warning this run" so the later make-global and verify captures can defer
+ * to it (breadcrumbs instead of second/third warnings).
+ */
 async function verifyWinbgimInstall(
   platform: Platform,
   storageRoot: string,
   includeDir: string,
   libDir: string,
   summary: string[]
-): Promise<void> {
+): Promise<boolean> {
   if (platform !== 'windows') {
-    return; /* SDL_bgi platforms verify themselves at the final verify step */
+    return false; /* SDL_bgi platforms verify themselves at the final verify step */
   }
   const cfg = getConfig();
   const compiler = cfg.compilerPath || 'g++';
   let link = await bgiLinkProbe({ compiler, includeDir, libDir, platform });
   if (link.ok) {
     addExtensionBreadcrumb('setup.step', 'winbgim link probe ok');
-    return;
+    return false;
   }
   const arch = await compilerArchitecture(compiler);
   const verdict = describeBgiProbeFailure(link.detail, arch);
@@ -714,7 +723,7 @@ async function verifyWinbgimInstall(
       if (link2.ok) {
         summary.push('WinBGIM re-downloaded and verified: it links correctly now.');
         addExtensionBreadcrumb('setup.step', 'winbgim re-download ok');
-        return;
+        return false;
       }
       link = link2;
       log('[setup] still failing after re-download: ' + link2.detail.slice(0, 200));
@@ -732,6 +741,7 @@ async function verifyWinbgimInstall(
     detail: scrubText(link.detail).slice(0, 180)
   });
   summary.push('WARNING: ' + verdict);
+  return true;
 }
 
 /**
@@ -1076,6 +1086,9 @@ async function runFullSetupInner(context: vscode.ExtensionContext): Promise<void
        * are worth a Sentry warning now. */
       let reportedInstallFailure = false;
       let sawActionNeeded = false;
+      /* v1.5.30: set when verifyWinbgimInstall captured its own warning —
+       * later make-global/verify failures defer to it (one cause, one event). */
+      let reportedProbeFailure = false;
 
       for (const step of plan) {
         progress.report({ message: step.title });
@@ -1237,7 +1250,9 @@ async function runFullSetupInner(context: vscode.ExtensionContext): Promise<void
             summary.push('WinBGIM (graphics.h / winbgim.h / libbgi.a) installed into the extension folder.');
             addExtensionBreadcrumb('setup.step', 'install-winbgim ok');
             res.log.forEach((l) => log('[setup] ' + l));
-            await verifyWinbgimInstall(platform, storageRoot, res.includeDir, res.libDir, summary);
+            if (await verifyWinbgimInstall(platform, storageRoot, res.includeDir, res.libDir, summary)) {
+              reportedProbeFailure = true;
+            }
           } catch (e) {
             log('[setup] WinBGIM install error: ' + String(e));
             const msg = String(e);
@@ -1312,6 +1327,15 @@ async function runFullSetupInner(context: vscode.ExtensionContext): Promise<void
                 addExtensionBreadcrumb('setup.step', 'make-global skipped: toolchain not writable', {
                   notWritableSkips: String(res.notWritableSkips)
                 });
+              } else if (reportedProbeFailure) {
+                /* v1.5.30 (GRAPHICS-H-RUNNER-F/K cascade, live v1.5.29 burst
+                 * 18:02:42 → 18:02:44): the winbgim probe already failed and
+                 * reported THIS run — the global probe exercises the same
+                 * broken graphics-library combination, so its failure adds
+                 * no new cause. The summary line + breadcrumb keep the
+                 * output channel truthful without a second event. */
+                summary.push('GLOBAL: the graphics-library probe failure above already covers this run — machine-wide copy skipped (details in the output).');
+                addExtensionBreadcrumb('setup.step', 'make-global failed — explained by earlier probe failure');
               } else {
                 summary.push('Global setup could NOT make plain "g++ ..." resolve graphics.h (details in the output). The extension keeps working via its own settings.');
                 /* v1.5.11: the warning used to carry NOTHING but the platform —
@@ -1396,7 +1420,7 @@ async function runFullSetupInner(context: vscode.ExtensionContext): Promise<void
               .map((c) => `${c.name}: ${String(c.detail || '').split(/\r?\n/)[0]}`)
               .join(' | ');
             const vArch = await compilerArchitecture(fresh.compilerPath || 'g++');
-            if (shouldReportVerifyFailure({ reportedInstallFailure, sawActionNeeded })) {
+            if (shouldReportVerifyFailure({ reportedInstallFailure, sawActionNeeded, reportedProbeFailure })) {
               captureExtensionWarning('setup verify not ready', {
                 platform: platform,
                 arch: String(vArch),
@@ -1407,7 +1431,8 @@ async function runFullSetupInner(context: vscode.ExtensionContext): Promise<void
               addExtensionBreadcrumb('setup.verify', 'not ready — explained by earlier steps', {
                 compilerOk: String(res.compilerCheck.ok),
                 downloadFailed: String(reportedInstallFailure),
-                actionNeeded: String(sawActionNeeded)
+                actionNeeded: String(sawActionNeeded),
+                probeFailure: String(reportedProbeFailure)
               });
             }
             log('[setup] verify NOT ready: ' + (failing || '(no detail)'));

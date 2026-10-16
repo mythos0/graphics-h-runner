@@ -4,6 +4,23 @@ All notable changes to this extension are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.30] — 2026-10-16
+
+Sixth Sentry round — the v1.5.29 events exposed a PRIVACY LEAK, a new environment failure class and a warning cascade; each is fixed at the source.
+
+### Fixed
+
+- **The compiler-tail truncation shipped raw USERNAMES to Sentry (GRAPHICS-H-RUNNER-M/F/K, live v1.5.29 burst 2026-10-15T18:02–18:04Z).** `smartCompilerTail` joined the raw compiler lines and cut `joined.slice(-maxChars)` — the cut landed MID-PATH, so `C:/Users/<name>/AppData/…` lost its `C:/Users/` anchor before the downstream scrub could run, and the three live events literally read `JAJ/AppData/…` (a real 3-char account name) in the `detail` tag. The tail is now scrubbed BEFORE any truncation: the pure scrubber moved to `src/scrub.ts` (no `vscode` import — toolchain.ts is unit-testable in plain Node), `instrument.ts` re-exports it unchanged, and `smartCompilerTail` maps every picked line through it first. Any later cut is privacy-safe (paths already read `C:/Users/~/…`), and the message tail the verdict classifiers need (`cannot find -lbgi`, `No such file`) still survives the 300-char budget.
+- **A full disk no longer dies with a raw `ENOSPC: no space left on device, write` (GRAPHICS-H-RUNNER-13, first event 2026-10-16T01:49Z, v1.5.29).** The WinLibs compiler download (~274 MB zip + extraction) now preflights the target volume via `fs.statfsSync` and fails fast with an actionable message (`…0.2 GB free, need about 1.2 GB — free up space…`) BEFORE any bytes move; a disk that fills during the zip write or the Expand-Archive extraction (`0x80070070` / "disk is full") is rewritten into the same message at the throw site. Volumes without statfs support skip the preflight silently — the rewrite still catches the real failure.
+- **One setup run can no longer fire three warnings for one probe failure (the K→F→M cascade, 18:02:42 → 18:02:44 → 18:04:47).** `verifyWinbgimInstall` now reports whether it captured its own warning; the setup runner tracks `reportedProbeFailure` and the later steps defer: make-global's failure of the same broken graphics-library combination pushes a summary line + breadcrumb instead of a second event, and `shouldReportVerifyFailure` accepts the new flag so the verify's inevitable NOT READY stays a breadcrumb too. Genuinely unexplained failures still reach the inbox exactly as before (v1.5.11 goal preserved).
+
+### Added
+
+- `test/sentry-round4-tests.js` (18 checks): the live JAJ burst replayed against the scrub-first tail (no username at any cut position), scrubber shape matrix, ENOSPC classifier + preflight/rewrite on a real filesystem (statfs monkey-patched for short-volume, dying-write and statfs-less timelines), and the three-input suppression predicate.
+- `src/scrub.ts` — pure privacy scrubber (extracted from instrument.ts); `test/sentry-round3-tests.js` updated to the evolved predicate call shape.
+
+
+
 ## [1.5.29] — 2026-10-15
 
 Fifth Sentry round — the v1.5.27-era events located three REAL root causes that the earlier rounds could not see yet, and each is now fixed at the source.

@@ -300,7 +300,12 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   });
 
   await t('verify + make-global warnings go through the suppress predicates', () => {
-    assert.ok(extSrc.includes('shouldReportVerifyFailure({ reportedInstallFailure, sawActionNeeded })'));
+    /* v1.5.30: the verify predicate call grew the reportedProbeFailure input
+     * (the winbgim probe warning now also explains a NOT READY verdict). */
+    assert.ok(
+      extSrc.includes('shouldReportVerifyFailure({ reportedInstallFailure, sawActionNeeded, reportedProbeFailure })'),
+      'verify capture must pass all three in-run cause flags'
+    );
     assert.ok(extSrc.includes('shouldReportMakeGlobalFailure(res)'));
     // the suppression branch must NOT call captureExtensionWarning
     const suppressed = extSrc.split('shouldReportMakeGlobalFailure(res)')[1].split('} else {')[0];

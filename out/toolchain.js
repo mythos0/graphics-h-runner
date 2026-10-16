@@ -9,6 +9,7 @@ exports.defaultCompilerPath = defaultCompilerPath;
 exports.isCppSourceFile = isCppSourceFile;
 exports.binaryPathFor = binaryPathFor;
 exports.smartCompilerTail = smartCompilerTail;
+const scrub_1 = require("./scrub");
 function currentPlatform() {
     switch (process.platform) {
         case 'win32':
@@ -72,7 +73,15 @@ function smartCompilerTail(stderr, stdout, exitCode, maxChars = 300) {
         outLines.filter((l) => PRIORITY.test(l)).forEach(push);
         outLines.slice(-1).forEach(push);
     }
-    const joined = picked.join(' | ');
+    /* v1.5.30 (GRAPHICS-H-RUNNER-M/F/K, all on v1.5.29 builds): scrub BEFORE
+     * slicing. The old code joined raw lines and cut `joined.slice(-maxChars)`
+     * — the cut landed MID-PATH, so "C:/Users/<name>/AppData/…" lost its
+     * "C:/Users/" anchor and shipped the raw USERNAME to Sentry (the live
+     * events literally read "JAJ/AppData/…" — a real 3-char account name),
+     * and describeBgiProbeFailure received prefix-less fragments. Scrubbing
+     * first makes ANY later cut privacy-safe (paths already read
+     * C:/Users/~/…), while the message tail the classifiers need is kept. */
+    const joined = picked.map(scrub_1.scrubText).join(' | ');
     if (joined) {
         return joined.length > maxChars ? joined.slice(-maxChars) : joined;
     }

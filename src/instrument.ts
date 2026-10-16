@@ -25,6 +25,12 @@ import * as os from 'os';
 import * as path from 'path';
 import * as Sentry from '@sentry/node';
 
+/* v1.5.30: the pure scrubber moved to scrub.ts so toolchain.ts (no 'vscode')
+ * can scrub compiler tails BEFORE truncating them. Re-exported here so every
+ * existing call site and test keeps working unchanged. */
+import { scrubText } from './scrub';
+export { scrubText };
+
 const SENTRY_DSN =
   'https://5e2f72e37ba24ec0179a56fccc3bc973@o4512147759235072.ingest.us.sentry.io/4512147800195072';
 
@@ -59,40 +65,6 @@ function telemetryAllowed(): boolean {
   } catch {
     return false;
   }
-}
-
-/**
- * Replace user-identifying path segments with `~`.
- *
- * v1.5.23 hardening (leaks seen in live events GRAPHICS-H-RUNNER-Q/Z):
- *  - usernames with SPACES ("C:\\Users\\Taha Pervaiz\\…") survived the old
- *    character class that stopped at whitespace — only "Taha" became ~;
- *  - forward-slash Windows forms ("/c:/Users/name/…", "c:/Users/name/…")
- *    escaped the backslash-only regex entirely;
- *  - the os.homedir() literal split missed case variants (c:\users\…).
- * The home-dir split is now a case-insensitive, separator-agnostic regex and
- * the Windows "Users\\<name>" segment allows spaces and both separators.
- */
-export function scrubText(value: string): string {
-  let out = String(value);
-  try {
-    const home = os.homedir();
-    if (home && home.length > 3) {
-      const esc = home.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const reHome = new RegExp(esc.replace(/\\{1,2}/g, '[\\\\/]'), 'gi');
-      out = out.replace(reHome, '~');
-    }
-  } catch {
-    /* ignore */
-  }
-  /* C:\Users\<name> | c:/Users/<name> | /c:/Users/<name> — spaces allowed in
-   * <name>, stopped by any path separator (or end of string). The whole
-   * "X:\Users\<sep>" prefix is captured and the NAME becomes `~`, so the
-   * shape stays exactly C:\Users\~\… (the pre-1.5.23 shape the tests and
-   * log readers know), for every separator style. */
-  out = out.replace(/([A-Za-z]:[\\/]+[Uu]sers[\\/]+)[^\\/:*?"<>|]*/g, '$1~');
-  out = out.replace(/(\/home\/)[^/\s]+/g, '$1~');
-  return out;
 }
 
 /**

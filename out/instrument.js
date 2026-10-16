@@ -53,7 +53,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.scrubText = scrubText;
+exports.scrubText = void 0;
 exports.isBenignCancellation = isBenignCancellation;
 exports.isAttributableToUs = isAttributableToUs;
 exports.referencesOtherExtension = referencesOtherExtension;
@@ -72,9 +72,13 @@ exports.setRuntimeTags = setRuntimeTags;
 exports.flushTelemetry = flushTelemetry;
 const vscode = __importStar(require("vscode"));
 const fs = __importStar(require("fs"));
-const os = __importStar(require("os"));
 const path = __importStar(require("path"));
 const Sentry = __importStar(require("@sentry/node"));
+/* v1.5.30: the pure scrubber moved to scrub.ts so toolchain.ts (no 'vscode')
+ * can scrub compiler tails BEFORE truncating them. Re-exported here so every
+ * existing call site and test keeps working unchanged. */
+const scrub_1 = require("./scrub");
+Object.defineProperty(exports, "scrubText", { enumerable: true, get: function () { return scrub_1.scrubText; } });
 const SENTRY_DSN = 'https://5e2f72e37ba24ec0179a56fccc3bc973@o4512147759235072.ingest.us.sentry.io/4512147800195072';
 /** true once Sentry.init() succeeded and the client is accepting events. */
 let telemetryActive = false;
@@ -107,40 +111,6 @@ function telemetryAllowed() {
     }
 }
 /**
- * Replace user-identifying path segments with `~`.
- *
- * v1.5.23 hardening (leaks seen in live events GRAPHICS-H-RUNNER-Q/Z):
- *  - usernames with SPACES ("C:\\Users\\Taha Pervaiz\\…") survived the old
- *    character class that stopped at whitespace — only "Taha" became ~;
- *  - forward-slash Windows forms ("/c:/Users/name/…", "c:/Users/name/…")
- *    escaped the backslash-only regex entirely;
- *  - the os.homedir() literal split missed case variants (c:\users\…).
- * The home-dir split is now a case-insensitive, separator-agnostic regex and
- * the Windows "Users\\<name>" segment allows spaces and both separators.
- */
-function scrubText(value) {
-    let out = String(value);
-    try {
-        const home = os.homedir();
-        if (home && home.length > 3) {
-            const esc = home.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            const reHome = new RegExp(esc.replace(/\\{1,2}/g, '[\\\\/]'), 'gi');
-            out = out.replace(reHome, '~');
-        }
-    }
-    catch {
-        /* ignore */
-    }
-    /* C:\Users\<name> | c:/Users/<name> | /c:/Users/<name> — spaces allowed in
-     * <name>, stopped by any path separator (or end of string). The whole
-     * "X:\Users\<sep>" prefix is captured and the NAME becomes `~`, so the
-     * shape stays exactly C:\Users\~\… (the pre-1.5.23 shape the tests and
-     * log readers know), for every separator style. */
-    out = out.replace(/([A-Za-z]:[\\/]+[Uu]sers[\\/]+)[^\\/:*?"<>|]*/g, '$1~');
-    out = out.replace(/(\/home\/)[^/\s]+/g, '$1~');
-    return out;
-}
-/**
  * v1.5.1 shipped "drop Canceled" but only matched the exception TYPE. VS Code
  * surfaces the same cancellation as type "Error" with value "Canceled: Canceled"
  * (seen as GRAPHICS-H-RUNNER-A/-6/-5, 53 events from v1.4.x clients). Match the
@@ -166,7 +136,7 @@ function isBenignCancellation(event) {
 /** Recursively scrub strings inside breadcrumb/exception payloads. */
 function scrubValue(value) {
     if (typeof value === 'string') {
-        return scrubText(value);
+        return (0, scrub_1.scrubText)(value);
     }
     if (Array.isArray(value)) {
         return value.map(scrubValue);
@@ -184,27 +154,27 @@ function scrubValue(value) {
 function scrubEvent(event) {
     try {
         if (typeof event.message === 'string') {
-            event.message = scrubText(event.message);
+            event.message = (0, scrub_1.scrubText)(event.message);
         }
         const values = event.exception?.values;
         if (values) {
             for (const ex of values) {
                 if (typeof ex.value === 'string') {
-                    ex.value = scrubText(ex.value);
+                    ex.value = (0, scrub_1.scrubText)(ex.value);
                 }
                 const frames = ex.stacktrace?.frames;
                 if (frames) {
                     for (const frame of frames) {
                         if (typeof frame.filename === 'string') {
-                            frame.filename = scrubText(frame.filename);
+                            frame.filename = (0, scrub_1.scrubText)(frame.filename);
                         }
                         if (typeof frame.abs_path === 'string') {
-                            frame.abs_path = scrubText(frame.abs_path);
+                            frame.abs_path = (0, scrub_1.scrubText)(frame.abs_path);
                         }
                         /* defensive: some serialization paths use the camelCase form */
                         const camel = frame.absPath;
                         if (typeof camel === 'string') {
-                            frame.absPath = scrubText(camel);
+                            frame.absPath = (0, scrub_1.scrubText)(camel);
                         }
                     }
                 }
@@ -213,7 +183,7 @@ function scrubEvent(event) {
         if (event.breadcrumbs) {
             for (const crumb of event.breadcrumbs) {
                 if (typeof crumb.message === 'string') {
-                    crumb.message = scrubText(crumb.message);
+                    crumb.message = (0, scrub_1.scrubText)(crumb.message);
                 }
                 if (crumb.data) {
                     crumb.data = scrubValue(crumb.data);
@@ -590,7 +560,7 @@ function captureExtensionError(error, tags) {
             scope.setTag('ghr.source', 'handled'); /* attribution: ours by definition */
             if (tags) {
                 for (const [key, value] of Object.entries(tags)) {
-                    scope.setTag(key, scrubText(value));
+                    scope.setTag(key, (0, scrub_1.scrubText)(value));
                 }
             }
             return scope;
@@ -618,7 +588,7 @@ function captureExtensionWarning(message, tags) {
             scope.setTag('ghr.source', 'handled');
             if (tags) {
                 for (const [key, value] of Object.entries(tags)) {
-                    scope.setTag(key, scrubText(value));
+                    scope.setTag(key, (0, scrub_1.scrubText)(value));
                 }
             }
             Sentry.captureMessage(message);
@@ -636,7 +606,7 @@ function addExtensionBreadcrumb(category, message, data) {
     try {
         Sentry.addBreadcrumb({
             category,
-            message: scrubText(message),
+            message: (0, scrub_1.scrubText)(message),
             level: 'info',
             timestamp: Date.now() / 1000,
             data: data ? scrubValue(data) : undefined
@@ -654,7 +624,7 @@ function setRuntimeTags(tags) {
     try {
         const scope = Sentry.getGlobalScope();
         for (const [key, value] of Object.entries(tags)) {
-            scope.setTag(key, scrubText(value));
+            scope.setTag(key, (0, scrub_1.scrubText)(value));
         }
     }
     catch {

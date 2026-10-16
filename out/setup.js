@@ -49,7 +49,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.LIBBGI_MIN_BYTES = exports.BGI_LINK_PROBE_SOURCE = exports.WINLIBS_FALLBACK = exports.WINGET_COMPILER_PACKAGE_ID = exports.WINBGIM_SOURCES = exports.SDL_BGI_TARBALL_URLS = void 0;
+exports.LIBBGI_MIN_BYTES = exports.BGI_LINK_PROBE_SOURCE = exports.WINLIBS_MIN_FREE_BYTES = exports.WINLIBS_FALLBACK = exports.WINGET_COMPILER_PACKAGE_ID = exports.WINBGIM_SOURCES = exports.SDL_BGI_TARBALL_URLS = void 0;
 exports.wingetInstallCompilerArgs = wingetInstallCompilerArgs;
 exports.detectLinuxPackageFamily = detectLinuxPackageFamily;
 exports.planSetup = planSetup;
@@ -61,6 +61,8 @@ exports.discoverGppWindows = discoverGppWindows;
 exports.verifyCompilerRun = verifyCompilerRun;
 exports.isNetworkFailureText = isNetworkFailureText;
 exports.withNetworkRetry = withNetworkRetry;
+exports.diskSpaceShortageMessage = diskSpaceShortageMessage;
+exports.isDiskFullErrorText = isDiskFullErrorText;
 exports.shouldReportVerifyFailure = shouldReportVerifyFailure;
 exports.shouldReportMakeGlobalFailure = shouldReportMakeGlobalFailure;
 exports.compilerArchitecture = compilerArchitecture;
@@ -583,6 +585,23 @@ async function withNetworkRetry(fn, opts) {
     throw lastErr; // unreachable — the loop always returns or throws
 }
 /**
+ * v1.5.30 (GRAPHICS-H-RUNNER-13, first ENOSPC event 2026-10-16): the WinLibs
+ * zip + extraction need ~1.2 GB; on a full disk the failure used to surface
+ * as a raw "ENOSPC: no space left on device, write" from writeFileSync.
+ * These helpers make the condition FIRST-CLASS: the preflight fails fast
+ * with the actionable message, and any disk-full error from the write or
+ * the extractors is rewritten the same way.
+ */
+exports.WINLIBS_MIN_FREE_BYTES = Math.round(1.2 * 1024 * 1024 * 1024);
+function diskSpaceShortageMessage(freeBytes, needBytes = exports.WINLIBS_MIN_FREE_BYTES) {
+    const gb = (n) => Math.round((n / (1024 * 1024 * 1024)) * 10) / 10;
+    return (`not enough disk space for the compiler download: ${gb(Math.max(0, freeBytes))} GB free, ` +
+        `need about ${gb(needBytes)} GB — free up space (e.g. clean %TEMP% or Downloads) and re-run Full Setup`);
+}
+function isDiskFullErrorText(msg) {
+    return /ENOSPC|no space left on device|disk is full|there is not enough space on the disk|0x80070070/i.test(String(msg || ''));
+}
+/**
  * v1.5.29 (GRAPHICS-H-RUNNER-M): "setup verify not ready" used to fire on
  * EVERY run whose earlier steps had already reported their own failure —
  * e.g. the compiler download lost the network (GRAPHICS-H-RUNNER-12 fired
@@ -595,7 +614,7 @@ async function withNetworkRetry(fn, opts) {
  * (the v1.5.11 observability goal is preserved).
  */
 function shouldReportVerifyFailure(state) {
-    return !state.reportedInstallFailure && !state.sawActionNeeded;
+    return !state.reportedInstallFailure && !state.sawActionNeeded && !state.reportedProbeFailure;
 }
 /**
  * v1.5.29 (GRAPHICS-H-RUNNER-F): make-global on a compiler under
@@ -713,6 +732,24 @@ async function installCompilerWindowsDirect(storageRoot, onProgress) {
     const workDir = path.join(storageRoot, 'mingw64-download');
     const zipPath = path.join(workDir, exports.WINLIBS_FALLBACK.url.split('/').pop() || 'winlibs.zip');
     fs.mkdirSync(workDir, { recursive: true });
+    /* v1.5.30 (GRAPHICS-H-RUNNER-13): preflight the volume — a full disk used
+     * to die mid-download with a raw ENOSPC. Fail fast with the actionable
+     * message instead. statfs is unavailable on some volumes/runtimes: skip
+     * the preflight silently there (the write below is still rewritten). */
+    try {
+        const st = fs.statfsSync(workDir);
+        const freeBytes = Number(st.bavail) * Number(st.bsize);
+        if (freeBytes < exports.WINLIBS_MIN_FREE_BYTES) {
+            throw new Error(diskSpaceShortageMessage(freeBytes));
+        }
+        log.push(`disk space ok (${(freeBytes / 1e9).toFixed(1)} GB free)`);
+    }
+    catch (e) {
+        if (e instanceof Error && /disk space/.test(e.message)) {
+            throw e;
+        }
+        /* statfs unsupported — preflight unavailable, continue */
+    }
     /* 0. idempotency: a previous attempt may already have extracted the
      * toolchain (crashed PC, re-run setup). Reuse it instead of re-downloading
      * 274 MB. */
@@ -781,7 +818,19 @@ async function installCompilerWindowsDirect(storageRoot, onProgress) {
             onProgress?.({ message: `Network hiccup — retrying download (${attempt + 1}/3)…`, percent: 0 });
         }
     });
-    fs.writeFileSync(zipPath, zip);
+    try {
+        fs.writeFileSync(zipPath, zip);
+    }
+    catch (e) {
+        /* v1.5.30 (GRAPHICS-H-RUNNER-13): the production event died exactly here
+         * ("ENOSPC: no space left on device, write") — rewrite it into the
+         * actionable message so the summary dialog and the telemetry both name
+         * the real cause. */
+        if (isDiskFullErrorText(String(e))) {
+            throw new Error(diskSpaceShortageMessage(0));
+        }
+        throw e;
+    }
     log.push(`downloaded ${zip.length} bytes`);
     /* 2. verify sha256 (first token of the .sha256 asset) */
     onProgress?.({ message: 'Verifying checksum…', percent: 91 });
@@ -811,7 +860,10 @@ async function installCompilerWindowsDirect(storageRoot, onProgress) {
         const psScript = `Expand-Archive -LiteralPath '${zipPath.replace(/'/g, "''")}' -DestinationPath '${workDir.replace(/'/g, "''")}' -Force`;
         const ps = await runProcessStreaming('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', psScript], { timeoutMs: 30 * 60 * 1000, onLine: (l) => log.push('ps: ' + l.slice(0, 100)) });
         if (ps.code !== 0) {
-            throw new Error('extraction failed: ' + ps.tail.slice(-300));
+            const psErr = 'extraction failed: ' + ps.tail.slice(-300);
+            /* v1.5.30: a full disk fails during extraction too (Expand-Archive
+             * reports "0x80070070" / "disk is full") — same rewrite. */
+            throw new Error(isDiskFullErrorText(ps.tail) ? diskSpaceShortageMessage(0) : psErr);
         }
         extractOk = true;
         log.push('extracted with Expand-Archive');

@@ -7,7 +7,7 @@
         "nonblack": 0.2277,
         "unique_colors": 7
       },
-      "secs": "6.8"
+      "secs": "6.9"
     },
     "rfx02_gravity_bounce.cpp": {
       "ok": true,
@@ -79,7 +79,7 @@
         "nonblack": 0.4946,
         "unique_colors": 16
       },
-      "secs": "5.3"
+      "secs": "5.2"
     },
     "rfx10_key_echo.cpp": {
       "ok": true,
