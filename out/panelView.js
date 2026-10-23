@@ -97,6 +97,45 @@ class GhPanelProvider {
         this.watchStartedAt = 0;
         this.healthOptions = tuning.healthOptions || {};
         this.recoveryProbeIntervalMs = tuning.recoveryProbeIntervalMs ?? 5000;
+        /* v1.5.31 (GRAPHICS-H-RUNNER-18): when the VS Code window is UNFOCUSED,
+         * Electron throttles the webview's JS — the live events (Indore/Nagpur,
+         * both page_visible=true + window_focused=false + ever_alive=false) show
+         * a page that never answered across the whole 26 s budget for exactly
+         * that reason. The health watch now PAUSES on an unfocused window (via
+         * mayContinue below) and this handler resumes it with a fresh budget
+         * when focus returns — the same structural cure the visibility gate
+         * (v1.5.27) gave hidden views. Best-effort: stub hosts without the API
+         * simply never pause. */
+        try {
+            if (vscode.window && typeof vscode.window.onDidChangeWindowState === 'function') {
+                this.windowStateSub = vscode.window.onDidChangeWindowState((st) => {
+                    if (!st.focused) {
+                        return; /* the pause happens lazily on the next tick */
+                    }
+                    this.resumePausedWatch();
+                });
+            }
+        }
+        catch {
+            /* tests / exotic hosts — no focus tracking */
+        }
+    }
+    /**
+     * v1.5.31: restart a focus-paused watch with a FULL fresh budget (mirror
+     * of the visibility reveal path). Only a watch that is actually paused
+     * (state 'idle' after mayContinue stopped it) is restarted; a fallback
+     * verdict has already fired -> the ladder owns recovery; a hidden view is
+     * handled by the visibility gate instead.
+     */
+    resumePausedWatch() {
+        if (!this.health || this.fallbackActive || !this.view || !this.view.visible) {
+            return;
+        }
+        if (this.health.getState() !== 'idle') {
+            return; /* watching/alive need nothing; fallback is excluded above */
+        }
+        this.watchStartedAt = Date.now();
+        this.health.start();
     }
     setDoctorResult(res) {
         this.doctorStatus = res;
@@ -234,6 +273,20 @@ class GhPanelProvider {
                  * the probe with the correct visibility (v1.5.27). */
                 if (view.visible) {
                     this.startRecoveryProbe();
+                }
+            },
+            /* v1.5.31 (GRAPHICS-H-RUNNER-18): pause the watch while the window
+             * is UNFOCUSED — Electron throttles background windows' webview JS,
+             * so the page cannot answer and any retry render would be burned /
+             * any verdict would be false. Unknown (tests/stubs) counts as
+             * "continue" so hosts without the API keep the old behavior. */
+            mayContinue: () => {
+                try {
+                    const focused = vscode.window.state?.focused;
+                    return focused !== false;
+                }
+                catch {
+                    return true;
                 }
             }
         }, this.healthOptions);

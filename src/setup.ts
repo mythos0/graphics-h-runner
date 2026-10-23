@@ -21,6 +21,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { Platform, smartCompilerTail } from './toolchain';
+import { scrubText } from './scrub';
 
 /* ------------------------------------------------------------------ */
 /* types                                                               */
@@ -449,7 +450,10 @@ export async function installCompilerViaWinget(
     return { ok: false, detail: 'winget is not available on this PC' };
   }
   if (res.code !== 0) {
-    return { ok: false, detail: `winget exited with code ${res.code}: ${res.tail.slice(-300)}` };
+    /* v1.5.31: scrub BEFORE the cut — a tail cut landing mid-path destroys
+     * the "C:/Users/" anchor and no downstream scrub can recover it (the
+     * live K detail tags shipped "sal/AppData/…" exactly this way). */
+    return { ok: false, detail: `winget exited with code ${res.code}: ${scrubText(res.tail).slice(-300)}` };
   }
   return { ok: true, detail: 'winget install completed' };
 }
@@ -608,9 +612,16 @@ export async function verifyCompilerRun(candidate: string): Promise<CompilerRunR
  * "TimeoutError" during install-winbgim — GitHub Pages unreachable):
  * these are the user's connectivity, not extension bugs, so they must be
  * reported as warnings with a retry hint, never as error-inbox entries.
+ * v1.5.31 (GRAPHICS-H-RUNNER-15/16, both on 1.5.30, both during
+ * install-compiler-download): the MID-BODY death shapes slipped through —
+ * undici wraps a connection reset during body streaming as
+ * "TypeError: terminated" (cause: read ECONNRESET) and a stalled body as
+ * "BodyTimeoutError". Neither matched, so after the retries were exhausted
+ * the RAW error landed in the inbox at ERROR level instead of the
+ * network-warning path. \bterminated\b keeps "determined" from matching.
  */
 export function isNetworkFailureText(text: string): boolean {
-  return /fetch failed|TimeoutError|aborted due to timeout|ConnectTimeoutError|ETIMEDOUT|ECONNRESET|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|socket hang up|network error|ERR_(?:SOCKET|CONNECTION|HTTP)_|getaddrinfo/i.test(
+  return /fetch failed|TimeoutError|aborted due to timeout|ConnectTimeoutError|ETIMEDOUT|ECONNRESET|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|socket hang up|network error|ERR_(?:SOCKET|CONNECTION|HTTP)_|getaddrinfo|BodyTimeoutError|\bterminated\b|\bEPIPE\b/i.test(
     String(text || '')
   );
 }
@@ -995,7 +1006,9 @@ export async function installCompilerWindowsDirect(
       { timeoutMs: 30 * 60 * 1000, onLine: (l) => log.push('ps: ' + l.slice(0, 100)) }
     );
     if (ps.code !== 0) {
-      const psErr = 'extraction failed: ' + ps.tail.slice(-300);
+      /* v1.5.31: scrub BEFORE the cut (same anchor-destruction class as the
+       * winget tail above). */
+      const psErr = 'extraction failed: ' + scrubText(ps.tail).slice(-300);
       /* v1.5.30: a full disk fails during extraction too (Expand-Archive
        * reports "0x80070070" / "disk is full") — same rewrite. */
       throw new Error(isDiskFullErrorText(ps.tail) ? diskSpaceShortageMessage(0) : psErr);
@@ -1876,7 +1889,8 @@ export async function installSdlBgiUserPrefix(opts: SdlBgiBuildOptions = {}): Pr
     if (classified) {
       throw new Error('SDL_bgi build failed: ' + classified);
     }
-    throw new Error('SDL_bgi build failed: ' + build.stderr.slice(-800));
+    /* v1.5.31: scrub BEFORE the cut — compiler dumps embed absolute paths. */
+    throw new Error('SDL_bgi build failed: ' + scrubText(build.stderr).slice(-800));
   }
   log.push('built libSDL_bgi.so');
 

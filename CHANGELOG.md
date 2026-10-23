@@ -4,6 +4,27 @@ All notable changes to this extension are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.31] — 2026-10-23
+
+Seventh Sentry round — the v1.5.30 events exposed a SECOND privacy-leak path, two mid-body network shapes and a localized refusal that defeated the settings guard; each is fixed at the source.
+
+### Fixed
+
+- **The winbgim probe detail still shipped raw USERNAMES on 1.5.30 (GRAPHICS-H-RUNNER-K, live events 2026-10-16/17: `sal/AppData/…` in Lahore, `…/ld.exe: cannot find Shyam/AppData/…` in Gurugram).** Two shape families escaped `scrubText`: the MSYS/Git-Bash drive-less form `/c/Users/<name>/…` (no `X:` colon, so the drive rule and the home-dir split both miss it), and PREFIX-LESS fragments — any tail cut that lands mid-path destroys the `C:/Users/` anchor BEFORE a scrub can run, and no prefix rule can match a fragment that no longer has one. Two new rules close the class: an MSYS Users rule (`/c/Users/<name>` → `/c/Users/~`), and an AppData-anchor rule — on every Windows profile path the segment immediately before `\AppData\` is the user name (or its cut tail), so `<fragment>/AppData/(Local|Roaming|LocalLow)` becomes `~/AppData/…`; the scrubbed `~` is deliberately outside the fragment class, so healthy `C:\Users\~\AppData\…` shapes pass through byte-identical. The remaining raw tail-cut sites (`winget exited…`, `extraction failed:`, the SDL_bgi build dump) now scrub BEFORE slicing too — same anchor-destruction class.
+- **Mid-body download deaths no longer reach the inbox as raw ERROR events (GRAPHICS-H-RUNNER-15/16, both `setup_step=install-compiler-download` on 1.5.30).** undici surfaces a connection reset during body streaming as `TypeError: terminated` (cause: `read ECONNRESET`) and a stalled body as `BodyTimeoutError` — neither matched the transient-network classifier, so after the retries the RAW error took the error-inbox branch instead of the network-warning path. Both shapes (plus `EPIPE`) now classify as transient: `withNetworkRetry` retries them (fresh fetch from byte 0) and an exhausted run degrades to the "check your connection" warning exactly like the v1.5.23 N/P flake family. `\bterminated\b` keeps words like "determined" from matching.
+- **A localized VS Code can no longer crash the guarded settings writer (GRAPHICS-H-RUNNER-10, Moscow event on a 1.5.30 build).** A Russian host throws `CodeExpectedError: Не удается выполнить запись в файл параметров пользователя…` — the English-phrase-only classifier returned undefined, so `guardedGlobalUpdate` classified the refusal "not ours" and RETHREW the raw error into the error inbox. The classifier now also recognizes the error CLASS (`name === 'CodeExpectedError'`), which VS Code uses for every user-facing configuration-editing refusal in any language: repair attempt → clear summary → "Open User Settings" — the designed degradation, language-proof.
+- **An unfocused window can no longer earn the panel a false "webview failed to load" verdict (GRAPHICS-H-RUNNER-18, Indore/Nagpur events 2026-10-23: `page_visible=true`, `window_focused=false`, `ever_alive=false` across the full 26 s budget).** Electron throttles the webview's JavaScript when the window is unfocused, so the page cannot answer pings and every verdict would be false — the same false-verdict family the v1.5.27 visibility gate cured for hidden views. `WebviewHealth` gained a `mayContinue` gate: the provider answers "window focused?" and the watchdog PAUSES (timer stopped, retry budget preserved) instead of burning retry renders or verdicting; when focus returns the watch resumes with a fresh full window. Hosts without the API (tests, exotic shells) keep the exact 1.5.30 behavior.
+
+### Changed
+
+- "User settings repaired automatically during setup" now reports at INFO level (`captureExtensionInfo`) — it is a success story (the guard repaired the file and the write landed), and it sat in the warning bucket looking like an actionable bug (GRAPHICS-H-RUNNER-14). Same once-per-session dedupe + session cap as the warning family.
+
+### Added
+
+- `test/sentry-round5-tests.js` (25 checks): both live leak fragments replayed through `smartCompilerTail` + the emission double-scrub (no username survives at any stage), the MSYS and AppData-anchor shape matrix (healthy `C:\Users\~\AppData` shapes byte-identical), the 15/16 transient classifications + retry semantics (3 attempts, backoff, recovery), the Russian/English/workspace refusal matrix, the info-capture dedupe/cap contract, and the pause/resume watchdog lifecycle with retry-budget preservation.
+
+
+
 ## [1.5.30] — 2026-10-16
 
 Sixth Sentry round — the v1.5.29 events exposed a PRIVACY LEAK, a new environment failure class and a warning cascade; each is fixed at the source.

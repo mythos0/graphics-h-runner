@@ -108,6 +108,16 @@ class WebviewHealth {
         if (this.state !== 'watching') {
             return;
         }
+        /* v1.5.31 (GRAPHICS-H-RUNNER-18): the provider may PAUSE the watch
+         * (unfocused window — the page's JS is throttled and cannot answer,
+         * so any retry render would be burned and any verdict would be false).
+         * Pausing keeps retriesUsed; the provider's focus handler restarts a
+         * fresh full watch when the window is focused again. */
+        if (this.hooks.mayContinue && !this.hooks.mayContinue()) {
+            this.stopTimer();
+            this.state = 'idle';
+            return;
+        }
         this.hooks.ping();
         this.unanswered++;
         /* v1.5.26: give the re-render FOUR chances (maxRetryRounds) before the

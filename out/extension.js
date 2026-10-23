@@ -431,7 +431,11 @@ async function guardedGlobalUpdate(section, key, value, opts = { step: 'settings
                         opts.summary.push(`Your VS Code settings.json had JSON errors — graphics.h Runner repaired them automatically` +
                             ` (fixes: ${fixText}; backup saved next to the file) and the setting "${section}.${key}" was written.`);
                     }
-                    (0, instrument_1.captureExtensionWarning)('user settings repaired automatically during setup', {
+                    /* v1.5.31 (GRAPHICS-H-RUNNER-14): a successful auto-repair is a
+                     * success story — report it at INFO so it stops looking like an
+                     * actionable warning in the inbox (the summary line above already
+                     * tells the user what happened). */
+                    (0, instrument_1.captureExtensionInfo)('user settings repaired automatically during setup', {
                         setup_step: opts.step,
                         fixes: fixText.slice(0, 100),
                         key: (0, instrument_1.scrubText)(`${section}.${key}`).slice(0, 80)

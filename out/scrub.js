@@ -74,6 +74,23 @@ function scrubText(value) {
      * log readers know), for every separator style. */
     out = out.replace(/([A-Za-z]:[\\/]+[Uu]sers[\\/]+)[^\\/:*?"<>|]*/g, '$1~');
     out = out.replace(/(\/home\/)[^/\s]+/g, '$1~');
+    /* v1.5.31 (GRAPHICS-H-RUNNER-K on 1.5.30 — the detail tags arrived as
+     * "sal/AppData/…" and "…/ld.exe: cannot find Shyam/AppData/…" with RAW
+     * usernames): two real-world shapes the rules above still miss.
+     *
+     * 1. MSYS/Git-Bash drive-less form "/c/Users/<name>/…" — there is NO
+     *    "X:" colon, so the drive rule cannot match, and the home-dir split
+     *    cannot either (the text never contains the homedir literal).
+     * 2. PREFIX-LESS FRAGMENTS — a tail cut that landed mid-path destroys
+     *    the "C:/Users/" anchor BEFORE this scrub ever sees the string, and
+     *    no prefix rule can match a fragment that no longer has a prefix.
+     *    AppData is itself a reliable anchor: on every Windows profile path
+     *    the segment immediately before \AppData\ is the user name (or the
+     *    cut tail of one). The rule fires only when that segment is a word
+     *    fragment — the scrubbed "~" is deliberately OUTSIDE the class, so
+     *    healthy "C:\Users\~\AppData\…" shapes pass through unchanged. */
+    out = out.replace(/(\/[A-Za-z]\/[Uu]sers[\\/]+)[^\\/:*?"<>|]*/g, '$1~');
+    out = out.replace(/([\w.@ -]{1,80})[\\/]AppData[\\/](?=Local\b|Roaming\b|LocalLow\b)/g, '~/AppData/');
     return out;
 }
 //# sourceMappingURL=scrub.js.map

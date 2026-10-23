@@ -647,6 +647,25 @@ export function classifySettingsWriteError(error: unknown): SettingsWriteRefusal
   if (/unable to write into workspace settings/i.test(msg)) {
     return 'workspace';
   }
+  /* v1.5.31 (GRAPHICS-H-RUNNER-10, the 2026-10-16 Moscow event on a 1.5.30
+   * build): VS Code LOCALIZES the refusal — a Russian host throws
+   * "CodeExpectedError: Не удается выполнить запись в файл параметров
+   * пользователя…", which matches neither phrase above, so the guarded
+   * writer classified it "not a refusal" and RETHREW the raw error into
+   * the error inbox. The CLASS of the error is the reliable signal: VS Code
+   * throws CodeExpectedError for every user-facing configuration-editing
+   * refusal, in every language. Any CodeExpectedError from a GLOBAL write
+   * degrades the same graceful way (repair attempt → clear summary →
+   * "Open User Settings"), which is exactly the designed behavior for an
+   * un-writable settings file — the English phrase remains the type
+   * discriminator between the user and the workspace file. */
+  if (
+    error &&
+    typeof error === 'object' &&
+    (error as { name?: unknown }).name === 'CodeExpectedError'
+  ) {
+    return /workspace/i.test(msg) ? 'workspace' : 'user';
+  }
   return undefined;
 }
 

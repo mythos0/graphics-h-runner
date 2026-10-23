@@ -67,6 +67,7 @@ exports.setTelemetryActiveForTests = setTelemetryActiveForTests;
 exports.hasReportedError = hasReportedError;
 exports.captureExtensionError = captureExtensionError;
 exports.captureExtensionWarning = captureExtensionWarning;
+exports.captureExtensionInfo = captureExtensionInfo;
 exports.addExtensionBreadcrumb = addExtensionBreadcrumb;
 exports.setRuntimeTags = setRuntimeTags;
 exports.flushTelemetry = flushTelemetry;
@@ -585,6 +586,35 @@ function captureExtensionWarning(message, tags) {
         warningsSent++;
         Sentry.withScope((scope) => {
             scope.setLevel('warning');
+            scope.setTag('ghr.source', 'handled');
+            if (tags) {
+                for (const [key, value] of Object.entries(tags)) {
+                    scope.setTag(key, (0, scrub_1.scrubText)(value));
+                }
+            }
+            Sentry.captureMessage(message);
+        });
+    }
+    catch {
+        /* ignore */
+    }
+}
+/** v1.5.31 (GRAPHICS-H-RUNNER-14): the same shape as captureExtensionWarning
+ * but at INFO level — for conditions that are RESILIENCE WORKING, not
+ * trouble. The live "user settings repaired automatically during setup"
+ * event is a success story (the guard repaired the file and the write
+ * landed) and sat in the warning bucket looking like an actionable bug.
+ * Same once-per-session dedupe + cap contract as the warning family. */
+function captureExtensionInfo(message, tags) {
+    const key = String(message || '').slice(0, 200);
+    if (!telemetryActive || reportedWarnings.has(key) || warningsSent >= MAX_WARNINGS_PER_SESSION) {
+        return;
+    }
+    try {
+        reportedWarnings.add(key);
+        warningsSent++;
+        Sentry.withScope((scope) => {
+            scope.setLevel('info');
             scope.setTag('ghr.source', 'handled');
             if (tags) {
                 for (const [key, value] of Object.entries(tags)) {

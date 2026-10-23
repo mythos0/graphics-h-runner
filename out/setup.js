@@ -82,6 +82,7 @@ const fs = __importStar(require("fs"));
 const os = __importStar(require("os"));
 const path = __importStar(require("path"));
 const toolchain_1 = require("./toolchain");
+const scrub_1 = require("./scrub");
 /* ------------------------------------------------------------------ */
 /* constants                                                           */
 /* ------------------------------------------------------------------ */
@@ -414,7 +415,10 @@ async function installCompilerViaWinget(onProgress) {
         return { ok: false, detail: 'winget is not available on this PC' };
     }
     if (res.code !== 0) {
-        return { ok: false, detail: `winget exited with code ${res.code}: ${res.tail.slice(-300)}` };
+        /* v1.5.31: scrub BEFORE the cut — a tail cut landing mid-path destroys
+         * the "C:/Users/" anchor and no downstream scrub can recover it (the
+         * live K detail tags shipped "sal/AppData/…" exactly this way). */
+        return { ok: false, detail: `winget exited with code ${res.code}: ${(0, scrub_1.scrubText)(res.tail).slice(-300)}` };
     }
     return { ok: true, detail: 'winget install completed' };
 }
@@ -550,9 +554,16 @@ async function verifyCompilerRun(candidate) {
  * "TimeoutError" during install-winbgim — GitHub Pages unreachable):
  * these are the user's connectivity, not extension bugs, so they must be
  * reported as warnings with a retry hint, never as error-inbox entries.
+ * v1.5.31 (GRAPHICS-H-RUNNER-15/16, both on 1.5.30, both during
+ * install-compiler-download): the MID-BODY death shapes slipped through —
+ * undici wraps a connection reset during body streaming as
+ * "TypeError: terminated" (cause: read ECONNRESET) and a stalled body as
+ * "BodyTimeoutError". Neither matched, so after the retries were exhausted
+ * the RAW error landed in the inbox at ERROR level instead of the
+ * network-warning path. \bterminated\b keeps "determined" from matching.
  */
 function isNetworkFailureText(text) {
-    return /fetch failed|TimeoutError|aborted due to timeout|ConnectTimeoutError|ETIMEDOUT|ECONNRESET|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|socket hang up|network error|ERR_(?:SOCKET|CONNECTION|HTTP)_|getaddrinfo/i.test(String(text || ''));
+    return /fetch failed|TimeoutError|aborted due to timeout|ConnectTimeoutError|ETIMEDOUT|ECONNRESET|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|socket hang up|network error|ERR_(?:SOCKET|CONNECTION|HTTP)_|getaddrinfo|BodyTimeoutError|\bterminated\b|\bEPIPE\b/i.test(String(text || ''));
 }
 /**
  * v1.5.29 (GRAPHICS-H-RUNNER-12): one transient hiccup during the 274 MB
@@ -860,7 +871,9 @@ async function installCompilerWindowsDirect(storageRoot, onProgress) {
         const psScript = `Expand-Archive -LiteralPath '${zipPath.replace(/'/g, "''")}' -DestinationPath '${workDir.replace(/'/g, "''")}' -Force`;
         const ps = await runProcessStreaming('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', psScript], { timeoutMs: 30 * 60 * 1000, onLine: (l) => log.push('ps: ' + l.slice(0, 100)) });
         if (ps.code !== 0) {
-            const psErr = 'extraction failed: ' + ps.tail.slice(-300);
+            /* v1.5.31: scrub BEFORE the cut (same anchor-destruction class as the
+             * winget tail above). */
+            const psErr = 'extraction failed: ' + (0, scrub_1.scrubText)(ps.tail).slice(-300);
             /* v1.5.30: a full disk fails during extraction too (Expand-Archive
              * reports "0x80070070" / "disk is full") — same rewrite. */
             throw new Error(isDiskFullErrorText(ps.tail) ? diskSpaceShortageMessage(0) : psErr);
@@ -1645,7 +1658,8 @@ async function installSdlBgiUserPrefix(opts = {}) {
         if (classified) {
             throw new Error('SDL_bgi build failed: ' + classified);
         }
-        throw new Error('SDL_bgi build failed: ' + build.stderr.slice(-800));
+        /* v1.5.31: scrub BEFORE the cut — compiler dumps embed absolute paths. */
+        throw new Error('SDL_bgi build failed: ' + (0, scrub_1.scrubText)(build.stderr).slice(-800));
     }
     log.push('built libSDL_bgi.so');
     /* 5. install headers */

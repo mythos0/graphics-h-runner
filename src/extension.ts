@@ -56,6 +56,7 @@ import {
   onTelemetryConsentChanged,
   addExtensionBreadcrumb,
   captureExtensionError,
+  captureExtensionInfo,
   captureExtensionWarning,
   setRuntimeTags,
   setTelemetryContext,
@@ -486,7 +487,11 @@ async function guardedGlobalUpdate(
               ` (fixes: ${fixText}; backup saved next to the file) and the setting "${section}.${key}" was written.`
             );
           }
-          captureExtensionWarning('user settings repaired automatically during setup', {
+          /* v1.5.31 (GRAPHICS-H-RUNNER-14): a successful auto-repair is a
+           * success story — report it at INFO so it stops looking like an
+           * actionable warning in the inbox (the summary line above already
+           * tells the user what happened). */
+          captureExtensionInfo('user settings repaired automatically during setup', {
             setup_step: opts.step,
             fixes: fixText.slice(0, 100),
             key: scrubText(`${section}.${key}`).slice(0, 80)

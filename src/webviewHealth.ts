@@ -71,6 +71,17 @@ export interface WebviewHealthHooks {
   fallback(): void;
   /** Optional observer for every lifecycle event (telemetry / context keys). */
   onEvent?(ev: WebviewEvent): void;
+  /**
+   * v1.5.31 (GRAPHICS-H-RUNNER-18): consulted before EVERY verdict decision.
+   * Returning false PAUSES the watch (state 'idle', timer stopped, retry
+   * budget preserved) instead of burning a retry render or firing the
+   * fallback verdict. The provider answers with "window focused?" — an
+   * UNFOCUSED window throttles the webview's JS (Electron background
+   * windows), so the page cannot answer and any verdict would be a false
+   * one; the provider resumes with a fresh budget when focus returns.
+   * Absent/undefined-safe hosts (tests): the provider simply omits it.
+   */
+  mayContinue?(): boolean;
 }
 
 export interface WebviewHealthOptions {
@@ -185,6 +196,16 @@ export class WebviewHealth {
 
   private tick(): void {
     if (this.state !== 'watching') {
+      return;
+    }
+    /* v1.5.31 (GRAPHICS-H-RUNNER-18): the provider may PAUSE the watch
+     * (unfocused window — the page's JS is throttled and cannot answer,
+     * so any retry render would be burned and any verdict would be false).
+     * Pausing keeps retriesUsed; the provider's focus handler restarts a
+     * fresh full watch when the window is focused again. */
+    if (this.hooks.mayContinue && !this.hooks.mayContinue()) {
+      this.stopTimer();
+      this.state = 'idle';
       return;
     }
     this.hooks.ping();
